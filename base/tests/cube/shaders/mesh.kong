@@ -23,6 +23,7 @@ struct vert_out {
 fun mesh_vert(input: vert_in): vert_out {
 	var output: vert_out;
 	output.tex = input.tex;
+	// Use WVP matrix
 	output.pos = constants.WVP * float4(input.pos.xyz, 1.0);
 	return output;
 }

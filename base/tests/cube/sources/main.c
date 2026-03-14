@@ -7,23 +7,15 @@ void render_commands() {
 	render_path_draw_meshes("mesh");
 }
 
-void spin_cube(void *_) {
-	object_t *cube = scene_get_child("Cube");
-	transform_rotate(cube->transform, vec4_create(0, 0, 1, 1.0), 0.01);
-}
-
 void scene_ready() {
-	// Set camera
 	transform_t *t = scene_camera->base->transform;
-	t->loc         = vec4_create(0, -6, 0, 1.0);
+	t->loc         = vec4_create(0, -10, 0, 1.0);
 	t->rot         = quat_from_to(vec4_create(0, 0, 1, 1.0), vec4_create(0, -1, 0, 1.0));
 	transform_build_matrix(t);
-
-	// Rotate cube
-	sys_notify_on_update(spin_cube, NULL);
 }
 
 void ready() {
+	gc_unroot(render_path_commands);
 	render_path_commands = render_commands;
 	gc_root(render_path_commands);
 
@@ -101,14 +93,13 @@ void ready() {
 	gc_root(data_cached_scene_raws);
 	any_map_set(data_cached_scene_raws, scene->name, scene);
 
-	// Instantiate scene
 	scene_create(scene);
 	scene_ready();
 }
 
 void _kickstart() {
 	iron_window_options_t *ops =
-	    GC_ALLOC_INIT(iron_window_options_t, {.title     = "Empty",
+	    GC_ALLOC_INIT(iron_window_options_t, {.title     = "Cube",
 	                                          .width     = 1280,
 	                                          .height    = 720,
 	                                          .x         = -1,
@@ -123,7 +114,7 @@ void _kickstart() {
 	iron_start();
 }
 
-////
+//
 
 any_map_t *ui_children;
 any_map_t *ui_nodes_custom_buttons;
