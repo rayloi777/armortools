@@ -1,16 +1,19 @@
 // ../../make --run
 
+#include <stdio.h>
 #include <iron.h>
 
 void render_commands() {
+	fprintf(stderr, "render_commands called\n");
+	fflush(stderr);
 	render_path_set_target("", NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff6495ed, 1.0);
 	render_path_draw_meshes("mesh");
 }
 
 void scene_ready() {
 	transform_t *t = scene_camera->base->transform;
-	t->loc         = vec4_create(0, -10, 0, 1.0);
-	t->rot         = quat_from_to(vec4_create(0, 0, 1, 1.0), vec4_create(0, -1, 0, 1.0));
+	t->loc         = vec4_create(0, 0, 5, 1.0);
+	t->rot         = quat_create(0, 0, 0, 1);
 	transform_build_matrix(t);
 }
 
@@ -63,22 +66,22 @@ void ready() {
 	                                                                 {.name            = "mesh",
 	                                                                  .vertex_shader   = "mesh.vert",
 	                                                                  .fragment_shader = "mesh.frag",
-	                                                                  .compare_mode    = "less",
-	                                                                  .cull_mode       = "clockwise",
+	                                                                 .compare_mode    = "always",
+	                                                                 .cull_mode       = "none",
 	                                                                  .depth_write     = true,
-	                                                                  .vertex_elements = any_array_create_from_raw(
-	                                                                      (void *[]){
-	                                                                          GC_ALLOC_INIT(vertex_element_t, {.name = "pos", .data = "short4norm"}),
-	                                                                          GC_ALLOC_INIT(vertex_element_t, {.name = "tex", .data = "short2norm"}),
-	                                                                      },
-	                                                                      2),
-	                                                                  .constants = any_array_create_from_raw(
-	                                                                      (void *[]){
-	                                                                          GC_ALLOC_INIT(shader_const_t,
-	                                                                                        {.name = "WVP", .type = "mat4", .link = "_world_view_proj_matrix"}),
-	                                                                      },
-	                                                                      1),
-	                                                                  .texture_units = any_array_create_from_raw(
+                                                                    .vertex_elements = any_array_create_from_raw(
+                                                                        (void *[]){
+                                                                            GC_ALLOC_INIT(vertex_element_t, {.name = "pos", .data = "short4norm"}),
+                                                                            GC_ALLOC_INIT(vertex_element_t, {.name = "tex", .data = "short2norm"}),
+                                                                        },
+                                                                        2),
+                                                                  .constants = any_array_create_from_raw(
+                                                                      (void *[]){
+                                                                          GC_ALLOC_INIT(shader_const_t,
+                                                                                        {.name = "WVP", .type = "mat4", .link = "_world_view_proj_matrix"}),
+                                                                      },
+                                                                      1),
+                                                                  .texture_units = any_array_create_from_raw(
 	                                                                      (void *[]){
 	                                                                          GC_ALLOC_INIT(tex_unit_t, {.name = "my_texture"}),
 	                                                                      },

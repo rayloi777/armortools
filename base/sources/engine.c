@@ -1,4 +1,5 @@
 #include "engine.h"
+#include <stdio.h>
 #include <limits.h>
 
 i32 _object_uid_counter = 0;
@@ -984,15 +985,20 @@ bool mesh_object_cull_mesh(mesh_object_t *raw, char *context, camera_object_t *c
 
 void mesh_object_render(mesh_object_t *raw, char *context, char_ptr_array_t *bind_params) {
 	if (!raw->base->visible) {
-		return; // Skip render if object is hidden
+		fprintf(stderr, "mesh hidden, skipping\n");
+		return;
 	}
 	if (mesh_object_cull_mesh(raw, context, scene_camera)) {
+		fprintf(stderr, "mesh culled\n");
 		return;
 	}
 	if (mesh_object_cull_material(raw, context)) {
+		fprintf(stderr, "material culled\n");
 		return;
 	}
 
+	fprintf(stderr, "rendering mesh!\n");
+	fflush(stderr);
 	uniforms_pos_unpack = raw->data->scale_pos;
 	uniforms_tex_unpack = raw->data->scale_tex;
 	transform_update(raw->base->transform);
@@ -1010,12 +1016,16 @@ void mesh_object_render(mesh_object_t *raw, char *context, char_ptr_array_t *bin
 	}
 
 	if (scontext->_->pipe != _mesh_object_last_pipeline) {
+		fprintf(stderr, "Setting pipeline\n");
+		fflush(stderr);
 		gpu_set_pipeline(scontext->_->pipe);
 		gc_unroot(_mesh_object_last_pipeline);
 		_mesh_object_last_pipeline = scontext->_->pipe;
 		gc_root(_mesh_object_last_pipeline);
 	}
 	uniforms_set_context_consts(scontext, bind_params);
+	fprintf(stderr, "About to call uniforms_set_obj_consts\n");
+	fflush(stderr);
 	uniforms_set_obj_consts(scontext, raw->base);
 	uniforms_set_material_consts(scontext, mcontext);
 	gpu_set_vertex_buffer(raw->data->_->vertex_buffer);
@@ -1327,6 +1337,10 @@ void uniforms_set_context_consts(shader_context_t *context, char_ptr_array_t *bi
 }
 
 void uniforms_set_obj_consts(shader_context_t *context, object_t *object) {
+	fprintf(stderr, "uniforms_set_obj_consts called: constants=%p, length=%d, expected=%d\n", 
+		(void*)context->constants, 
+		context->constants ? context->constants->length : 0,
+		context->_->constants ? context->_->constants->length : 0);
 	if (context->constants != NULL && context->constants->length == context->_->constants->length) {
 		for (i32 i = 0; i < context->constants->length; ++i) {
 			shader_const_t *c = context->constants->buffer[i];
@@ -1627,12 +1641,14 @@ bool uniforms_set_context_const(i32 location, shader_const_t *c) {
 
 void uniforms_set_obj_const(object_t *obj, i32 loc, shader_const_t *c) {
 	if (c->link == NULL) {
+		fprintf(stderr, "c->link is NULL, name=%s\n", c->name);
 		return;
 	}
 
 	camera_object_t *camera = scene_camera;
 	if (string_equals(c->type, "mat4")) {
 		mat4_t m = mat4_nan();
+		fprintf(stderr, "Processing constant: name=%s, link=%s\n", c->name, c->link);
 
 		if (string_equals(c->link, "_world_matrix")) {
 			m = obj->transform->world_unpack;
@@ -1641,8 +1657,13 @@ void uniforms_set_obj_const(object_t *obj, i32 loc, shader_const_t *c) {
 			m = mat4_inv(obj->transform->world_unpack);
 		}
 		else if (string_equals(c->link, "_world_view_proj_matrix")) {
-			mat4_t wvp = mat4_mult_mat(obj->transform->world_unpack, camera->v);
-			m = mat4_mult_mat(wvp, camera->p);
+			mat4_t vp = mat4_mult_mat(camera->v, camera->p);
+			m = mat4_mult_mat(vp, obj->transform->world_unpack);
+			fprintf(stderr, "WVP matrix:\n");
+			fprintf(stderr, "%f %f %f %f\n", m.m[0], m.m[1], m.m[2], m.m[3]);
+			fprintf(stderr, "%f %f %f %f\n", m.m[4], m.m[5], m.m[6], m.m[7]);
+			fprintf(stderr, "%f %f %f %f\n", m.m[8], m.m[9], m.m[10], m.m[11]);
+			fprintf(stderr, "%f %f %f %f\n", m.m[12], m.m[13], m.m[14], m.m[15]);
 			if (mat4_isnan(m) || isinf(m.m[0])) {
 				m = mat4_nan();
 			}
