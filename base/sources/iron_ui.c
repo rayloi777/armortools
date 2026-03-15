@@ -2205,7 +2205,7 @@ bool ui_radio(ui_handle_t *handle, int position, char *text, char *label) {
 	return handle->i == position;
 }
 
-int ui_combo(ui_handle_t *handle, char_ptr_array_t *texts, char *label, bool show_label, int align, bool search_bar) {
+int ui_combo(ui_handle_t *handle, string_array_t *texts, char *label, bool show_label, int align, bool search_bar) {
 	if (!ui_is_visible(UI_ELEMENT_H())) {
 		ui_end_element();
 		return handle->i;
@@ -2814,7 +2814,7 @@ float ui_float_input(ui_handle_t *handle, char *label, int align, float precisio
 	return handle->f;
 }
 
-int ui_inline_radio(ui_handle_t *handle, char_ptr_array_t *texts, int align) {
+int ui_inline_radio(ui_handle_t *handle, string_array_t *texts, int align) {
 	ui_t *current = ui_get_current();
 
 	if (!ui_is_visible(UI_ELEMENT_H())) {
@@ -3016,7 +3016,7 @@ int ui_color_wheel(ui_handle_t *handle, bool alpha, float w, float h, bool color
 	}
 
 	char            *strings[] = {"RGB", "HSV", "Hex"};
-	char_ptr_array_t car;
+	string_array_t car;
 	car.buffer = strings;
 	car.length = 3;
 	int pos    = ui_inline_radio(&radio_handle, &car, UI_ALIGN_LEFT);
