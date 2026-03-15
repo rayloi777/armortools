@@ -1,0 +1,34 @@
+
+#[set(root)]
+const root: {
+	mvp: float4x4;
+};
+
+struct vert_in {
+	pos: float3;
+}
+
+struct vert_out {
+	pos: float4;
+}
+
+fun test_vert(input: vert_in): vert_out {
+	var output: vert_out;
+	var pos: float4 = float4(input.pos, 1.0);
+	pos = root.mvp * pos;
+	pos.x = pos.x / pos.w;
+	pos.y = pos.y / pos.w;
+	pos.z = pos.z / pos.w;
+	output.pos = pos;
+	return output;
+}
+
+fun test_frag(input: vert_out): float4 {
+	return float4(1.0, 0.0, 0.0, 1.0);
+}
+
+#[pipe]
+struct pipe {
+	vertex = test_vert;
+	fragment = test_frag;
+}

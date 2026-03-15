@@ -22,6 +22,31 @@ make.bat [platform] [graphics]
 ./make windows direct3d12  # Windows with Direct3D12
 ```
 
+### Building Paint (ArmorPaint Application)
+
+```bash
+cd paint
+
+# Build for current platform (automatic detection)
+../base/make
+
+# Build and run immediately (Linux)
+../base/make --run
+
+# Build for specific target platform
+../base/make --target android
+../base/make --target ios
+../base/make --target wasm
+
+# Embed data files (requires C23 #embed support, clang 19+)
+../base/make --embed
+
+# Generate locale file
+cd ../base
+./make --js base/tools/extract_locales.js <locale_code>
+# Output: paint/assets/locale/<locale_code>.json
+```
+
 ### Building Tests
 
 Tests are located in `base/tests/`. Each test has its own `project.js`.
@@ -37,14 +62,19 @@ cd base/tests/cube
 # - triangle  - Simple triangle rendering
 ```
 
-### Running Single Tests
+### Make Tool Flags
 
-The build system uses amake (based on kmake). To run a specific test:
+The amake build system (based on kmake) supports these common flags:
 
-```bash
-cd base/tests/[test_name]
-../../make [platform] [graphics]
-```
+| Flag | Description |
+|------|-------------|
+| `[platform]` | Target platform (macos, linux, windows, android, ios, wasm) |
+| `[graphics]` | Graphics backend (metal, vulkan, direct3d12, opengl, glsl) |
+| `--run` | Build and execute after compilation (Linux) |
+| `--target` | Specify target platform for cross-compilation |
+| `--compile` | Compile without building (WASM) |
+| `--embed` | Embed data files using C23 #embed |
+| `--js` | Run JavaScript tool from tools/ |
 
 ## Code Style Guidelines
 
@@ -147,6 +177,13 @@ Wrap platform-specific code with defines:
 - Tests are in `base/tests/` directory
 - Each test is a standalone project with its own `project.js`
 - Test projects reference the main engine via `project.add_project("../../")`
+
+### Linting and Formatting
+
+- The project uses `.clang-format` at repository root for code formatting
+- Run clang-format to format your code before committing
+- Format C files: `clang-format -i source.c`
+- Check formatting: `clang-format --dry-run -Werror source.c`
 
 ## Project Structure
 

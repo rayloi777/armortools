@@ -39,7 +39,8 @@ cd base/tests/[test_name]
 ../../make --run
 
 # Available tests:
-# - triangle  - Simple triangle rendering
+# - triangle  - Simple triangle rendering (no MVP)
+# - poly      - Triangle with MVP matrix and perspective projection
 # - cube      - Basic 3D cube rendering
 # - fall      - Physics/falling objects test (uses ASIM)
 ```
@@ -181,6 +182,64 @@ Iron uses **column-major** matrix storage:
 - Translation stored in `m[12]`, `m[13]`, `m[14]` (not m03, m13, m23)
 - Access elements via `mat.m[0]` through `mat.m[15]`
 
+### Custom Shader Rendering (MVP)
+
+For custom shaders with MVP matrix:
+
+#### 1. MVP Matrix Order
+
+Correct multiplication order is `model * view * proj`:
+```c
+mat4_t proj = mat4_persp(0.85, 1280.0 / 720.0, 0.1, 100.0);
+mat4_t view = mat4_init_translate(0, 0, -5);
+mat4_t model = mat4_rot_z(rotation);
+mat4_t mvp = mat4_identity();
+mvp = mat4_mult_mat(model, view);
+mvp = mat4_mult_mat(mvp, proj);  // model * view * proj
+```
+
+#### 2. Shader with Perspective Divide
+
+Metal's `[[position]]` does NOT auto-divide by w. Manual perspective divide is required:
+```kong
+#[set(root)]
+const root: {
+    mvp: float4x4;
+};
+
+fun test_vert(input: vert_in): vert_out {
+    var output: vert_out;
+    var pos: float4 = float4(input.pos, 1.0);
+    pos = root.mvp * pos;
+    // Perspective divide - REQUIRED for perspective projection!
+    pos.x = pos.x / pos.w;
+    pos.y = pos.y / pos.w;
+    pos.z = pos.z / pos.w;
+    output.pos = pos;
+    return output;
+}
+```
+
+#### 3. Setting Matrix in C
+
+Use `gpu_set_matrix4(0, matrix)` to write to engine's internal constant buffer:
+```c
+_gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff000000, 1.0);
+gpu_set_pipeline(pipeline);
+gpu_set_vertex_buffer(vb);
+gpu_set_index_buffer(ib);
+gpu_set_matrix4(0, mvp);  // Write to offset 0 in internal constant buffer
+gpu_draw();
+gpu_end();
+```
+
+#### 4. Why `gpu_set_matrix4` Works
+
+- Engine has internal `constant_buffer` (512 bytes, multiple slots)
+- `gpu_set_matrix4(location, matrix)` writes directly to this buffer
+- `gpu_draw()` automatically binds the internal buffer to shader
+- Custom constant buffers get overwritten by `gpu_draw()` - use engine's buffer instead
+
 ### Known Issues
 
 - First frame WVP matrix may be invalid (-inf) due to camera not being initialized
@@ -245,15 +304,21 @@ If meshes don't render but rendering is called:
 3. The engine handles first-frame NaN/infinite values by skipping invalid matrices
 
 Example shader usage:
-```glsl
-#[set(everything)]
-const constants: {
+```kong
+#[set(root)]
+const root: {
     WVP: float4x4;
 };
 
 fun mesh_vert(input: vert_in): vert_out {
     var output: vert_out;
-    output.pos = constants.WVP * float4(input.pos.xyz, 1.0);
+    var pos: float4 = float4(input.pos.xyz, 1.0);
+    pos = root.WVP * pos;
+    // Add perspective divide for perspective projection
+    pos.x = pos.x / pos.w;
+    pos.y = pos.y / pos.w;
+    pos.z = pos.z / pos.w;
+    output.pos = pos;
     return output;
 }
 ```

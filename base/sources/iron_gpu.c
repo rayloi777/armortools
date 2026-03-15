@@ -1,5 +1,6 @@
 #include "iron_gpu.h"
 #include "iron_system.h"
+#include <stdio.h>
 #include <string.h>
 
 static gpu_buffer_t   constant_buffer;
