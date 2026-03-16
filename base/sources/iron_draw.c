@@ -9,8 +9,6 @@
 #include "iron_system.h"
 #include <math.h>
 
-#define MATH_PI 3.14159265358979323846
-
 draw_font_t   *draw_font = NULL;
 int            draw_font_size;
 gpu_texture_t *_draw_current = NULL;
@@ -790,7 +788,7 @@ void draw_filled_circle(float cx, float cy, float radius, int segments) {
 	if (segments <= 0) {
 		segments = (int)floor(10 * sqrtf(radius));
 	}
-	float theta = 2.0 * (float)MATH_PI / segments;
+	float theta = 2.0 * (float)IRON_PI / segments;
 	float c     = cosf(theta);
 	float s     = sinf(theta);
 	float x     = radius;
@@ -831,7 +829,7 @@ void draw_circle(float cx, float cy, float radius, int segments, float strength)
 	if (segments <= 0) {
 		segments = (int)floor(10 * sqrtf(radius));
 	}
-	float theta = 2 * (float)MATH_PI / segments;
+	float theta = 2 * (float)IRON_PI / segments;
 	float c     = cosf(theta);
 	float s     = sinf(theta);
 	float x     = radius;
