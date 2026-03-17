@@ -212,6 +212,27 @@ if (flags.with_eval) {
 	// project.add_cfiles("tools/amake/alang_eval.c");
 }
 
+// Always add wren assets if they exist
+if (fs_exists("assets/wren")) {
+	project.add_assets("assets/wren/*.wren", {destination: "data/wren/{name}"});
+}
+
+if (flags.with_wren) {
+	project.add_define("WITH_WREN");
+	project.add_cfiles("sources/iron_wren.c");
+	project.add_cfiles("sources/wren_iron.c");
+	project.add_cfiles("sources/libs/wren/wren_compiler.c");
+	project.add_cfiles("sources/libs/wren/wren_core.c");
+	project.add_cfiles("sources/libs/wren/wren_debug.c");
+	project.add_cfiles("sources/libs/wren/wren_primitive.c");
+	project.add_cfiles("sources/libs/wren/wren_utils.c");
+	project.add_cfiles("sources/libs/wren/wren_value.c");
+	project.add_cfiles("sources/libs/wren/wren_vm.c");
+	project.add_cfiles("sources/libs/wren/wren_opt_meta.c");
+	project.add_cfiles("sources/libs/wren/wren_opt_random.c");
+	project.add_include_dir("../lib/wren/include");
+}
+
 if (flags.with_gamepad) {
 	project.add_define("WITH_GAMEPAD");
 }

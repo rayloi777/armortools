@@ -171,10 +171,66 @@ Supported via platform-specific implementations:
 
 ### Additional Systems
 
-- **Scripting**: QuickJS integration via `iron_eval.h`
+- **Scripting**: Wren or QuickJS via `iron_wren.h` or `iron_eval.h`
 - **Audio**: stb_vorbis OGG decoding, 16-channel mixer
 - **Physics**: ASIM (`sources/libs/asim.c`) - lightweight sphere-mesh collision with BVH
 - **Raycasting**: `iron_raycast.h` - screen-to-world rays
+
+### Wren Scripting
+
+Iron supports Wren as an alternative scripting language. Wren is a small, fast, class-based concurrent scripting language.
+
+#### Building with Wren
+
+```bash
+cd base
+./make [platform] [graphics] --with-wren
+```
+
+Example:
+```bash
+./make macos metal --with-wren
+./make linux vulkan --with-wren
+```
+
+#### Wren Script Location
+
+Wren scripts should be placed in `assets/wren/`:
+```
+assets/wren/
+├── main.wren          # Entry point (required)
+├── math_test.wren
+└── game_logic.wren
+```
+
+#### Wren API
+
+In your Wren scripts, you can use:
+
+```wren
+// Basic output
+Iron.print("Hello from Wren!")
+
+// Math functions
+Math.sin(0)
+Math.cos(0)
+Math.sqrt(16)
+Math.PI
+
+// Data structures
+var list = List.new()
+list.add(1)
+var map = Map.new()
+map.set("key", "value")
+```
+
+#### Adding More Wren Bindings
+
+To add new Wren bindings:
+
+1. Create `sources/wren_xxx.c` with foreign method definitions
+2. Register methods in `iron_wren.c`'s `wren_bind_foreign_method_fn`
+3. Add the C file to `project.js` under `--with-wren` section
 
 ### Matrix Storage
 

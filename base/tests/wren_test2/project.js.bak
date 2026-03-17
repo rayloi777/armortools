@@ -1,0 +1,13 @@
+let flags = globalThis.flags;
+
+let project = new Project("WrenTest");
+project.add_project("../../");
+project.add_define("WITH_WREN");
+project.add_cfiles("main.c");
+project.add_cfiles("../../sources/iron_wren.c");
+project.add_cfiles("../../sources/wren_iron.c");
+project.add_lib("wren");
+project.add_lib_path("../../lib/wren/lib");
+project.add_include_dir("../../lib/wren/include");
+project.add_shaders("./*.kong");
+return project;

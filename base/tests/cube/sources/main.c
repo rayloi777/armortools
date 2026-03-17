@@ -10,7 +10,7 @@ void render_commands() {
 
 void scene_ready() {
 	transform_t *t = scene_camera->base->transform;
-	t->loc         = vec4_create(0, 0, 5, 1.0);
+	t->loc         = vec4_create(0, 0, -5.0, 1.0);
 	t->rot         = quat_create(0, 0, 0, 1);
 	transform_build_matrix(t);
 	camera_object_build_proj(scene_camera, (f32)sys_w() / (f32)sys_h());
