@@ -43,6 +43,8 @@ cd base/tests/[test_name]
 # - poly      - Triangle with MVP matrix and perspective projection
 # - cube      - Basic 3D cube rendering
 # - fall      - Physics/falling objects test (uses ASIM)
+# - wren      - Wren scripting test
+# - eval      - QuickJS scripting test
 ```
 
 ## Code Style Guidelines
@@ -231,6 +233,75 @@ To add new Wren bindings:
 1. Create `sources/wren_xxx.c` with foreign method definitions
 2. Register methods in `iron_wren.c`'s `wren_bind_foreign_method_fn`
 3. Add the C file to `project.js` under `--with-wren` section
+
+### QuickJS Scripting
+
+Iron supports QuickJS as an embedded JavaScript engine via `iron_eval.h`.
+
+#### Building with QuickJS
+
+QuickJS is enabled by default (via `WITH_EVAL` flag in project.js). No special flag needed.
+
+#### QuickJS API
+
+```c
+#include <iron_eval.h>
+
+// Initialize QuickJS runtime
+js_init();
+
+// Execute JavaScript code, returns float result
+float result = js_eval("1 + 2");        // Returns 3.0
+float result = js_eval("Math.sin(0.5)"); // Returns ~0.479
+
+// Call JS function (requires getting function pointer first)
+js_call(void *fn_handle);
+js_call_ptr(void *fn, void *arg);
+js_call_ptr_str(void *fn, void *arg0, char *arg1);
+```
+
+#### Reading JS Files from Assets
+
+```c
+#include <iron_eval.h>
+#include <stdio.h>
+
+char *js_code = NULL;
+
+void load_js() {
+    iron_file_reader_t reader;
+    if (iron_file_reader_open(&reader, "data/a.js", IRON_FILE_TYPE_ASSET)) {
+        size_t size = iron_file_reader_size(&reader);
+        js_code = malloc(size + 1);
+        iron_file_reader_read(&reader, js_code, size);
+        js_code[size] = '\0';
+        iron_file_reader_close(&reader);
+    }
+}
+
+void render() {
+    float result = js_eval(js_code);
+    fprintf(stderr, "JS result: %f\n", result);
+}
+```
+
+#### Required Stubs
+
+When using QuickJS, you must provide `console_trace()`:
+
+```c
+void console_trace(char *s) {
+    fprintf(stderr, "%s\n", s);
+}
+```
+
+#### QuickJS Test
+
+See `tests/eval/` for a complete working example:
+```bash
+cd base/tests/eval
+../../make --run
+```
 
 ### Matrix Storage
 
