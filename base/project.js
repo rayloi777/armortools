@@ -230,7 +230,7 @@ if (flags.with_wren) {
 	project.add_cfiles("sources/libs/wren/wren_vm.c");
 	project.add_cfiles("sources/libs/wren/wren_opt_meta.c");
 	project.add_cfiles("sources/libs/wren/wren_opt_random.c");
-	project.add_include_dir("../lib/wren/include");
+	project.add_include_dir("sources/libs/wren/include");
 }
 
 if (flags.with_gamepad) {

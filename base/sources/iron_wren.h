@@ -2,7 +2,7 @@
 
 #ifdef WITH_WREN
 
-#include "../../lib/wren/include/wren.h"
+#include "libs/wren/include/wren.h"
 
 void   wren_init();
 void   wren_free();

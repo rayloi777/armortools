@@ -15,5 +15,10 @@ project.add_cfiles("../../sources/libs/wren/wren_value.c");
 project.add_cfiles("../../sources/libs/wren/wren_vm.c");
 project.add_cfiles("../../sources/libs/wren/wren_opt_meta.c");
 project.add_cfiles("../../sources/libs/wren/wren_opt_random.c");
-project.add_include_dir("../../lib/wren/include");
+project.add_include_dir("../../sources/libs/wren/include");
+
+if (fs_exists("assets/wren")) {
+	project.add_assets("assets/wren/*.wren", {destination: "data/wren/{name}"});
+}
+
 return project;
