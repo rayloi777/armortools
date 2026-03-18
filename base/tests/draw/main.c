@@ -5,6 +5,7 @@
 
 f32 rotation = 0.0f;
 draw_font_t *font;
+gpu_texture_t *image;
 
 void render() {
     rotation += 0.01f;
@@ -53,6 +54,19 @@ void render() {
     draw_set_color(0xffaaaaaa);
     draw_string("Shapes: rect, line, circle", 400, 90);
 
+    draw_set_color(0xffffffff);
+    draw_string("draw_image:", 50, 480);
+    if (image != NULL) draw_image(image, 50, 500);
+
+    draw_string("draw_scaled_image:", 200, 480);
+    if (image != NULL) draw_scaled_image(image, 200, 500, 64, 64);
+
+    draw_string("draw_sub_image:", 300, 480);
+    if (image != NULL) draw_sub_image(image, 0, 0, 128, 128, 300, 500);
+
+    draw_string("draw_scaled_sub_image:", 450, 480);
+    if (image != NULL) draw_scaled_sub_image(image, 0, 0, 64, 64, 450, 500, 128, 128);
+
     draw_end();
 }
 
@@ -60,7 +74,7 @@ void _kickstart() {
     iron_window_options_t *ops =
         GC_ALLOC_INIT(iron_window_options_t, {.title     = "Draw Test",
                                               .width     = 640,
-                                              .height    = 480,
+                                              .height    = 680,
                                               .x         = -1,
                                               .y         = -1,
                                               .mode      = IRON_WINDOW_MODE_WINDOW,
@@ -73,6 +87,11 @@ void _kickstart() {
 
     font = data_get_font("font.ttf");
     draw_font_init(font);
+
+    image = data_get_image("color_wheel.k");
+    if (image == NULL) {
+        iron_log("Failed to load color_wheel image");
+    }
 
     _iron_set_update_callback(render);
 

@@ -45,6 +45,7 @@ cd base/tests/[test_name]
 # - fall      - Physics/falling objects test (uses ASIM)
 # - wren      - Wren scripting test
 # - eval      - QuickJS scripting test
+# - draw      - 2D draw API test (shapes, images, text)
 ```
 
 ### Test Project Initialization
@@ -84,6 +85,104 @@ void _kickstart() {
 Use for: tests that use `iron_draw` API (images, shapes, text).
 
 **Why**: `draw_init()` is only called inside `sys_start()` (see `iron_sys.c:158`). Using `_iron_init()` alone leaves the draw system uninitialized.
+
+### 2D Draw API
+
+Iron provides a 2D drawing API via `iron_draw.h`. All draw operations must be wrapped between `draw_begin()` and `draw_end()`.
+
+#### Basic Usage
+
+```c
+void render() {
+    draw_begin(NULL, true, 0xff1a1a2e);  // Clear with dark blue
+    
+    // Draw shapes
+    draw_set_color(0xffe94560);
+    draw_filled_rect(50, 50, 150, 100);
+    draw_rect(220, 50, 150, 100, 3.0f);
+    draw_line(50, 200, 200, 200, 2.0f);
+    draw_filled_circle(120, 400, 50, 32);
+    
+    // Draw text (requires font initialization)
+    draw_font_t *font = data_get_font("font.ttf");
+    draw_font_init(font);
+    draw_set_font(font, 32);
+    draw_set_color(0xffffffff);
+    draw_string("Hello!", 50, 50);
+    
+    draw_end();
+}
+```
+
+#### Drawing Images
+
+Images must be loaded using `data_get_image()` with the `.k` extension (build-time compressed format):
+
+```c
+gpu_texture_t *image;
+
+void _kickstart() {
+    sys_start(ops);
+    image = data_get_image("color_wheel.k");  // Note: .k extension
+    // ...
+}
+
+void render() {
+    draw_begin(NULL, true, 0xff1a1a2e);
+    
+    // Various image drawing functions
+    draw_image(image, x, y);                    // Original size
+    draw_scaled_image(image, x, y, w, h);       // Scale to specific size
+    draw_sub_image(image, sx, sy, sw, sh, x, y);  // Draw sub-rectangle
+    draw_scaled_sub_image(image, sx, sy, sw, sh, dx, dy, dw, dh);  // Scaled sub-rect
+    
+    draw_end();
+}
+```
+
+**Important**: Image files (`.png`, `.jpg`) are converted to `.k` format at build time. Use `data_get_image("filename.k")` - not the original extension.
+
+#### Draw API Reference
+
+| Function | Description |
+|----------|-------------|
+| `draw_begin(target, clear, color)` | Begin drawing (target=NULL for default framebuffer) |
+| `draw_end()` | End drawing |
+| `draw_set_color(color)` | Set RGBA color (0xRRGGBBAA) |
+| `draw_filled_rect(x, y, w, h)` | Draw filled rectangle |
+| `draw_rect(x, y, w, h, strength)` | Draw rectangle outline |
+| `draw_line(x0, y0, x1, y1, strength)` | Draw line |
+| `draw_line_aa(x0, y0, x1, y1, strength)` | Draw anti-aliased line |
+| `draw_filled_circle(cx, cy, radius, segments)` | Draw filled circle |
+| `draw_circle(cx, cy, radius, segments, strength)` | Draw circle outline |
+| `draw_image(tex, x, y)` | Draw image at original size |
+| `draw_scaled_image(tex, x, y, w, h)` | Draw scaled image |
+| `draw_sub_image(tex, sx, sy, sw, sh, x, y)` | Draw sub-region |
+| `draw_scaled_sub_image(tex, sx, sy, sw, sh, dx, dy, dw, dh)` | Draw scaled sub-region |
+| `draw_string(text, x, y)` | Draw text (requires font) |
+| `draw_set_font(font, size)` | Set font and size |
+
+#### Test Project Example
+
+See `tests/draw/` for a complete working example:
+
+```bash
+cd base/tests/draw
+../../make --run
+```
+
+Required `project.js` configuration:
+```js
+let flags = globalThis.flags;
+flags.with_wren = false;
+flags.with_eval = false;
+
+let project = new Project("test");
+project.add_project("../../");
+project.add_cfiles("main.c");
+project.add_assets("assets/*", {destination: "data/{name}"});
+return project;
+```
 
 ## Code Style Guidelines
 
