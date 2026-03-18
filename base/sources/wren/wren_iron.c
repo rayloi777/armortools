@@ -16,8 +16,16 @@ WrenVM *wren_get_vm(void) {
 
 // Iron.print(text)
 static void wren_iron_print(WrenVM *vm) {
-    const char *text = wrenGetSlotString(vm, 1);
-    iron_log("%s", text);
+    WrenType type = wrenGetSlotType(vm, 1);
+    if (type == WREN_TYPE_STRING) {
+        const char *text = wrenGetSlotString(vm, 1);
+        iron_log("%s", text);
+    } else if (type == WREN_TYPE_NUM) {
+        double num = wrenGetSlotDouble(vm, 1);
+        iron_log("%f", num);
+    } else {
+        iron_log("(unknown type)");
+    }
 }
 
 // Iron.log(text)

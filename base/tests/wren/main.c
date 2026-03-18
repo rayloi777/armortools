@@ -1,13 +1,15 @@
 // Wren test
 // ../../make --run
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <iron.h>
 #include <iron_wren.h>
 
+char *wren_code = NULL;
+
 void render() {
 	_gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff1a1a2e, 1.0);
-
-	wren_eval("Iron.print(\"Mouse view: %(Mouse.view_x), %(Mouse.view_y)\")");
 
 	gpu_end();
 }
@@ -26,9 +28,23 @@ void _kickstart() {
 	                                          .depth_bits = 32});
 	_iron_init(ops);
 
+	iron_file_reader_t reader;
+	if (iron_file_reader_open(&reader, "data/wren/test.wren", IRON_FILE_TYPE_ASSET)) {
+		size_t size = iron_file_reader_size(&reader);
+		wren_code = malloc(size + 1);
+		iron_file_reader_read(&reader, wren_code, size);
+		wren_code[size] = '\0';
+		iron_file_reader_close(&reader);
+		iron_log("Loaded Wren: %s", wren_code);
+	} else {
+		iron_log("Failed to load data/wren/test.wren");
+	}
+
 	wren_init();
 
-	wren_eval("Iron.print(\"Wren initialized!\")");
+	if (wren_code != NULL) {
+		wren_eval(wren_code);
+	}
 
 	_iron_set_update_callback(render);
 
