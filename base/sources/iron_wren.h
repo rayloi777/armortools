@@ -7,6 +7,7 @@
 void   wren_init();
 void   wren_free();
 float  wren_eval(const char *code);
+void  *wren_make_call_handle(const char *signature);
 char  *wren_call(void *fn_handle);
 char  *wren_call_ptr(void *fn_handle, void *arg);
 void  *wren_pcall_str(void *fn_handle, char *arg);
@@ -22,6 +23,7 @@ WrenVM *wren_get_vm();
 void wren_init() {}
 void wren_free() {}
 float wren_eval(const char *code) { (void)code; return 0.0f; }
+void *wren_make_call_handle(const char *signature) { (void)signature; return NULL; }
 char *wren_call(void *fn_handle) { (void)fn_handle; return (char*)NULL; }
 char *wren_call_ptr(void *fn_handle, void *arg) { (void)fn_handle; (void)arg; return (char*)NULL; }
 void *wren_pcall_str(void *fn_handle, char *arg) { (void)fn_handle; (void)arg; return NULL; }

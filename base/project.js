@@ -18,6 +18,7 @@ project.add_assets("assets/*", {destination : "data/{name}"});
 project.add_assets("assets/licenses/**", {destination : "data/licenses/{name}"});
 project.add_assets("assets/themes/*.json", {destination : "data/themes/{name}"});
 project.add_cfiles("sources/*.c");
+
 if (platform != "wasm") {
 	project.add_cfiles("sources/libs/gc.c");
 }
@@ -217,10 +218,11 @@ if (fs_exists("assets/wren")) {
 	project.add_assets("assets/wren/*.wren", {destination: "data/wren/{name}"});
 }
 
+// Only add wren files when explicitly requested
 if (flags.with_wren) {
 	project.add_define("WITH_WREN");
-	project.add_cfiles("sources/iron_wren.c");
-	project.add_cfiles("sources/wren_iron.c");
+	project.add_cfiles("sources/wren/iron_wren.c");
+	project.add_cfiles("sources/wren/wren_iron.c");
 	project.add_cfiles("sources/libs/wren/wren_compiler.c");
 	project.add_cfiles("sources/libs/wren/wren_core.c");
 	project.add_cfiles("sources/libs/wren/wren_debug.c");

@@ -6,6 +6,9 @@
 
 void render() {
 	_gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff1a1a2e, 1.0);
+
+	wren_eval("Iron.print(\"Mouse view: %(Mouse.view_x), %(Mouse.view_y)\")");
+
 	gpu_end();
 }
 
@@ -23,18 +26,15 @@ void _kickstart() {
 	                                          .depth_bits = 32});
 	_iron_init(ops);
 
-	// Test Wren
 	wren_init();
-	wren_eval("Iron.print(\"Hello from Wren!\")");
-	wren_eval("Iron.print(\"Math.sin(0) = %(Math.sin(0))\")");
-	wren_eval("Iron.print(\"Math.cos(0) = %(Math.cos(0))\")");
-	wren_eval("Iron.print(\"Math.sqrt(16) = %(Math.sqrt(16))\")");
-	wren_eval("Iron.print(\"Math.PI = %(Math.PI)\")");
-	wren_free();
+
+	wren_eval("Iron.print(\"Wren initialized!\")");
 
 	_iron_set_update_callback(render);
 
 	iron_start();
+
+	wren_free();
 }
 
 ////
