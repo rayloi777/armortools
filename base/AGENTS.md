@@ -47,6 +47,44 @@ cd base/tests/[test_name]
 # - eval      - QuickJS scripting test
 ```
 
+### Test Project Initialization
+
+Test projects have two initialization options:
+
+#### `_iron_init()` - Basic Initialization
+
+Use when you only need GPU rendering without the 2D draw system:
+
+```c
+void _kickstart() {
+    iron_window_options_t *ops = GC_ALLOC_INIT(iron_window_options_t, {...});
+    _iron_init(ops);
+    // draw_* functions will NOT work
+    _iron_set_update_callback(render);
+    iron_start();
+}
+```
+
+Use for: `triangle`, `cube`, `poly` tests that render directly via GPU.
+
+#### `sys_start()` - Full Initialization with Draw System
+
+Use when you need the 2D draw API (`draw_filled_rect`, `draw_image`, `draw_string`, etc.):
+
+```c
+void _kickstart() {
+    iron_window_options_t *ops = GC_ALLOC_INIT(iron_window_options_t, {...});
+    sys_start(ops);  // Calls _iron_init() + draw_init()
+    // draw_* functions will work
+    _iron_set_update_callback(render);
+    iron_start();
+}
+```
+
+Use for: tests that use `iron_draw` API (images, shapes, text).
+
+**Why**: `draw_init()` is only called inside `sys_start()` (see `iron_sys.c:158`). Using `_iron_init()` alone leaves the draw system uninitialized.
+
 ## Code Style Guidelines
 
 ### Formatting
