@@ -1,6 +1,5 @@
 
 let flags = globalThis.flags;
-flags.with_wren = false;
 flags.with_eval = false;
 
 let project = new Project("test");
