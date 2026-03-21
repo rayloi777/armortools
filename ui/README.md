@@ -1,6 +1,10 @@
 # ArmorUI - Iron Engine UI Demo
 
+<<<<<<< HEAD
 A demonstration project showcasing the Iron Engine's immediate mode UI system with all available widgets.
+=======
+A demonstration project showcasing the Iron Engine's immediate mode UI system.
+>>>>>>> 6dc2c210e769d4a21ad046362b9d297a6dbb7fec
 
 ## Build & Run
 
@@ -19,6 +23,7 @@ open /Users/rayloi/Library/Developer/Xcode/DerivedData/ArmorUI-ewplyaelesnkkafqk
 
 ## Features
 
+<<<<<<< HEAD
 The demo is organized into 5 tabs:
 
 ### Tab 1: Buttons
@@ -46,6 +51,14 @@ The demo is organized into 5 tabs:
 
 ### Tab 5: Color
 - **Color Wheel** (`ui_color_wheel`) - HSV color picker with RGB output
+=======
+- **Window**: Main demo window with title "Iron Engine UI Demo"
+- **Buttons**: 2 buttons (Button 1, Button 2)
+- **Checkbox**: Toggle option with persistent state
+- **Slider**: Float slider (0.0 - 1.0 range)
+- **Text Input**: Editable text field with stored value
+- **Combo Box**: Dropdown selection with 3 options
+>>>>>>> 6dc2c210e769d4a21ad046362b9d297a6dbb7fec
 
 ## Project Structure
 
@@ -53,6 +66,7 @@ The demo is organized into 5 tabs:
 ui/
 ├── project.js          # Build configuration
 ├── sources/
+<<<<<<< HEAD
 │   ├── main.c          # Entry point
 │   ├── global.h        # Master include header
 │   ├── kickstart.c     # Initialization
@@ -60,10 +74,20 @@ ui/
 │   ├── types.h         # demo_ui_t type definition
 │   ├── enums.h         # Tab and window enums
 │   ├── globals.h       # Global declarations
+=======
+│   ├── main.c          # Entry point (includes kickstart.c)
+│   ├── global.h        # Master include header
+│   ├── kickstart.c    # Initialization (sys_start, ui_create, etc.)
+│   ├── demo_ui.c       # UI demonstration code
+│   ├── types.h         # demo_ui_t type definition
+│   ├── enums.h         # Window IDs, theme enums
+│   ├── globals.h       # Global declarations (ui, demo_ui, ui_children)
+>>>>>>> 6dc2c210e769d4a21ad046362b9d297a6dbb7fec
 │   └── functions.h     # Function declarations
 └── build/              # Xcode project output
 ```
 
+<<<<<<< HEAD
 ## Complete UI Widget Reference
 
 ### Button
@@ -188,12 +212,15 @@ ui_separator(1, false);   // Thin line
 ui_separator(4, true);    // Filled bar
 ```
 
+=======
+>>>>>>> 6dc2c210e769d4a21ad046362b9d297a6dbb7fec
 ## Key Discoveries
 
 ### UI Handle Pattern
 
 Each UI widget requires a `ui_handle_t` for state management:
 ```c
+<<<<<<< HEAD
 // Get/create handle - must use ui_handle(__ID__) not ui_handle_create()
 ui_handle_t *h = ui_handle(__ID__);
 
@@ -212,6 +239,25 @@ stored_value = ui_slider(h, "Label", ...);
 if (h->changed) { }  // Value was modified
 ```
 
+=======
+// Checkbox/Slider pattern:
+ui_handle_t *h = ui_handle(__ID__);
+h->b = stored_bool;  // or h->f for float
+stored_bool = ui_check(h, "Label", "");  // or ui_slider()
+
+// Text Input pattern:
+ui_handle_t *h_text = ui_handle(__ID__);
+h_text->text = text_buffer;  // MUST set text pointer every frame
+ui_text_input(h_text, "", UI_ALIGN_LEFT, true, false);
+
+// Combo Box pattern:
+ui_handle_t *h_combo = ui_handle(__ID__);
+selection = ui_combo(h_combo, &options_array, "Label", true, UI_ALIGN_LEFT, false);
+```
+
+**Important**: For text input, you must set `h->text = buffer` BEFORE calling `ui_text_input` every frame. The buffer must be persistent (not a temporary string).
+
+>>>>>>> 6dc2c210e769d4a21ad046362b9d297a6dbb7fec
 ### Required Global Variables
 
 ```c
@@ -237,16 +283,26 @@ gc_root(demo_ui);
 ### Missing Declarations Added to base/sources/iron_ui.h
 
 ```c
+<<<<<<< HEAD
 ui_handle_t *ui_handle(char *s);           // Line 340
 ui_t        *ui_create(ui_options_t *ops); // Line 341
 ui_theme_t  *ui_theme_create();            // Line 336
 void          ui_indent();                   // Added
 void          ui_unindent();                 // Added
+=======
+ui_handle_t *ui_handle(char *s);           // Line 339
+ui_t        *ui_create(ui_options_t *ops); // Line 340
+ui_theme_t  *ui_theme_create();            // Line 336
+>>>>>>> 6dc2c210e769d4a21ad046362b9d297a6dbb7fec
 ```
 
 ### Metal Rendering Note
 
+<<<<<<< HEAD
 Do NOT use `draw_begin()` / `draw_end()` when using `sys_start()`. The Iron engine handles rendering internally.
+=======
+Do NOT use `draw_begin()` / `draw_end()` when using `sys_start()`. The Iron engine handles rendering internally, and calling these functions causes "command encoder already encoding" errors.
+>>>>>>> 6dc2c210e769d4a21ad046362b9d297a6dbb7fec
 
 ## Troubleshooting
 
@@ -256,6 +312,7 @@ Cause: `ui_children` was not initialized.
 
 Fix: Add `ui_children = any_map_create(); gc_root(ui_children);` after `sys_start()`.
 
+<<<<<<< HEAD
 ### Text Input Not Working
 
 Cause: Text buffer pointer not set.
@@ -265,6 +322,17 @@ Fix: Set `h->text = buffer` BEFORE calling `ui_text_input()` every frame.
 ### LSP shows "iron.h not found"
 
 This is a false positive. The build system correctly finds `iron.h` through include paths.
+=======
+### Crash: any_map_get with NULL pointer
+
+Cause: `demo_ui_init()` was not called.
+
+Fix: Call `demo_ui_init();` before registering callbacks.
+
+### LSP shows "iron.h not found"
+
+This is a false positive. The build system correctly finds `iron.h` through include paths. Build succeeds despite LSP errors.
+>>>>>>> 6dc2c210e769d4a21ad046362b9d297a6dbb7fec
 
 ## Reference Files
 

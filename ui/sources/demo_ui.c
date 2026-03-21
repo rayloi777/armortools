@@ -235,8 +235,6 @@ void render_tab_display(void) {
     ui_handle_t *h_tip = ui_handle(__ID__);
     h_tip->b = demo_ui->check_bool;
     demo_ui->check_bool = ui_check(h_tip, "Hover for tooltip", "");
-    if (h_tip->init) {
-    }
     ui_end_element();
 }
 
