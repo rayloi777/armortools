@@ -2345,7 +2345,6 @@ function load_project(directory, is_root_project) {
             with_image_write : false,
             with_video_write : false,
             with_eval : goptions.with_eval == true,
-            with_wren : goptions.with_wren == true,
             with_plugins : false,
             with_kong : false,
             with_raytrace : false,

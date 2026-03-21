@@ -333,9 +333,12 @@ char        *ui_copy();
 char        *ui_cut();
 void         ui_paste(char *s);
 void         ui_theme_default(ui_theme_t *t);
+ui_theme_t  *ui_theme_create();
 ui_t        *ui_get_current();
 void         ui_set_current(ui_t *current);
 ui_handle_t *ui_handle_create();
+ui_handle_t *ui_handle(char *s);
+ui_t        *ui_create(ui_options_t *ops);
 ui_handle_t *ui_nest(ui_handle_t *handle, int pos);
 void         ui_set_scale(float factor);
 

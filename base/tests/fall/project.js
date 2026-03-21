@@ -3,7 +3,6 @@ let flags = globalThis.flags;
 flags.with_physics = true;
 
 let project = new Project("test");
-flags.with_wren = false;
 project.add_project("../../");
 
 project.add_cfiles("sources/main.c");
