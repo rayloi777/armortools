@@ -1,7 +1,7 @@
 
 #include "global.h"
 
-static char_ptr_array_t combo_options;
+static char_ptr_array_t *combo_options;
 static char *tab_names[DEMO_TAB_COUNT] = {
     "Buttons",
     "Inputs",
@@ -128,7 +128,7 @@ void render_tab_inputs(void) {
     ui_end_element();
 
     ui_handle_t *h_combo = ui_handle(__ID__);
-    demo_ui->combo_selection = ui_combo(h_combo, &combo_options, "Select:", true, UI_ALIGN_LEFT, false);
+    demo_ui->combo_selection = ui_combo(h_combo, combo_options, "Select:", true, UI_ALIGN_LEFT, false);
     ui_end_element();
 
     ui_separator(0, true);
@@ -139,7 +139,7 @@ void render_tab_inputs(void) {
 
     ui_handle_t *h_inline = ui_handle(__ID__);
     h_inline->i = demo_ui->inline_radio_selection;
-    demo_ui->inline_radio_selection = ui_inline_radio(h_inline, &combo_options, UI_ALIGN_LEFT);
+    demo_ui->inline_radio_selection = ui_inline_radio(h_inline, combo_options, UI_ALIGN_LEFT);
     ui_end_element();
 }
 
@@ -271,6 +271,9 @@ void demo_ui_update(void *_) {
 }
 
 void demo_ui_render(void *_) {
+    draw_begin(NULL, true, 0xff1a1a2e);
+    draw_end();
+    
     ui_begin(ui);
 
     if (ui_window(demo_ui->windows[DEMO_WINDOW_MAIN], 10, 10, 450, 700, true)) {
@@ -304,9 +307,10 @@ void demo_ui_render(void *_) {
 }
 
 void demo_ui_init(void) {
-    char_ptr_array_push(&combo_options, "Option 1");
-    char_ptr_array_push(&combo_options, "Option 2");
-    char_ptr_array_push(&combo_options, "Option 3");
-    char_ptr_array_push(&combo_options, "Option 4");
-    char_ptr_array_push(&combo_options, "Option 5");
+    combo_options = char_ptr_array_create(8);
+    char_ptr_array_push(combo_options, "Option 1");
+    char_ptr_array_push(combo_options, "Option 2");
+    char_ptr_array_push(combo_options, "Option 3");
+    char_ptr_array_push(combo_options, "Option 4");
+    char_ptr_array_push(combo_options, "Option 5");
 }

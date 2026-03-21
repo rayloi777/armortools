@@ -78,6 +78,9 @@ void _kickstart() {
 
     demo_ui_init();
 
+    ui_begin(ui);
+    ui_end();
+
     sys_notify_on_update(demo_ui_update, NULL);
     sys_notify_on_render(demo_ui_render, NULL);
 
