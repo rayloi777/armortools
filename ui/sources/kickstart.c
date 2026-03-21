@@ -5,6 +5,7 @@ draw_font_t *demo_font;
 ui_theme_t *demo_theme;
 gpu_texture_t *demo_color_wheel;
 gpu_texture_t *demo_color_wheel_gradient;
+gpu_texture_t *demo_noise_texture;
 
 void _kickstart() {
     iron_window_options_t *ops = GC_ALLOC_INIT(iron_window_options_t, {
@@ -30,6 +31,7 @@ void _kickstart() {
 
     demo_color_wheel = data_get_image("color_wheel.k");
     demo_color_wheel_gradient = data_get_image("color_wheel_gradient.k");
+    demo_noise_texture = data_get_image("noise256.k");
 
     demo_theme = ui_theme_create();
 
@@ -51,15 +53,28 @@ void _kickstart() {
         gc_root(demo_ui->windows[i]);
     }
 
-    demo_ui->slider_float = 0.5f;
-    demo_ui->slider_int = 50;
-    demo_ui->check_bool = true;
-    demo_ui->radio_selection = 0;
-    demo_ui->combo_selection = 0;
-    demo_ui->active_tab = DEMO_TAB_WIDGETS;
+    demo_ui->active_tab = DEMO_TAB_BUTTONS;
     demo_ui->theme = THEME_DARK;
 
+    demo_ui->check_enabled = true;
+    demo_ui->check_visible = true;
+    demo_ui->check_bool = true;
+    demo_ui->radio_selection = 0;
+    demo_ui->panel_expanded = true;
+
+    demo_ui->slider_float = 0.5f;
+    demo_ui->float_value = 42.5f;
     strcpy(demo_ui->text_input_buffer, "Hello, UI!");
+    strcpy(demo_ui->text_area_buffer, "Multi-line text area.\nSecond line here.");
+    demo_ui->combo_selection = 0;
+    demo_ui->inline_radio_selection = 0;
+
+    demo_ui->color_hue = 0.5f;
+    demo_ui->color_sat = 0.8f;
+    demo_ui->color_val = 0.9f;
+    demo_ui->selected_color = 0xFF8844FF;
+
+    demo_ui->demo_image = demo_noise_texture;
 
     demo_ui_init();
 

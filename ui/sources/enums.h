@@ -2,15 +2,16 @@
 #pragma once
 
 typedef enum {
-    DEMO_TAB_WIDGETS,
+    DEMO_TAB_BUTTONS,
+    DEMO_TAB_INPUTS,
     DEMO_TAB_LAYOUT,
-    DEMO_TAB_INTERACTIVE,
+    DEMO_TAB_DISPLAY,
+    DEMO_TAB_COLOR,
+    DEMO_TAB_COUNT,
 } demo_tab_t;
 
 typedef enum {
     DEMO_WINDOW_MAIN,
-    DEMO_WINDOW_SECONDARY,
-    DEMO_WINDOW_COLOR,
     DEMO_WINDOW_COUNT,
 } demo_window_t;
 

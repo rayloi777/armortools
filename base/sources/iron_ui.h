@@ -307,6 +307,8 @@ void  ui_row4();
 void  ui_row5();
 void  ui_row6();
 void  ui_row7();
+void  ui_indent();
+void  ui_unindent();
 void  ui_separator(int h, bool fill);
 void  ui_tooltip(char *text);
 void  ui_tooltip_image(gpu_texture_t *image, int max_width);
