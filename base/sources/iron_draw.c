@@ -413,6 +413,7 @@ static int stbtt_BakeFontBitmapArr(unsigned char *data, int offset,       // Fon
 }
 
 bool draw_font_load(draw_font_t *font, int size) {
+	draw_font_init(font);
 	if (!draw_prepare_font_load_internal(font, size)) {
 		return true;
 	}
@@ -549,6 +550,17 @@ void draw_font_init(draw_font_t *font) {
 	if (font->glyphs_version != draw_glyphs_version) {
 		font->glyphs_version = draw_glyphs_version;
 		font->blob           = font->buf->buffer;
+		if (font->images != NULL) {
+			for (int i = 0; i < font->m_images_len; ++i) {
+				if (font->images[i].tex != NULL) {
+					free(font->images[i].tex);
+				}
+				if (font->images[i].chars != NULL) {
+					free(font->images[i].chars);
+				}
+			}
+			free(font->images);
+		}
 		font->images         = NULL;
 		font->m_images_len   = 0;
 		font->m_capacity     = 0;
@@ -661,6 +673,9 @@ void draw_font_build_glyphs() {
 }
 
 void draw_font_add_glyph(int glyph) {
+	if (draw_font_has_glyph(glyph)) {
+		return;
+	}
 	i32_array_push(draw_font_glyphs, glyph);
 	draw_font_build_glyphs();
 }

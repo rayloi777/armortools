@@ -46,6 +46,7 @@ void     draw_set_pipeline(gpu_pipeline_t *pipeline);
 void     draw_set_transform(mat3_t matrix);
 bool     draw_set_font(draw_font_t *font, int size);
 void     draw_font_init(draw_font_t *font);
+bool     draw_font_load(draw_font_t *font, int size);
 void     draw_font_destroy(draw_font_t *font);
 void     draw_font_13(draw_font_t *font);
 bool     draw_font_has_glyph(int glyph);
