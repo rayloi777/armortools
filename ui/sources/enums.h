@@ -2,6 +2,7 @@
 #pragma once
 
 typedef enum {
+    DEMO_TAB_CHINESE,
     DEMO_TAB_BUTTONS,
     DEMO_TAB_INPUTS,
     DEMO_TAB_LAYOUT,

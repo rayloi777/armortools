@@ -17,4 +17,5 @@ flags.export_version_info = false;
 let project = new Project(flags.name);
 project.add_project("../base");
 project.add_cfiles("sources/main.c");
+project.add_assets("assets/*", {destination: "data/{name}"});
 return project;

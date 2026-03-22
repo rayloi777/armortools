@@ -10,8 +10,8 @@ gpu_texture_t *demo_noise_texture;
 void _kickstart() {
     iron_window_options_t *ops = GC_ALLOC_INIT(iron_window_options_t, {
         .title     = "Iron UI Demo",
-        .width     = 1024,
-        .height    = 768,
+        .width     = 1920,
+        .height    = 1080,
         .x         = -1,
         .y         = -1,
         .mode      = IRON_WINDOW_MODE_WINDOW,
@@ -26,7 +26,7 @@ void _kickstart() {
     ui_children = any_map_create();
     gc_root(ui_children);
 
-    demo_font = data_get_font("font.ttf");
+    demo_font = data_get_font("NotoSansTC-Regular.ttf");
     draw_font_init(demo_font);
 
     demo_color_wheel = data_get_image("color_wheel.k");
@@ -34,11 +34,12 @@ void _kickstart() {
     demo_noise_texture = data_get_image("noise256.k");
 
     demo_theme = ui_theme_create();
+    
 
     ui_options_t *ui_ops = GC_ALLOC_INIT(ui_options_t, {
         .theme = demo_theme,
         .font = demo_font,
-        .scale_factor = 1.0f,
+        .scale_factor = 2.0f,
         .color_wheel = demo_color_wheel,
         .black_white_gradient = demo_color_wheel_gradient
     });
@@ -53,7 +54,7 @@ void _kickstart() {
         gc_root(demo_ui->windows[i]);
     }
 
-    demo_ui->active_tab = DEMO_TAB_BUTTONS;
+    demo_ui->active_tab = DEMO_TAB_CHINESE;
     demo_ui->theme = THEME_DARK;
 
     demo_ui->check_enabled = true;

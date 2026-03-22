@@ -3,6 +3,7 @@
 
 static char_ptr_array_t *combo_options;
 static char *tab_names[DEMO_TAB_COUNT] = {
+    "中文測試",
     "Buttons",
     "Inputs",
     "Layout",
@@ -267,6 +268,135 @@ void render_tab_color(void) {
     ui_end_element();
 }
 
+void render_tab_chinese(void) {
+    ui_text("繁體中文測試", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+    ui_text("使用 NotoSansTC 字型", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    ui_separator(0, true);
+    ui_end_element();
+
+    ui_text("按鈕測試", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    if (ui_button("點擊我", UI_ALIGN_CENTER, "")) {
+    }
+    ui_end_element();
+
+    if (ui_button("確認", UI_ALIGN_CENTER, "")) {
+    }
+    ui_end_element();
+
+    if (ui_button("取消", UI_ALIGN_CENTER, "")) {
+    }
+    ui_end_element();
+
+    ui_separator(0, true);
+    ui_end_element();
+
+    ui_text("核取方塊", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    ui_handle_t *h_check_zh = ui_handle(__ID__);
+    h_check_zh->b = demo_ui->check_bool;
+    demo_ui->check_bool = ui_check(h_check_zh, "啟用選項", "");
+    ui_end_element();
+
+    ui_handle_t *h_check_zh2 = ui_handle(__ID__);
+    h_check_zh2->b = demo_ui->check_visible;
+    demo_ui->check_visible = ui_check(h_check_zh2, "顯示內容", "");
+    ui_end_element();
+
+    ui_separator(0, true);
+    ui_end_element();
+
+    ui_text("單選按鈕", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    ui_handle_t *h_radio_zh = ui_handle(__ID__);
+    h_radio_zh->i = demo_ui->radio_selection;
+    if (ui_radio(h_radio_zh, 0, "選項甲", "")) {
+        demo_ui->radio_selection = 0;
+    }
+    ui_end_element();
+    if (ui_radio(h_radio_zh, 1, "選項乙", "")) {
+        demo_ui->radio_selection = 1;
+    }
+    ui_end_element();
+    if (ui_radio(h_radio_zh, 2, "選項丙", "")) {
+        demo_ui->radio_selection = 2;
+    }
+    ui_end_element();
+
+    ui_separator(0, true);
+    ui_end_element();
+
+    ui_text("滑桿", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    ui_handle_t *h_slider_zh = ui_handle(__ID__);
+    h_slider_zh->f = demo_ui->slider_float;
+    demo_ui->slider_float = ui_slider(h_slider_zh, "數值", 0.0, 100.0, true, 1.0, true, UI_ALIGN_RIGHT, true);
+    ui_end_element();
+
+    ui_separator(0, true);
+    ui_end_element();
+
+    ui_text("文字輸入", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    ui_handle_t *h_text_zh = ui_handle(__ID__);
+    h_text_zh->text = demo_ui->text_input_buffer;
+    ui_text_input(h_text_zh, "", UI_ALIGN_LEFT, true, false);
+    ui_end_element();
+
+    ui_separator(0, true);
+    ui_end_element();
+
+    ui_text("下拉選單", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    ui_handle_t *h_combo_zh = ui_handle(__ID__);
+    demo_ui->combo_selection = ui_combo(h_combo_zh, combo_options, "選擇：", true, UI_ALIGN_LEFT, false);
+    ui_end_element();
+
+    ui_separator(0, true);
+    ui_end_element();
+
+    ui_text("可摺疊面板", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    ui_handle_t *h_panel_zh = ui_handle(__ID__);
+    h_panel_zh->b = demo_ui->panel_expanded;
+    demo_ui->panel_expanded = ui_panel(h_panel_zh, "進階設定", false, true, false);
+    ui_end_element();
+    if (demo_ui->panel_expanded) {
+        ui_indent();
+        ui_text("面板內容放在這裡", UI_ALIGN_LEFT, 0x00000000);
+        ui_end_element();
+        ui_button("面板按鈕", UI_ALIGN_CENTER, "");
+        ui_end_element();
+        ui_unindent();
+    }
+
+    ui_separator(0, true);
+    ui_end_element();
+
+    ui_text("顏色選擇器", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+
+    ui_handle_t *h_color_zh = ui_handle(__ID__);
+    h_color_zh->color = demo_ui->selected_color;
+    demo_ui->selected_color = ui_color_wheel(h_color_zh, true, -1, -1, true, NULL, NULL);
+    ui_end_element();
+
+    ui_text("目前顏色:", UI_ALIGN_LEFT, 0x00000000);
+    ui_end_element();
+    ui_fill(0, 0, 100, 30, demo_ui->selected_color);
+    ui_end_element();
+}
+
 void demo_ui_update(void *_) {
 }
 
@@ -300,6 +430,7 @@ void demo_ui_render(void *_) {
             case DEMO_TAB_LAYOUT: render_tab_layout(); break;
             case DEMO_TAB_DISPLAY: render_tab_display(); break;
             case DEMO_TAB_COLOR: render_tab_color(); break;
+            case DEMO_TAB_CHINESE: render_tab_chinese(); break;
         }
     }
 
@@ -308,9 +439,9 @@ void demo_ui_render(void *_) {
 
 void demo_ui_init(void) {
     combo_options = char_ptr_array_create(8);
-    char_ptr_array_push(combo_options, "Option 1");
-    char_ptr_array_push(combo_options, "Option 2");
-    char_ptr_array_push(combo_options, "Option 3");
-    char_ptr_array_push(combo_options, "Option 4");
-    char_ptr_array_push(combo_options, "Option 5");
+    char_ptr_array_push(combo_options, "選項一");
+    char_ptr_array_push(combo_options, "選項二");
+    char_ptr_array_push(combo_options, "選項三");
+    char_ptr_array_push(combo_options, "選項四");
+    char_ptr_array_push(combo_options, "選項五");
 }
