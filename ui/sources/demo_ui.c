@@ -439,6 +439,7 @@ void demo_ui_render(void *_) {
 
 void demo_ui_init(void) {
     combo_options = char_ptr_array_create(8);
+    gc_root(combo_options);
     char_ptr_array_push(combo_options, "選項一");
     char_ptr_array_push(combo_options, "選項二");
     char_ptr_array_push(combo_options, "選項三");

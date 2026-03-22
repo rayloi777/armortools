@@ -79,6 +79,9 @@ void _kickstart() {
 
     demo_ui_init();
 
+    draw_font_preload_text_for(demo_font, ui->font_size,
+        "中文測試使用NotoSansTC字型繁體按鈕點擊我確認取消核取方塊啟用選項顯示內容單選甲乙丙滑桿數值文字輸入下拉選單可摺疊面板進階設定顏色選擇器目前IronEngineDemoLayoutDisplayColor");
+
     ui_begin(ui);
     ui_end();
 

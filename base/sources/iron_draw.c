@@ -680,6 +680,45 @@ void draw_font_add_glyph(int glyph) {
 	draw_font_build_glyphs();
 }
 
+bool draw_font_has_all_glyphs(const char *text) {
+	for (int i = 0; text[i] != 0;) {
+		int l = 0;
+		int codepoint = string_utf8_decode(&text[i], &l);
+		i += l;
+		if (!draw_font_has_glyph(codepoint)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool draw_font_preload_text(const char *text) {
+	return draw_font_preload_text_for(draw_font, draw_font_size, text);
+}
+
+bool draw_font_preload_text_for(draw_font_t *font, int size, const char *text) {
+	bool added = false;
+	for (int i = 0; text[i] != 0;) {
+		int l = 0;
+		int codepoint = string_utf8_decode(&text[i], &l);
+		i += l;
+		if (!draw_font_has_glyph(codepoint)) {
+			i32_array_push(draw_font_glyphs, codepoint);
+			added = true;
+		}
+	}
+	if (added) {
+		draw_font_build_glyphs();
+		draw_font_load(font, size);
+	}
+	return added;
+}
+
+void draw_string_dynamic(const char *text, float x, float y) {
+	draw_font_preload_text(text);
+	draw_string(text, x, y);
+}
+
 int draw_font_count(draw_font_t *font) {
 	return stbtt_GetNumberOfFonts(font->blob);
 }
