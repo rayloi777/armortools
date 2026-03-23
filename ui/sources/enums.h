@@ -21,3 +21,11 @@ typedef enum {
     THEME_DARK,
     THEME_LIGHT,
 } demo_theme_t;
+
+typedef enum {
+    MENU_CATEGORY_FILE,
+    MENU_CATEGORY_EDIT,
+    MENU_CATEGORY_VIEW,
+    MENU_CATEGORY_HELP,
+    MENU_CATEGORY_COUNT,
+} menu_category_t;

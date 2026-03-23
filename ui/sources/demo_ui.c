@@ -1,5 +1,7 @@
 
 #include "global.h"
+#include "ui_menu.h"
+#include "ui_menubar.h"
 
 static char_ptr_array_t *combo_options;
 static char *tab_names[DEMO_TAB_COUNT] = {
@@ -406,13 +408,29 @@ void demo_ui_render(void *_) {
     
     ui_begin(ui);
 
-    if (ui_window(demo_ui->windows[DEMO_WINDOW_MAIN], 10, 10, 450, 700, true)) {
+    ui_menubar_render();
+
+    if (menubar_get_exit_requested()) {
+        menubar_reset_requests();
+        iron_stop();
+    }
+
+    if (menubar_get_theme_requested()) {
+        menubar_reset_requests();
+        demo_ui->theme = (demo_ui->theme == THEME_DARK) ? THEME_LIGHT : THEME_DARK;
+    }
+
+    if (menubar_get_about_requested()) {
+        menubar_reset_requests();
+    }
+
+    i32 menubar_height = math_floor(ui_menu_menubar_h(ui));
+    i32 window_y_offset = menubar_height + 5;
+
+    if (ui_window(demo_ui->windows[DEMO_WINDOW_MAIN], 10, window_y_offset, 450, 700, true)) {
 
         ui_text("UI Demo", UI_ALIGN_LEFT, 0x00000000);
-        //ui_end_element();
-        //ui_separator(0, true);
         ui_text("繁體中文測試", UI_ALIGN_LEFT, 0x00000000);
-        //ui_end_element();
 
         ui_handle_t *h_tab = ui_handle(__ID__);
         for (i32 i = 0; i < DEMO_TAB_COUNT; i++) {
@@ -420,9 +438,6 @@ void demo_ui_render(void *_) {
                 demo_ui->active_tab = i;
             }
         }
-        //ui_end_element();
-        //ui_separator(0, true);
-        //ui_end_element();
 
         switch (demo_ui->active_tab) {
             case DEMO_TAB_BUTTONS: render_tab_buttons(); break;
@@ -434,7 +449,7 @@ void demo_ui_render(void *_) {
         }
     }
 
-    if (ui_window(demo_ui->windows[DEMO_WINDOW_SECOND], 470, 10, 800, 800, true)) {
+    if (ui_window(demo_ui->windows[DEMO_WINDOW_SECOND], 470, window_y_offset, 800, 800, true)) {
        
         ui_text("Hello from Window2", UI_ALIGN_LEFT, 0x00000000);
 
@@ -448,6 +463,7 @@ void demo_ui_render(void *_) {
 }
 
 void demo_ui_init(void) {
+    ui_menubar_init();
     combo_options = char_ptr_array_create(8);
     gc_root(combo_options);
     char_ptr_array_push(combo_options, "選項一");
