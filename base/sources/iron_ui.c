@@ -2131,12 +2131,11 @@ char *ui_text_input(ui_handle_t *handle, char *label, int align, bool editable, 
 	else {
 		ui_draw_string(current->text_selected, theme->TEXT_OFFSET, 0, align, false);
 		if (current->ime_composing && current->ime_composition[0] != '\0') {
-			float off = align == UI_ALIGN_LEFT ? theme->TEXT_OFFSET : current->_w - draw_string_width(current->ops->font, current->font_size, current->text_selected);
 			float text_w = draw_string_width(current->ops->font, current->font_size, current->text_selected);
-			float comp_x = align == UI_ALIGN_LEFT ? current->_x + off + text_w : current->_x + off;
-			float comp_y = current->_y + current->button_offset_y * 1.5;
-			float screen_x = current->_window_x + comp_x + 20;
-			float screen_y = current->_window_y + comp_y + current->font_size + 20;
+			float comp_x = current->_x + theme->TEXT_OFFSET * UI_SCALE() + text_w;
+			float comp_y = current->_y + current->font_offset_y;
+			float screen_x = current->_window_x + comp_x;
+			float screen_y = current->_window_y + current->_y + current->button_offset_y + 100;
 			iron_keyboard_set_ime_position(screen_x, screen_y, current->font_size + 4);
 			draw_set_color(theme->TEXT_COL);
 			draw_string(current->ime_composition, comp_x, comp_y);
