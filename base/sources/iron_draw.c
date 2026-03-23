@@ -737,15 +737,31 @@ float draw_sub_string_width(draw_font_t *font, int font_size, const char *text, 
 	draw_font_load(font, font_size);
 	draw_font_image_t *img   = draw_font_get_image_internal(font, font_size);
 	float              width = 0.0;
-	for (int i = start; i < end; ++i) {
-		if (text[i] == '\0')
-			break;
-		width += draw_font_get_char_width_internal(img, text[i]);
+	
+	if (img == NULL || draw_font_glyphs == NULL || draw_font_glyph_blocks == NULL) {
+		return width;
+	}
+	
+	int byte_pos = 0;
+	while (text[byte_pos] != '\0') {
+		int l = 0;
+		int codepoint = string_utf8_decode(&text[byte_pos], &l);
+		if (byte_pos >= start && byte_pos < end) {
+			int char_index = draw_font_get_char_index_internal(codepoint);
+			if (char_index >= 0 && char_index < draw_font_glyphs->length) {
+				width += img->chars[char_index].xadvance;
+			}
+		}
+		byte_pos += l;
+		if (byte_pos >= end) break;
 	}
 	return width;
 }
 
 int draw_string_width(draw_font_t *font, int font_size, const char *text) {
+	if (text == NULL) {
+		return 0;
+	}
 	return (int)draw_sub_string_width(font, font_size, text, 0, (int)strlen(text));
 }
 

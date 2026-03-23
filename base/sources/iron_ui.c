@@ -333,7 +333,7 @@ void ui_draw_string(char *text, float x_offset, float y_offset, int align, bool 
 		}
 	}
 
-	if (ui_dynamic_glyph_load && false) {
+	if (ui_dynamic_glyph_load) {
 		int i = 0;
 		while (text[i] != '\0') {
 			int l = 0;
@@ -867,6 +867,9 @@ void ui_draw_combo() {
 
 	current->combo_selected_texts_filtered = 0;
 	for (int i = 0; i < current->combo_selected_texts->length; ++i) {
+		if (current->combo_selected_texts->buffer[i] == NULL) {
+			continue;
+		}
 		char str[512];
 		ui_lower_case(str, current->combo_selected_texts->buffer[i]);
 		if (strlen(search) > 0 && strstr(str, search) == NULL) {
@@ -2137,9 +2140,11 @@ int ui_combo(ui_handle_t *handle, char_ptr_array_t *texts, char *label, bool sho
 			current->combo_selected_texts_filtered = 0;
 			current->combo_search_bar              = search_bar;
 			for (int i = 0; i < texts->length; ++i) { // Adapt combo list width to combo item width
-				int w = (int)draw_string_width(current->ops->font, current->font_size, texts->buffer[i]) + 10;
-				if (current->combo_selected_w < w) {
-					current->combo_selected_w = w;
+				if (texts->buffer[i] != NULL) {
+					int w = (int)draw_string_width(current->ops->font, current->font_size, texts->buffer[i]) + 10;
+					if (current->combo_selected_w < w) {
+						current->combo_selected_w = w;
+					}
 				}
 			}
 			if (current->combo_selected_w > current->_w * 2.0) {
@@ -2190,7 +2195,7 @@ int ui_combo(ui_handle_t *handle, char_ptr_array_t *texts, char *label, bool sho
 		current->_x -= 15;
 	}
 	draw_set_color(theme->TEXT_COL); // Value
-	if (handle->i < texts->length) {
+	if (handle->i < texts->length && texts->buffer[handle->i] != NULL) {
 		ui_draw_string(texts->buffer[handle->i], theme->TEXT_OFFSET, 0, align, true);
 	}
 	if (align == UI_ALIGN_RIGHT) {
