@@ -1089,16 +1089,44 @@ void ui_deselect_text(ui_t *ui) {
 #endif
 }
 
-void ui_remove_char_at(char *str, int at) {
-	int len = strlen(str);
-	for (int i = at; i < len; ++i) {
-		str[i] = str[i + 1];
-	}
+static int ui_utf8_char_len(const char *str, int at) {
+	unsigned char c = (unsigned char)str[at];
+	if ((c & 0x80) == 0) return 1;
+	if ((c & 0xE0) == 0xC0) return 2;
+	if ((c & 0xF0) == 0xE0) return 3;
+	if ((c & 0xF8) == 0xF0) return 4;
+	return 1;
 }
 
-void ui_remove_chars_at(char *str, int at, int count) {
-	for (int i = 0; i < count; ++i) {
-		ui_remove_char_at(str, at);
+static int ui_utf8_prev_char(const char *str, int at) {
+	int start = at - 1;
+	while (start > 0 && ((str[start] & 0xC0) == 0x80)) {
+		start--;
+	}
+	return start;
+}
+
+static int ui_utf8_next_char(const char *str, int at) {
+	return at + ui_utf8_char_len(str, at);
+}
+
+int ui_remove_char_at(char *str, int at) {
+	int start = at;
+	while (start > 0 && ((str[start] & 0xC0) == 0x80)) {
+		start--;
+	}
+	int char_len = ui_utf8_char_len(str, start);
+	int len = strlen(str);
+	for (int i = start; i <= len - char_len; ++i) {
+		str[i] = str[i + char_len];
+	}
+	return start;
+}
+
+void ui_remove_chars_at(char *str, int at, int byte_count) {
+	int len = strlen(str);
+	for (int i = at; i <= len - byte_count; ++i) {
+		str[i] = str[i + byte_count];
 	}
 }
 
@@ -1156,18 +1184,20 @@ void ui_update_text_edit(int align, bool editable, bool live_update) {
 	if (current->is_key_pressed) {                // Process input
 		if (current->key_code == KEY_CODE_LEFT) { // Move cursor
 			if (current->cursor_x > 0) {
-				current->cursor_x--;
+				current->cursor_x = ui_utf8_prev_char(text, current->cursor_x);
 			}
 		}
 		else if (current->key_code == KEY_CODE_RIGHT) {
 			if (current->cursor_x < strlen(text)) {
+				current->cursor_x = ui_utf8_next_char(text, current->cursor_x);
 				current->cursor_x++;
 			}
 		}
 		else if (editable && current->key_code == KEY_CODE_BACKSPACE) { // Remove char
 			if (current->cursor_x > 0 && current->highlight_anchor == current->cursor_x) {
-				ui_remove_char_at(text, current->cursor_x - 1);
-				current->cursor_x--;
+				int prev_start = ui_utf8_prev_char(text, current->cursor_x);
+				ui_remove_char_at(text, prev_start);
+				current->cursor_x = prev_start;
 			}
 			else if (current->highlight_anchor < current->cursor_x) {
 				int count = current->cursor_x - current->highlight_anchor;
@@ -2105,6 +2135,9 @@ char *ui_text_input(ui_handle_t *handle, char *label, int align, bool editable, 
 			float text_w = draw_string_width(current->ops->font, current->font_size, current->text_selected);
 			float comp_x = align == UI_ALIGN_LEFT ? current->_x + off + text_w : current->_x + off;
 			float comp_y = current->_y + current->button_offset_y * 1.5;
+			float screen_x = current->_window_x + comp_x + 20;
+			float screen_y = current->_window_y + comp_y + current->font_size + 20;
+			iron_keyboard_set_ime_position(screen_x, screen_y, current->font_size + 4);
 			draw_set_color(theme->TEXT_COL);
 			draw_string(current->ime_composition, comp_x, comp_y);
 			float comp_w = draw_string_width(current->ops->font, current->font_size, current->ime_composition);

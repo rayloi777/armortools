@@ -420,6 +420,10 @@ static int getMouseY(NSEvent *event) {
 	commandQueue = [device newCommandQueue];
 	library      = [device newDefaultLibrary];
 
+	compositionX      = 0;
+	compositionY      = 0;
+	compositionHeight = 20;
+
 	CAMetalLayer *metalLayer   = (CAMetalLayer *)self.layer;
 	metalLayer.device          = device;
 	metalLayer.pixelFormat     = MTLPixelFormatBGRA8Unorm;
@@ -524,26 +528,26 @@ static int getMouseY(NSEvent *event) {
 	NSWindow *win = [self window];
 	if (win) {
 		NSRect frame = [win frame];
-		NSPoint topleft = [self convertPoint:NSMakePoint(0, 0) toView:nil];
-		topleft = [[self window] convertPointToScreen:topleft];
-		return NSMakeRect(topleft.x + 100, topleft.y - 50, 0, 20);
+		float  scale = [win backingScaleFactor];
+		float  screenX = frame.origin.x + compositionX / scale;
+		float  screenY = frame.origin.y + frame.size.height - compositionY / scale;
+		return NSMakeRect(screenX, screenY - compositionHeight / scale, 0, compositionHeight / scale);
 	}
-	return NSMakeRect(compositionX, compositionY, 0, 20);
+	return NSMakeRect(compositionX, compositionY, 0, compositionHeight);
 }
 
 - (NSRect)firstRectForCharacterRange:(NSRange)range {
-	NSWindow *win = [self window];
-	if (win) {
-		NSRect frame = [win frame];
-		NSPoint topleft = [self convertPoint:NSMakePoint(0, 0) toView:nil];
-		topleft = [[self window] convertPointToScreen:topleft];
-		return NSMakeRect(topleft.x + 100, topleft.y - 50, 0, 20);
-	}
-	return NSMakeRect(compositionX, compositionY, 0, 20);
+	return [self firstRectForCharacterRange:range actualRange:NULL];
 }
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)point {
 	return 0;
+}
+
+- (void)setCompositionPosition:(float)x y:(float)y height:(float)height {
+	compositionX      = x;
+	compositionY      = y;
+	compositionHeight = height;
 }
 
 - (void)doCommandBySelector:(SEL)selector {
@@ -551,9 +555,15 @@ static int getMouseY(NSEvent *event) {
 		iron_internal_keyboard_trigger_key_down(KEY_CODE_RETURN);
 		iron_internal_keyboard_trigger_key_press('\n');
 	} else if (selector == @selector(deleteBackward:)) {
+		if ([self hasMarkedText]) {
+			return;
+		}
 		iron_internal_keyboard_trigger_key_down(KEY_CODE_BACKSPACE);
 		iron_internal_keyboard_trigger_key_press('\x08');
 	} else if (selector == @selector(deleteForward:)) {
+		if ([self hasMarkedText]) {
+			return;
+		}
 		iron_internal_keyboard_trigger_key_down(KEY_CODE_DELETE);
 		iron_internal_keyboard_trigger_key_press('\x7F');
 	} else if (selector == @selector(moveLeft:)) {
@@ -570,6 +580,10 @@ static int getMouseY(NSEvent *event) {
 }
 
 @end
+
+void iron_macos_set_ime_position(float x, float y, float height) {
+	[view setCompositionPosition:x y:y height:height];
+}
 
 void iron_copy_to_clipboard(const char *text) {
 	NSPasteboard *board = [NSPasteboard generalPasteboard];

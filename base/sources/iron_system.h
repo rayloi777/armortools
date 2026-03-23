@@ -282,6 +282,7 @@ void iron_keyboard_set_ime_composition_callback(void (*value)(const char *, int,
 void iron_keyboard_set_ime_commit_callback(void (*value)(const char *, void *), void *data);
 void iron_keyboard_set_ime_candidates_callback(void (*value)(const char **, int, int, void *), void *data);
 void iron_keyboard_set_ime_text_inserted_callback(void (*value)(const char *, void *), void *data);
+void iron_keyboard_set_ime_position(float x, float y, float height);
 void iron_internal_ime_composition_updated(const char *composition, int cursor_pos);
 void iron_internal_ime_text_committed(const char *text);
 void iron_internal_ime_candidates_updated(const char **candidates, int count, int selected);

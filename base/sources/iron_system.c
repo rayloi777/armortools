@@ -398,6 +398,16 @@ void iron_internal_ime_candidates_updated(const char **candidates, int count, in
 	}
 }
 
+#ifdef IRON_MACOS
+void iron_macos_set_ime_position(float x, float y, float height);
+#endif
+
+void iron_keyboard_set_ime_position(float x, float y, float height) {
+#ifdef IRON_MACOS
+	iron_macos_set_ime_position(x, y, height);
+#endif
+}
+
 static void (*mouse_press_callback)(int /*button*/, int /*x*/, int /*y*/, void * /*data*/)                      = NULL;
 static void *mouse_press_callback_data                                                                          = NULL;
 static void (*mouse_release_callback)(int /*button*/, int /*x*/, int /*y*/, void * /*data*/)                    = NULL;

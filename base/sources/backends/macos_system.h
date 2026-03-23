@@ -15,6 +15,7 @@
 	NSRange             selectedTextRange;
 	float               compositionX;
 	float               compositionY;
+	float               compositionHeight;
 }
 
 - (CAMetalLayer *)metalLayer;
@@ -37,6 +38,7 @@
 - (BOOL)resignFirstResponder;
 - (id)initWithFrame:(NSRect)frameRect;
 - (void)resize:(NSSize)size;
+- (void)setCompositionPosition:(float)x y:(float)y height:(float)height;
 
 @end
 
