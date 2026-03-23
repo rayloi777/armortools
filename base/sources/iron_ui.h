@@ -263,6 +263,12 @@ typedef struct ui {
 	bool              tooltip_shown;
 	bool              tooltip_wait;
 	double            tooltip_time;
+	char              ime_composition[512];
+	int               ime_cursor_pos;
+	bool              ime_composing;
+	float             ime_window_x;
+	float             ime_window_y;
+	char              ime_committed_text[1024];
 	char              tab_names[16][256];
 	uint32_t          tab_colors[16];
 	bool              tab_enabled[16];
@@ -364,8 +370,9 @@ void  ui_draw_round_bottom(float x, float y, float w);
 void  ui_start_text_edit(ui_handle_t *handle, int align);
 void  ui_remove_char_at(char *str, int at);
 void  ui_remove_chars_at(char *str, int at, int count);
-void  ui_insert_char_at(char *str, int at, char c);
+void  ui_insert_char_at(char *str, int at, int codepoint);
 void  ui_insert_chars_at(char *str, int at, char *cs);
+void  ui_insert_text_at_cursor(const char *text);
 
 float UI_SCALE();
 float UI_ELEMENT_W();

@@ -345,6 +345,59 @@ void iron_internal_keyboard_trigger_key_press(unsigned character) {
 	}
 }
 
+static void (*ime_composition_callback)(const char *, int, void *)    = NULL;
+static void *ime_composition_callback_data                             = NULL;
+static void (*ime_commit_callback)(const char *, void *)              = NULL;
+static void *ime_commit_callback_data                                 = NULL;
+static void (*ime_candidates_callback)(const char **, int, int, void *) = NULL;
+static void *ime_candidates_callback_data                              = NULL;
+static void (*ime_text_inserted_callback)(const char *, void *)        = NULL;
+static void *ime_text_inserted_callback_data                          = NULL;
+
+void iron_keyboard_set_ime_composition_callback(void (*value)(const char *, int, void *), void *data) {
+	ime_composition_callback      = value;
+	ime_composition_callback_data = data;
+}
+
+void iron_keyboard_set_ime_commit_callback(void (*value)(const char *, void *), void *data) {
+	ime_commit_callback      = value;
+	ime_commit_callback_data = data;
+}
+
+void iron_keyboard_set_ime_candidates_callback(void (*value)(const char **, int, int, void *), void *data) {
+	ime_candidates_callback      = value;
+	ime_candidates_callback_data = data;
+}
+
+void iron_keyboard_set_ime_text_inserted_callback(void (*value)(const char *, void *), void *data) {
+	ime_text_inserted_callback      = value;
+	ime_text_inserted_callback_data = data;
+}
+
+void iron_text_insert(const char *text) {
+	if (ime_text_inserted_callback != NULL) {
+		ime_text_inserted_callback(text, ime_text_inserted_callback_data);
+	}
+}
+
+void iron_internal_ime_composition_updated(const char *composition, int cursor_pos) {
+	if (ime_composition_callback != NULL) {
+		ime_composition_callback(composition, cursor_pos, ime_composition_callback_data);
+	}
+}
+
+void iron_internal_ime_text_committed(const char *text) {
+	if (ime_commit_callback != NULL) {
+		ime_commit_callback(text, ime_commit_callback_data);
+	}
+}
+
+void iron_internal_ime_candidates_updated(const char **candidates, int count, int selected) {
+	if (ime_candidates_callback != NULL) {
+		ime_candidates_callback(candidates, count, selected, ime_candidates_callback_data);
+	}
+}
+
 static void (*mouse_press_callback)(int /*button*/, int /*x*/, int /*y*/, void * /*data*/)                      = NULL;
 static void *mouse_press_callback_data                                                                          = NULL;
 static void (*mouse_release_callback)(int /*button*/, int /*x*/, int /*y*/, void * /*data*/)                    = NULL;

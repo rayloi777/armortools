@@ -278,6 +278,14 @@ void iron_keyboard_set_key_press_callback(void (*value)(unsigned /*character*/, 
 void iron_internal_keyboard_trigger_key_down(int key_code);
 void iron_internal_keyboard_trigger_key_up(int key_code);
 void iron_internal_keyboard_trigger_key_press(unsigned character);
+void iron_keyboard_set_ime_composition_callback(void (*value)(const char *, int, void *), void *data);
+void iron_keyboard_set_ime_commit_callback(void (*value)(const char *, void *), void *data);
+void iron_keyboard_set_ime_candidates_callback(void (*value)(const char **, int, int, void *), void *data);
+void iron_keyboard_set_ime_text_inserted_callback(void (*value)(const char *, void *), void *data);
+void iron_internal_ime_composition_updated(const char *composition, int cursor_pos);
+void iron_internal_ime_text_committed(const char *text);
+void iron_internal_ime_candidates_updated(const char **candidates, int count, int selected);
+void iron_text_insert(const char *text);
 void iron_mouse_set_press_callback(void (*value)(int /*button*/, int /*x*/, int /*y*/, void * /*data*/), void *data);
 void iron_mouse_set_release_callback(void (*value)(int /*button*/, int /*x*/, int /*y*/, void * /*data*/), void *data);
 void iron_mouse_set_move_callback(void (*value)(int /*x*/, int /*y*/, int /*movement_x*/, int /*movement_y*/, void * /*data*/), void *data);

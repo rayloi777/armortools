@@ -75,6 +75,10 @@ static bool cmd   = false;
 - (void)keyDown:(NSEvent *)theEvent {
 	if ([theEvent isARepeat])
 		return;
+
+	[self interpretKeyEvents:[NSArray arrayWithObject:theEvent]];
+	return;
+
 	NSString *characters = [theEvent charactersIgnoringModifiers];
 	if ([characters length]) {
 		unichar ch = [characters characterAtIndex:0];
@@ -451,6 +455,118 @@ static int getMouseY(NSEvent *event) {
 
 - (id<MTLCommandQueue>)metalQueue {
 	return commandQueue;
+}
+
+#pragma mark - NSTextInputClient Protocol
+
+- (BOOL)hasMarkedText {
+	return markedText != nil && markedText.length > 0;
+}
+
+- (NSRange)markedRange {
+	return markedTextRange;
+}
+
+- (NSRange)selectedRange {
+	return selectedTextRange;
+}
+
+- (NSArray *)validAttributesForMarkedText {
+	return @[];
+}
+
+- (void)setMarkedText:(id)string selectedRange:(NSRange)selRange replacementRange:(NSRange)replRange {
+	if ([string isKindOfClass:[NSAttributedString class]]) {
+		markedText = [string string];
+	} else {
+		markedText = string;
+	}
+	markedTextRange = NSMakeRange(0, markedText.length);
+	selectedTextRange = selRange;
+
+	iron_internal_ime_composition_updated([markedText UTF8String], (int)selRange.location);
+}
+
+- (void)insertText:(id)string replacementRange:(NSRange)replRange {
+	NSString *text;
+	if ([string isKindOfClass:[NSAttributedString class]]) {
+		text = [string string];
+	} else {
+		text = string;
+	}
+
+	iron_internal_ime_text_committed([text UTF8String]);
+
+	markedText = nil;
+	markedTextRange = NSMakeRange(NSNotFound, 0);
+	selectedTextRange = NSMakeRange(0, 0);
+}
+
+- (void)unmarkText {
+	markedText = nil;
+	markedTextRange = NSMakeRange(NSNotFound, 0);
+	selectedTextRange = NSMakeRange(0, 0);
+
+	iron_internal_ime_composition_updated("", 0);
+}
+
+- (NSAttributedString *)attributedSubstringFromRange:(NSRange)range {
+	if (markedText && range.location + range.length <= markedText.length) {
+		return [[NSAttributedString alloc] initWithString:[markedText substringWithRange:range]];
+	}
+	return nil;
+}
+
+- (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
+	if (actualRange != NULL) {
+		*actualRange = range;
+	}
+	NSWindow *win = [self window];
+	if (win) {
+		NSRect frame = [win frame];
+		NSPoint topleft = [self convertPoint:NSMakePoint(0, 0) toView:nil];
+		topleft = [[self window] convertPointToScreen:topleft];
+		return NSMakeRect(topleft.x + 100, topleft.y - 50, 0, 20);
+	}
+	return NSMakeRect(compositionX, compositionY, 0, 20);
+}
+
+- (NSRect)firstRectForCharacterRange:(NSRange)range {
+	NSWindow *win = [self window];
+	if (win) {
+		NSRect frame = [win frame];
+		NSPoint topleft = [self convertPoint:NSMakePoint(0, 0) toView:nil];
+		topleft = [[self window] convertPointToScreen:topleft];
+		return NSMakeRect(topleft.x + 100, topleft.y - 50, 0, 20);
+	}
+	return NSMakeRect(compositionX, compositionY, 0, 20);
+}
+
+- (NSUInteger)characterIndexForPoint:(NSPoint)point {
+	return 0;
+}
+
+- (void)doCommandBySelector:(SEL)selector {
+	if (selector == @selector(insertNewline:)) {
+		iron_internal_keyboard_trigger_key_down(KEY_CODE_RETURN);
+		iron_internal_keyboard_trigger_key_press('\n');
+	} else if (selector == @selector(deleteBackward:)) {
+		iron_internal_keyboard_trigger_key_down(KEY_CODE_BACKSPACE);
+		iron_internal_keyboard_trigger_key_press('\x08');
+	} else if (selector == @selector(deleteForward:)) {
+		iron_internal_keyboard_trigger_key_down(KEY_CODE_DELETE);
+		iron_internal_keyboard_trigger_key_press('\x7F');
+	} else if (selector == @selector(moveLeft:)) {
+		iron_internal_keyboard_trigger_key_down(KEY_CODE_LEFT);
+	} else if (selector == @selector(moveRight:)) {
+		iron_internal_keyboard_trigger_key_down(KEY_CODE_RIGHT);
+	} else if (selector == @selector(moveUp:)) {
+		iron_internal_keyboard_trigger_key_down(KEY_CODE_UP);
+	} else if (selector == @selector(moveDown:)) {
+		iron_internal_keyboard_trigger_key_down(KEY_CODE_DOWN);
+	} else if (selector == @selector(cancelOperation:)) {
+		[self unmarkText];
+	}
 }
 
 @end

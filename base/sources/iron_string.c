@@ -291,3 +291,26 @@ int string_utf8_decode(const char *str, int *i) {
 		*i += l;
 	return u;
 }
+
+int string_utf8_encode(int codepoint, char *out) {
+	if (codepoint < 0x80) {
+		out[0] = codepoint;
+		return 1;
+	}
+	if (codepoint < 0x800) {
+		out[0] = 0xC0 | (codepoint >> 6);
+		out[1] = 0x80 | (codepoint & 0x3F);
+		return 2;
+	}
+	if (codepoint < 0x10000) {
+		out[0] = 0xE0 | (codepoint >> 12);
+		out[1] = 0x80 | ((codepoint >> 6) & 0x3F);
+		out[2] = 0x80 | (codepoint & 0x3F);
+		return 3;
+	}
+	out[0] = 0xF0 | (codepoint >> 18);
+	out[1] = 0x80 | ((codepoint >> 12) & 0x3F);
+	out[2] = 0x80 | ((codepoint >> 6) & 0x3F);
+	out[3] = 0x80 | (codepoint & 0x3F);
+	return 4;
+}

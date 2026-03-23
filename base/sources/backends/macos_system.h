@@ -5,11 +5,16 @@
 #import <MetalKit/MTKView.h>
 #include <iron_global.h>
 
-@interface BasicMTKView : MTKView {
+@interface BasicMTKView : MTKView <NSTextInputClient> {
 @private
 	id<MTLDevice>       device;
 	id<MTLCommandQueue> commandQueue;
 	id<MTLLibrary>      library;
+	NSString           *markedText;
+	NSRange             markedTextRange;
+	NSRange             selectedTextRange;
+	float               compositionX;
+	float               compositionY;
 }
 
 - (CAMetalLayer *)metalLayer;

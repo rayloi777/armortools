@@ -1102,24 +1102,57 @@ void ui_remove_chars_at(char *str, int at, int count) {
 	}
 }
 
-void ui_insert_char_at(char *str, int at, char c) {
-	int len = strlen(str);
-	for (int i = len + 1; i > at; --i) {
-		str[i] = str[i - 1];
+void ui_insert_char_at(char *str, int at, int codepoint) {
+	char utf8[4];
+	int  bytes = string_utf8_encode(codepoint, utf8);
+	int  len   = strlen(str);
+	for (int i = len + bytes; i > at; --i) {
+		str[i] = str[i - bytes];
 	}
-	str[at] = c;
+	for (int i = 0; i < bytes; ++i) {
+		str[at + i] = utf8[i];
+	}
 }
 
 void ui_insert_chars_at(char *str, int at, char *cs) {
-	int len = strlen(cs);
-	for (int i = 0; i < len; ++i) {
-		ui_insert_char_at(str, at + i, cs[i]);
+	int cs_len = strlen(cs);
+	int str_len = strlen(str);
+	for (int i = str_len; i >= at; --i) {
+		str[i + cs_len] = str[i];
 	}
+	for (int i = 0; i < cs_len; ++i) {
+		str[at + i] = cs[i];
+	}
+}
+
+void ui_insert_text_at_cursor(const char *text) {
+	if (current == NULL || current->text_selected_handle == NULL)
+		return;
+	char *dest = current->text_selected;
+	int at = current->cursor_x;
+	int text_len = strlen(text);
+	int dest_len = strlen(dest);
+	for (int i = dest_len; i >= at; --i) {
+		dest[i + text_len] = dest[i];
+	}
+	for (int i = 0; i < text_len; ++i) {
+		dest[at + i] = text[i];
+	}
+	current->cursor_x += text_len;
+	current->highlight_anchor = current->cursor_x;
 }
 
 void ui_update_text_edit(int align, bool editable, bool live_update) {
 	char text[1024];
 	strcpy(text, current->text_selected);
+
+	if (current->ime_committed_text[0] != '\0') {
+		ui_insert_chars_at(text, current->cursor_x, current->ime_committed_text);
+		current->cursor_x += strlen(current->ime_committed_text);
+		current->highlight_anchor = current->cursor_x;
+		current->ime_committed_text[0] = '\0';
+	}
+
 	if (current->is_key_pressed) {                // Process input
 		if (current->key_code == KEY_CODE_LEFT) { // Move cursor
 			if (current->cursor_x > 0) {
@@ -1189,7 +1222,8 @@ void ui_update_text_edit(int align, bool editable, bool live_update) {
 			ui_remove_chars_at(text, current->highlight_anchor, current->cursor_x - current->highlight_anchor);
 			ui_insert_char_at(text, current->highlight_anchor, current->key_char);
 
-			current->cursor_x = current->cursor_x + 1 > strlen(text) ? strlen(text) : current->cursor_x + 1;
+			int utf8_bytes = (current->key_char < 0x80) ? 1 : (current->key_char < 0x800) ? 2 : (current->key_char < 0x10000) ? 3 : 4;
+			current->cursor_x = current->cursor_x + utf8_bytes > strlen(text) ? strlen(text) : current->cursor_x + utf8_bytes;
 		}
 		bool selecting =
 		    current->is_shift_down && (current->key_code == KEY_CODE_LEFT || current->key_code == KEY_CODE_RIGHT || current->key_code == KEY_CODE_SHIFT);
@@ -1263,6 +1297,14 @@ void ui_update_text_edit(int align, bool editable, bool live_update) {
 	float cursor_x   = align == UI_ALIGN_LEFT ? current->_x + strw + off : current->_x + current->_w - strw - off;
 	draw_set_color(theme->TEXT_COL); // Cursor
 	draw_filled_rect(cursor_x, current->_y + current->button_offset_y * 1.5, 1.0 * UI_SCALE(), cursor_height);
+
+	if (current->ime_composing && current->ime_composition[0] != '\0') {
+		float comp_w = draw_string_width(current->ops->font, current->font_size, current->ime_composition);
+		float comp_x = align == UI_ALIGN_LEFT ? current->_x + off : current->_x + current->_w - comp_w - off;
+		float comp_y = current->_y + current->button_offset_y * 1.5;
+		draw_set_color(theme->TEXT_COL);
+		draw_line(comp_x, comp_y + current->font_size + 2, comp_x + comp_w, comp_y + current->font_size + 2, 1.0);
+	}
 
 	strcpy(current->text_selected, text);
 	if (live_update && current->text_selected_handle != NULL) {
@@ -2058,6 +2100,16 @@ char *ui_text_input(ui_handle_t *handle, char *label, int align, bool editable, 
 	}
 	else {
 		ui_draw_string(current->text_selected, theme->TEXT_OFFSET, 0, align, false);
+		if (current->ime_composing && current->ime_composition[0] != '\0') {
+			float off = align == UI_ALIGN_LEFT ? theme->TEXT_OFFSET : current->_w - draw_string_width(current->ops->font, current->font_size, current->text_selected);
+			float text_w = draw_string_width(current->ops->font, current->font_size, current->text_selected);
+			float comp_x = align == UI_ALIGN_LEFT ? current->_x + off + text_w : current->_x + off;
+			float comp_y = current->_y + current->button_offset_y * 1.5;
+			draw_set_color(theme->TEXT_COL);
+			draw_string(current->ime_composition, comp_x, comp_y);
+			float comp_w = draw_string_width(current->ops->font, current->font_size, current->ime_composition);
+			draw_line(comp_x, comp_y + current->font_size + 2, comp_x + comp_w, comp_y + current->font_size + 2, 1.0);
+		}
 	}
 
 	ui_end_element();
