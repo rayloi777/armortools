@@ -5,7 +5,7 @@ A demonstration project showcasing the Iron Engine's immediate mode UI system wi
 ## Build & Run
 
 ```bash
-cd /Users/rayloi/Documents/GitHub/armortools/ui
+cd armortools/ui
 ../base/make macos metal          # Build only
 ../base/make macos metal --run    # Build and run
 ```
@@ -14,13 +14,20 @@ Or use Xcode:
 ```bash
 cd build
 xcodebuild -project ArmorUI.xcodeproj -scheme ArmorUI -configuration Release build
-open /Users/rayloi/Library/Developer/Xcode/DerivedData/ArmorUI-ewplyaelesnkkafqkekhsdzdhrty/Build/Products/Release/ArmorUI.app
+open build/build/Release/ArmorUI.app
 ```
+
+## Features
+
+- **Chinese Text Support** - Full UTF-8 text rendering with dynamic glyph loading
+- **Combo Box** - Dropdown selection with optional search bar
+- **All Standard Widgets** - Buttons, Checkboxes, Radio, Sliders, Inputs, etc.
 
 ## Demo Tabs
 
 | Tab | Widgets |
 |-----|---------|
+| **繁體中文** | Chinese text display test with all widgets |
 | **Buttons** | Button, Checkbox, Radio, Panel |
 | **Inputs** | Slider, Float Input, Text Input, Text Area, Combo, Inline Radio |
 | **Layout** | Row layouts (2-7), Indent/Unindent, Separator |
