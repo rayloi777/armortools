@@ -34,7 +34,7 @@ void _kickstart() {
     demo_noise_texture = data_get_image("noise256.k");
 
     demo_theme = ui_theme_create();
-    demo_theme->ELEMENT_H = 20;
+    demo_theme->ELEMENT_H = 24;
     demo_theme->ELEMENT_OFFSET = 4;
 
     ui_options_t *ui_ops = GC_ALLOC_INIT(ui_options_t, {
