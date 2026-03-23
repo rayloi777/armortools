@@ -403,9 +403,6 @@ void demo_ui_update(void *_) {
 }
 
 void demo_ui_render(void *_) {
-    draw_begin(NULL, true, 0xff1a1a2e);
-    draw_end();
-    
     ui_begin(ui);
 
     ui_menubar_render();
