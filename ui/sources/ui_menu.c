@@ -5,7 +5,7 @@
 bool   ui_menu_show       = false;
 bool   ui_menu_show_first = false;
 bool   ui_menu_keep_open  = false;
-bool   ui_menu_hide_flag  = false;
+bool   ui_menu_hide_flag = false;
 bool   ui_menu_nested     = false;
 i32    ui_menu_x          = 0;
 i32    ui_menu_y          = 0;
@@ -48,7 +48,6 @@ void ui_menu_render(void) {
         ui_menu_y -= iron_window_height() * 2;
     }
 
-    draw_begin(NULL, false, 0);
     ui_begin_region(ui, ui_menu_x, ui_menu_y, menu_w);
     ui->input_enabled = true;
     ui_menu_begin();
@@ -65,7 +64,6 @@ void ui_menu_render(void) {
     ui_menu_end();
     ui_end_region();
     ui->input_enabled = true;
-    draw_end();
 
     if (ui_menu_show_first) {
         ui_menu_show_first = false;
