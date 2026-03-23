@@ -1,6 +1,6 @@
 
 let flags                = globalThis.flags;
-flags.name              = "ArmorUI";
+flags.name              = "UI Demo";
 flags.with_physics      = false;
 flags.with_d3dcompiler  = false;
 flags.with_nfd          = false;

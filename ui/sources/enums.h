@@ -13,6 +13,7 @@ typedef enum {
 
 typedef enum {
     DEMO_WINDOW_MAIN,
+    DEMO_WINDOW_SECOND,
     DEMO_WINDOW_COUNT,
 } demo_window_t;
 

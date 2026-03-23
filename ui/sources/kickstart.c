@@ -9,7 +9,7 @@ gpu_texture_t *demo_noise_texture;
 
 void _kickstart() {
     iron_window_options_t *ops = GC_ALLOC_INIT(iron_window_options_t, {
-        .title     = "Iron UI Demo",
+        .title     = "UI Demo",
         .width     = 1920,
         .height    = 1080,
         .x         = -1,
@@ -34,7 +34,8 @@ void _kickstart() {
     demo_noise_texture = data_get_image("noise256.k");
 
     demo_theme = ui_theme_create();
-    
+    demo_theme->ELEMENT_H = 20;
+    demo_theme->ELEMENT_OFFSET = 4;
 
     ui_options_t *ui_ops = GC_ALLOC_INIT(ui_options_t, {
         .theme = demo_theme,
