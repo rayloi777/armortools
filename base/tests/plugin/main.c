@@ -1,11 +1,11 @@
-// Minic Plugin Test with Draw
-// Uses draw_* functions instead of ui_* for simplicity
+// Minic Plugin Test with Draw-based UI
+// Uses draw_* functions to simulate button interaction
 
 #include <iron.h>
 #include <stdint.h>
 #include <stdio.h>
 
-static void *g_plugin_fn_on_ui  = NULL;
+static void *g_plugin_fn_on_ui = NULL;
 static void *g_plugin_fn_on_update = NULL;
 static minic_ctx_t *g_plugin_ctx = NULL;
 
@@ -13,8 +13,7 @@ static float g_button_x = 100.0f;
 static float g_button_y = 100.0f;
 static float g_button_w = 120.0f;
 static float g_button_h = 40.0f;
-static int g_button_hovered = 0;
-static int g_button_pressed = 0;
+static int g_button_clicked = 0;
 
 void console_info(char *s) {
     fprintf(stderr, "[INFO] %s\n", s);
@@ -54,21 +53,26 @@ void test_plugin_load(const char *filename) {
     }
 }
 
-int hit_test(float mx, float my) {
-    return mx >= g_button_x && mx <= g_button_x + g_button_w &&
-           my >= g_button_y && my <= g_button_y + g_button_h;
-}
-
 void render(void) {
     draw_begin(NULL, true, 0xff1a1a2e);
 
-    // Draw button background
-    if (g_button_pressed) {
-        draw_set_color(0xff205d9c);
-    } else if (g_button_hovered) {
-        draw_set_color(0xff383838);
+    // Check mouse click on button
+    if (mouse_started("left")) {
+        float mx = mouse_x;
+        float my = mouse_y;
+        if (mx >= g_button_x && mx <= g_button_x + g_button_w &&
+            my >= g_button_y && my <= g_button_y + g_button_h) {
+            g_button_clicked = 1;
+            fprintf(stderr, "[CLICK] Button clicked!\n");
+        }
+    }
+
+    // Draw button background (change color when clicked)
+    if (g_button_clicked) {
+        draw_set_color(0xff205d9c);  // Blue when clicked
+        g_button_clicked = 0;
     } else {
-        draw_set_color(0xff323232);
+        draw_set_color(0xff323232);  // Dark gray normally
     }
     draw_filled_rect(g_button_x, g_button_y, g_button_w, g_button_h);
 
@@ -76,11 +80,11 @@ void render(void) {
     draw_set_color(0xff555555);
     draw_rect(g_button_x, g_button_y, g_button_w, g_button_h, 1.0f);
 
-    // Draw button text placeholder (just a rect for now)
-    draw_set_color(0xffffffff);
-    draw_string("Click Me", g_button_x + 20, g_button_y + 12);
+    // Draw button text (commented out - requires font init)
+    // draw_set_color(0xffffffff);
+    // draw_string("Click Me!", g_button_x + 20, g_button_y + 12);
 
-    // Call plugin UI
+    // Call plugin UI callback
     if (g_plugin_fn_on_ui != NULL) {
         minic_ctx_call_fn(g_plugin_ctx, g_plugin_fn_on_ui, NULL, 0);
     }
