@@ -1,5 +1,5 @@
-// Minic Plugin Test
-// ../../make --run
+// Minic Plugin Test with Draw
+// Uses draw_* functions instead of ui_* for simplicity
 
 #include <iron.h>
 #include <stdint.h>
@@ -7,8 +7,14 @@
 
 static void *g_plugin_fn_on_ui  = NULL;
 static void *g_plugin_fn_on_update = NULL;
-static void *g_plugin_fn_on_delete = NULL;
 static minic_ctx_t *g_plugin_ctx = NULL;
+
+static float g_button_x = 100.0f;
+static float g_button_y = 100.0f;
+static float g_button_w = 120.0f;
+static float g_button_h = 40.0f;
+static int g_button_hovered = 0;
+static int g_button_pressed = 0;
 
 void console_info(char *s) {
     fprintf(stderr, "[INFO] %s\n", s);
@@ -26,10 +32,6 @@ void test_plugin_register_on_ui(void *fn) {
 
 void test_plugin_register_on_update(void *fn) {
     g_plugin_fn_on_update = fn;
-}
-
-void test_plugin_register_on_delete(void *fn) {
-    g_plugin_fn_on_delete = fn;
 }
 
 void *test_plugin_create(void) {
@@ -52,9 +54,33 @@ void test_plugin_load(const char *filename) {
     }
 }
 
+int hit_test(float mx, float my) {
+    return mx >= g_button_x && mx <= g_button_x + g_button_w &&
+           my >= g_button_y && my <= g_button_y + g_button_h;
+}
+
 void render(void) {
     draw_begin(NULL, true, 0xff1a1a2e);
 
+    // Draw button background
+    if (g_button_pressed) {
+        draw_set_color(0xff205d9c);
+    } else if (g_button_hovered) {
+        draw_set_color(0xff383838);
+    } else {
+        draw_set_color(0xff323232);
+    }
+    draw_filled_rect(g_button_x, g_button_y, g_button_w, g_button_h);
+
+    // Draw button border
+    draw_set_color(0xff555555);
+    draw_rect(g_button_x, g_button_y, g_button_w, g_button_h, 1.0f);
+
+    // Draw button text placeholder (just a rect for now)
+    draw_set_color(0xffffffff);
+    draw_string("Click Me", g_button_x + 20, g_button_y + 12);
+
+    // Call plugin UI
     if (g_plugin_fn_on_ui != NULL) {
         minic_ctx_call_fn(g_plugin_ctx, g_plugin_fn_on_ui, NULL, 0);
     }
@@ -82,13 +108,11 @@ void _kickstart(void) {
     minic_register("test_plugin_create", "p()", (minic_ext_fn_raw_t)test_plugin_create);
     minic_register("test_plugin_register_on_ui", "v(p)", (minic_ext_fn_raw_t)test_plugin_register_on_ui);
     minic_register("test_plugin_register_on_update", "v(p)", (minic_ext_fn_raw_t)test_plugin_register_on_update);
-    minic_register("test_plugin_register_on_delete", "v(p)", (minic_ext_fn_raw_t)test_plugin_register_on_delete);
     minic_register("console_info", "v(p)", (minic_ext_fn_raw_t)console_info);
     minic_register("console_error", "v(p)", (minic_ext_fn_raw_t)console_error);
     minic_register("console_log", "v(p)", (minic_ext_fn_raw_t)console_log);
     minic_register("gc_root", "v(p)", (minic_ext_fn_raw_t)gc_root);
     minic_register("gc_alloc", "p(i)", (minic_ext_fn_raw_t)gc_alloc);
-    minic_register("ui_handle_create", "p()", (minic_ext_fn_raw_t)ui_handle_create);
 
     test_plugin_load("data/test_plugin.c");
 
@@ -97,12 +121,10 @@ void _kickstart(void) {
     iron_start();
 }
 
-// Stubs for paint-specific functions referenced by minic_api.c
+// Stubs
 void project_save(bool save_and_quit) {}
 char *project_filepath = "";
-char *project_filepath_get(void) {
-    return project_filepath;
-}
+char *project_filepath_get(void) { return project_filepath; }
 void ui_box_show_message(char *title, char *text, bool copyable) {}
 void ui_files_show2(char *filters, bool is_save, bool open_multiple, void *files_done) {}
 void ui_files_show(char *filter, bool open_multiple, void *files_done) {}
@@ -131,13 +153,7 @@ void *parser_material_kong = NULL;
 
 any_map_t *ui_children;
 any_map_t *ui_nodes_custom_buttons;
-i32        pipes_offset;
-char      *strings_check_internet_connection(void) {
-    return "";
-}
-char *tr(char *id, any_map_t *vars) {
-    return id;
-}
-i32 pipes_get_constant_location(char *s) {
-    return 0;
-}
+i32 pipes_offset;
+char *strings_check_internet_connection(void) { return ""; }
+char *tr(char *id, any_map_t *vars) { return id; }
+i32 pipes_get_constant_location(char *s) { return 0; }
