@@ -1,42 +1,35 @@
-// Minic Plugin Test with Draw-based UI
-// Uses draw_* functions to simulate button interaction
+// Minic Plugin Test - Thin loader
 
 #include <iron.h>
 #include <stdint.h>
 #include <stdio.h>
 
 static void *g_plugin_fn_on_ui = NULL;
-static void *g_plugin_fn_on_update = NULL;
-static minic_ctx_t *g_plugin_ctx = NULL;
-
-static float g_button_x = 100.0f;
-static float g_button_y = 100.0f;
-static float g_button_w = 120.0f;
-static float g_button_h = 40.0f;
-static int g_button_clicked = 0;
 
 void console_info(char *s) {
     fprintf(stderr, "[INFO] %s\n", s);
-}
-void console_error(char *s) {
-    fprintf(stderr, "[ERROR] %s\n", s);
-}
-void console_log(char *s) {
-    fprintf(stderr, "[LOG] %s\n", s);
 }
 
 void test_plugin_register_on_ui(void *fn) {
     g_plugin_fn_on_ui = fn;
 }
 
-void test_plugin_register_on_update(void *fn) {
-    g_plugin_fn_on_update = fn;
-}
-
 void *test_plugin_create(void) {
     static int plugin_id = 0;
     plugin_id++;
     return (void *)(intptr_t)plugin_id;
+}
+
+int mouse_started(char *button) {
+    return iron_input_mouse_started(0, button);
+}
+
+float mouse_x(void) {
+    return iron_input_mouse_x();
+}
+
+float mouse_y(void) {
+    return iron_input_mouse_y();
 }
 
 void test_plugin_load(const char *filename) {
@@ -46,8 +39,8 @@ void test_plugin_load(const char *filename) {
         return;
     }
 
-    g_plugin_ctx = minic_eval_named(sys_buffer_to_string(blob), filename);
-    if (g_plugin_ctx == NULL) {
+    minic_ctx_t *ctx = minic_eval_named(sys_buffer_to_string(blob), filename);
+    if (ctx == NULL) {
         iron_log("Failed to eval plugin: %s", filename);
         return;
     }
@@ -56,37 +49,8 @@ void test_plugin_load(const char *filename) {
 void render(void) {
     draw_begin(NULL, true, 0xff1a1a2e);
 
-    // Check mouse click on button
-    if (mouse_started("left")) {
-        float mx = mouse_x;
-        float my = mouse_y;
-        if (mx >= g_button_x && mx <= g_button_x + g_button_w &&
-            my >= g_button_y && my <= g_button_y + g_button_h) {
-            g_button_clicked = 1;
-            fprintf(stderr, "[CLICK] Button clicked!\n");
-        }
-    }
-
-    // Draw button background (change color when clicked)
-    if (g_button_clicked) {
-        draw_set_color(0xff205d9c);  // Blue when clicked
-        g_button_clicked = 0;
-    } else {
-        draw_set_color(0xff323232);  // Dark gray normally
-    }
-    draw_filled_rect(g_button_x, g_button_y, g_button_w, g_button_h);
-
-    // Draw button border
-    draw_set_color(0xff555555);
-    draw_rect(g_button_x, g_button_y, g_button_w, g_button_h, 1.0f);
-
-    // Draw button text (commented out - requires font init)
-    // draw_set_color(0xffffffff);
-    // draw_string("Click Me!", g_button_x + 20, g_button_y + 12);
-
-    // Call plugin UI callback
     if (g_plugin_fn_on_ui != NULL) {
-        minic_ctx_call_fn(g_plugin_ctx, g_plugin_fn_on_ui, NULL, 0);
+        minic_ctx_call_fn(NULL, g_plugin_fn_on_ui, NULL, 0);
     }
 
     draw_end();
@@ -111,12 +75,17 @@ void _kickstart(void) {
 
     minic_register("test_plugin_create", "p()", (minic_ext_fn_raw_t)test_plugin_create);
     minic_register("test_plugin_register_on_ui", "v(p)", (minic_ext_fn_raw_t)test_plugin_register_on_ui);
-    minic_register("test_plugin_register_on_update", "v(p)", (minic_ext_fn_raw_t)test_plugin_register_on_update);
     minic_register("console_info", "v(p)", (minic_ext_fn_raw_t)console_info);
-    minic_register("console_error", "v(p)", (minic_ext_fn_raw_t)console_error);
-    minic_register("console_log", "v(p)", (minic_ext_fn_raw_t)console_log);
     minic_register("gc_root", "v(p)", (minic_ext_fn_raw_t)gc_root);
     minic_register("gc_alloc", "p(i)", (minic_ext_fn_raw_t)gc_alloc);
+
+    minic_register("mouse_started", "i(p)", (minic_ext_fn_raw_t)mouse_started);
+    minic_register("mouse_x", "f()", (minic_ext_fn_raw_t)mouse_x);
+    minic_register("mouse_y", "f()", (minic_ext_fn_raw_t)mouse_y);
+
+    minic_register("draw_set_color", "v(i)", (minic_ext_fn_raw_t)draw_set_color);
+    minic_register("draw_filled_rect", "v(f,f,f,f)", (minic_ext_fn_raw_t)draw_filled_rect);
+    minic_register("draw_rect", "v(f,f,f,f,f)", (minic_ext_fn_raw_t)draw_rect);
 
     test_plugin_load("data/test_plugin.c");
 

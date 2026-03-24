@@ -577,6 +577,12 @@ minic_val_t minic_dispatch(minic_ext_func_t *ef, minic_val_t *args, int argc) {
 		typedef void (*fn_iii)(int, int, int);
 		typedef void (*fn_f)(float);
 		typedef void (*fn_ff)(float, float);
+		typedef void (*fn_fff)(float, float, float);
+		typedef void (*fn_ffff)(float, float, float, float);
+		typedef void (*fn_fffff)(float, float, float, float, float);
+		typedef void (*fn_fff)(float, float, float);
+		typedef void (*fn_ffff)(float, float, float, float);
+		typedef void (*fn_fffff)(float, float, float, float, float);
 		typedef void (*fn_ppi)(void *, void *, int);
 		typedef void (*fn_pppi)(void *, void *, void *, int);
 		typedef void (*fn_ppf)(void *, void *, float);
@@ -620,6 +626,12 @@ minic_val_t minic_dispatch(minic_ext_func_t *ef, minic_val_t *args, int argc) {
 			((fn_f)ef->fn)(A0f);
 		else if (strcmp(adesc, "ff") == 0)
 			((fn_ff)ef->fn)(A0f, A1f);
+		else if (strcmp(adesc, "fff") == 0)
+			((fn_fff)ef->fn)(A0f, A1f, A2f);
+		else if (strcmp(adesc, "ffff") == 0)
+			((fn_ffff)ef->fn)(A0f, A1f, A2f, A3f);
+		else if (strcmp(adesc, "fffff") == 0)
+			((fn_fffff)ef->fn)(A0f, A1f, A2f, A3f, a[4].f);
 		else if (strcmp(adesc, "ppi") == 0)
 			((fn_ppi)ef->fn)(A0p, A1p, A2i);
 		else if (strcmp(adesc, "pppi") == 0)
