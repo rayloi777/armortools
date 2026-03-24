@@ -609,6 +609,7 @@ MN(draw_set_transform) {
 #undef AP
 
 // paint
+#ifdef WITH_PAINT
 void *plugin_create();
 void  plugin_notify_on_ui(void *plugin, void *f);
 void  plugin_notify_on_update(void *plugin, void *f);
@@ -755,6 +756,7 @@ void        *plugin_material_kong_get() {
 }
 char *parser_material_parse_value_input(ui_node_socket_t *inp, bool vector_as_grayscale);
 void  node_shader_write_frag(void *raw, char *s);
+#endif
 
 void minic_register_builtins() {
 	minic_register_native("printf", minic_printf_native);
@@ -1612,6 +1614,7 @@ void minic_register_builtins() {
 	R(keyboard_down_listener, "v(i)");
 	R(keyboard_up_listener, "v(i)");
 
+#ifdef WITH_PAINT
 	// paint
 	R(plugin_create, "p()");
 	R(plugin_notify_on_ui, "v(p,p)");
@@ -1642,6 +1645,7 @@ void minic_register_builtins() {
 	R(plugin_material_kong_get, "p()");
 	R(parser_material_parse_value_input, "p(p,i)");
 	R(node_shader_write_frag, "v(p,p)");
+#endif
 
 	// json
 	R(json_parse, "p(p)");

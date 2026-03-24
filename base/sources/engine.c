@@ -790,8 +790,6 @@ mesh_data_t *mesh_data_parse(char *name, char *id) {
 		iron_log("Mesh data '%s' not found!", id);
 		return NULL;
 	}
-	fprintf(stderr, "mesh_data_parse: found mesh '%s', scale_pos=%f\n", raw->name ? raw->name : "null", raw->scale_pos);
-	fflush(stderr);
 	return mesh_data_create(raw);
 }
 
@@ -987,20 +985,15 @@ bool mesh_object_cull_mesh(mesh_object_t *raw, char *context, camera_object_t *c
 
 void mesh_object_render(mesh_object_t *raw, char *context, string_array_t *bind_params) {
 	if (!raw->base->visible) {
-		fprintf(stderr, "mesh hidden, skipping\n");
 		return;
 	}
 	if (mesh_object_cull_mesh(raw, context, scene_camera)) {
-		fprintf(stderr, "mesh culled\n");
 		return;
 	}
 	if (mesh_object_cull_material(raw, context)) {
-		fprintf(stderr, "material culled\n");
 		return;
 	}
 
-	fprintf(stderr, "rendering mesh!\n");
-	fflush(stderr);
 	uniforms_pos_unpack = raw->data->scale_pos;
 	uniforms_tex_unpack = raw->data->scale_tex;
 	transform_update(raw->base->transform);
@@ -1018,16 +1011,12 @@ void mesh_object_render(mesh_object_t *raw, char *context, string_array_t *bind_
 	}
 
 	if (scontext->_->pipe != _mesh_object_last_pipeline) {
-		fprintf(stderr, "Setting pipeline\n");
-		fflush(stderr);
 		gpu_set_pipeline(scontext->_->pipe);
 		gc_unroot(_mesh_object_last_pipeline);
 		_mesh_object_last_pipeline = scontext->_->pipe;
 		gc_root(_mesh_object_last_pipeline);
 	}
 	uniforms_set_context_consts(scontext, bind_params);
-	fprintf(stderr, "About to call uniforms_set_obj_consts\n");
-	fflush(stderr);
 	uniforms_set_obj_consts(scontext, raw->base);
 	uniforms_set_material_consts(scontext, mcontext);
 	gpu_set_vertex_buffer(raw->data->_->vertex_buffer);
@@ -1143,10 +1132,6 @@ void camera_object_build_mat(camera_object_t *raw) {
 
 	raw->v  = mat4_inv(raw->base->transform->world);
 	raw->vp = mat4_mult_mat(raw->p, raw->v);
-
-	fprintf(stderr, "camera_object_build_mat: v.m[0]=%f, v.m[5]=%f, v.m[10]=%f, v.m[15]=%f\n", raw->v.m[0], raw->v.m[5], raw->v.m[10], raw->v.m[15]);
-	fprintf(stderr, "camera_object_build_mat: vp.m[0]=%f, vp.m[5]=%f, vp.m[10]=%f, vp.m[15]=%f\n", raw->vp.m[0], raw->vp.m[5], raw->vp.m[10], raw->vp.m[15]);
-	fprintf(stderr, "camera_object_build_mat: p.m[0]=%f, p.m[5]=%f, p.m[10]=%f, p.m[15]=%f\n", raw->p.m[0], raw->p.m[5], raw->p.m[10], raw->p.m[15]);
 
 	if (raw->data->frustum_culling) {
 		camera_object_build_view_frustum(raw->vp, raw->frustum_planes);
@@ -1343,10 +1328,6 @@ void uniforms_set_context_consts(shader_context_t *context, string_array_t *bind
 }
 
 void uniforms_set_obj_consts(shader_context_t *context, object_t *object) {
-	fprintf(stderr, "uniforms_set_obj_consts called: constants=%p, length=%d, expected=%d\n", 
-		(void*)context->constants, 
-		context->constants ? context->constants->length : 0,
-		context->_->constants ? context->_->constants->length : 0);
 	if (context->constants != NULL && context->constants->length == context->_->constants->length) {
 		for (i32 i = 0; i < context->constants->length; ++i) {
 			shader_const_t *c = context->constants->buffer[i];
@@ -1647,19 +1628,12 @@ bool uniforms_set_context_const(i32 location, shader_const_t *c) {
 
 void uniforms_set_obj_const(object_t *obj, i32 loc, shader_const_t *c) {
 	if (c->link == NULL) {
-		fprintf(stderr, "c->link is NULL, name=%s\n", c->name);
 		return;
 	}
 
 	camera_object_t *camera = scene_camera;
 	if (string_equals(c->type, "mat4")) {
 		mat4_t m = mat4_nan();
-		fprintf(stderr, "Processing constant: name=%s, link=%s\n", c->name, c->link);
-		fflush(stderr);
-		fprintf(stderr, "link length=%d, _world_view_proj_matrix length=%d\n", (int)strlen(c->link), (int)strlen("_world_view_proj_matrix"));
-		fflush(stderr);
-		fprintf(stderr, "strcmp result=%d\n", strcmp(c->link, "_world_view_proj_matrix"));
-		fflush(stderr);
 
 		if (string_equals(c->link, "_world_matrix")) {
 			m = obj->transform->world_unpack;
@@ -1668,15 +1642,7 @@ void uniforms_set_obj_const(object_t *obj, i32 loc, shader_const_t *c) {
 			m = mat4_inv(obj->transform->world_unpack);
 		}
 		else if (string_equals(c->link, "_world_view_proj_matrix")) {
-			fprintf(stderr, "ENTERED _world_view_proj_matrix branch!\n");
-			fflush(stderr);
 			m = mat4_mult_mat(camera->vp, obj->transform->world_unpack);
-			fprintf(stderr, "WVP matrix: m0=%f, m5=%f, m10=%f, m15=%f\n", m.m[0], m.m[5], m.m[10], m.m[15]);
-			fflush(stderr);
-			fprintf(stderr, "camera->vp: v0=%f, v5=%f, v10=%f, v15=%f\n", camera->vp.m[0], camera->vp.m[5], camera->vp.m[10], camera->vp.m[15]);
-			fflush(stderr);
-			fprintf(stderr, "obj->transform->world_unpack: w0=%f, w5=%f, w10=%f, w15=%f\n", obj->transform->world_unpack.m[0], obj->transform->world_unpack.m[5], obj->transform->world_unpack.m[10], obj->transform->world_unpack.m[15]);
-			fflush(stderr);
 			if (mat4_isnan(m) || isinf(m.m[0])) {
 				m = mat4_nan();
 			}
@@ -1687,9 +1653,6 @@ void uniforms_set_obj_const(object_t *obj, i32 loc, shader_const_t *c) {
 		else if (uniforms_mat4_links != NULL) {
 			m = uniforms_mat4_links(obj, current_material(obj), c->link);
 		}
-
-		fprintf(stderr, "After string checks, mat4_isnan(m)=%d, m.m[0]=%f\n", mat4_isnan(m), m.m[0]);
-		fflush(stderr);
 
 		if (mat4_isnan(m)) {
 			return;
@@ -2419,24 +2382,17 @@ object_t *scene_create_object(obj_t *o, scene_t *format, object_t *parent) {
 }
 
 object_t *scene_create_mesh_object(obj_t *o, scene_t *format, object_t *parent, material_data_t *material) {
-	fprintf(stderr, "scene_create_mesh_object: data_ref=%s\n", o->data_ref);
-	fflush(stderr);
-	// Mesh reference
 	any_array_t *ref         = string_split(o->data_ref, "/");
 	char        *object_file = "";
 	char        *data_ref    = "";
 	char        *scene_name  = format->name;
-	if (ref->length == 2) { // File reference
+	if (ref->length == 2) {
 		object_file = (char *)ref->buffer[0];
 		data_ref    = (char *)ref->buffer[1];
-		fprintf(stderr, "  file ref: object_file=%s, data_ref=%s\n", object_file, data_ref);
-		fflush(stderr);
 	}
-	else { // Local mesh data
+	else {
 		object_file = scene_name;
 		data_ref    = o->data_ref;
-		fprintf(stderr, "  local: object_file=%s, data_ref=%s\n", object_file, data_ref);
-		fflush(stderr);
 	}
 	return scene_return_mesh_object(object_file, data_ref, material, parent, o);
 }
