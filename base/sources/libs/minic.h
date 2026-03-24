@@ -20,6 +20,7 @@ typedef enum {
 	MINIC_T_PTR   = 2, // void *, always holds a real host pointer
 	MINIC_T_BOOL  = 3, // used in extern-call ABI, stored as INT in vals
 	MINIC_T_CHAR  = 4, // used in extern-call ABI, stored as INT in vals
+	MINIC_T_VOID  = 5, // for void-returning functions
 } minic_type_t;
 
 typedef struct {
@@ -133,8 +134,8 @@ static inline minic_val_t minic_val_typed_ptr(void *v, minic_type_t deref_type) 
 
 static inline minic_val_t minic_val_void(void) {
 	minic_val_t r;
-	r.type       = MINIC_T_INT;
-	r.deref_type = MINIC_T_INT;
+	r.type       = MINIC_T_VOID;
+	r.deref_type = MINIC_T_VOID;
 	r.i          = 0;
 	return r;
 }

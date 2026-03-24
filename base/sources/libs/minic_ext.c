@@ -138,8 +138,10 @@ static minic_type_t minic_sig_char(char c) {
 		return MINIC_T_BOOL;
 	case 'c':
 		return MINIC_T_CHAR;
+	case 'v':
+		return MINIC_T_VOID;
 	default:
-		return MINIC_T_INT; // 'v' → INT/0 for void
+		return MINIC_T_INT;
 	}
 }
 
@@ -553,6 +555,103 @@ minic_val_t minic_dispatch(minic_ext_func_t *ef, minic_val_t *args, int argc) {
 			fprintf(stderr, "minic: unsupported signature '%s' for ptr-returning '%s'\n", ef->sig, ef->name);
 		}
 		return minic_val_ptr(r);
+	}
+
+	// MINIC_T_VOID - void-returning functions
+	if (ef->ret_type == MINIC_T_VOID) {
+		typedef void (*fn_v)(void);
+		typedef void (*fn_p)(void *);
+		typedef void (*fn_pp)(void *, void *);
+		typedef void (*fn_ppp)(void *, void *, void *);
+		typedef void (*fn_pppp)(void *, void *, void *, void *);
+		typedef void (*fn_pi)(void *, int);
+		typedef void (*fn_pii)(void *, int, int);
+		typedef void (*fn_piii)(void *, int, int, int);
+		typedef void (*fn_piiii)(void *, int, int, int, int);
+		typedef void (*fn_pf)(void *, float);
+		typedef void (*fn_pff)(void *, float, float);
+		typedef void (*fn_pfff)(void *, float, float, float);
+		typedef void (*fn_pffff)(void *, float, float, float, float);
+		typedef void (*fn_i)(int);
+		typedef void (*fn_ii)(int, int);
+		typedef void (*fn_iii)(int, int, int);
+		typedef void (*fn_f)(float);
+		typedef void (*fn_ff)(float, float);
+		typedef void (*fn_ppi)(void *, void *, int);
+		typedef void (*fn_pppi)(void *, void *, void *, int);
+		typedef void (*fn_ppf)(void *, void *, float);
+		typedef void (*fn_ppff)(void *, void *, float, float);
+		typedef void (*fn_if)(int, float);
+		typedef void (*fn_iff)(int, float, float);
+
+		if (strcmp(adesc, "") == 0)
+			((fn_v)ef->fn)();
+		else if (strcmp(adesc, "p") == 0)
+			((fn_p)ef->fn)(A0p);
+		else if (strcmp(adesc, "pp") == 0)
+			((fn_pp)ef->fn)(A0p, A1p);
+		else if (strcmp(adesc, "ppp") == 0)
+			((fn_ppp)ef->fn)(A0p, A1p, A2p);
+		else if (strcmp(adesc, "pppp") == 0)
+			((fn_pppp)ef->fn)(A0p, A1p, A2p, A3p);
+		else if (strcmp(adesc, "pi") == 0)
+			((fn_pi)ef->fn)(A0p, A1i);
+		else if (strcmp(adesc, "pii") == 0)
+			((fn_pii)ef->fn)(A0p, A1i, A2i);
+		else if (strcmp(adesc, "piii") == 0)
+			((fn_piii)ef->fn)(A0p, A1i, A2i, A3i);
+		else if (strcmp(adesc, "piiii") == 0)
+			((fn_piiii)ef->fn)(A0p, A1i, A2i, A3i, a[4].i);
+		else if (strcmp(adesc, "pf") == 0)
+			((fn_pf)ef->fn)(A0p, A1f);
+		else if (strcmp(adesc, "pff") == 0)
+			((fn_pff)ef->fn)(A0p, A1f, A2f);
+		else if (strcmp(adesc, "pfff") == 0)
+			((fn_pfff)ef->fn)(A0p, A1f, A2f, A3f);
+		else if (strcmp(adesc, "pffff") == 0)
+			((fn_pffff)ef->fn)(A0p, A1f, A2f, A3f, a[4].f);
+		else if (strcmp(adesc, "i") == 0)
+			((fn_i)ef->fn)(A0i);
+		else if (strcmp(adesc, "ii") == 0)
+			((fn_ii)ef->fn)(A0i, A1i);
+		else if (strcmp(adesc, "iii") == 0)
+			((fn_iii)ef->fn)(A0i, A1i, A2i);
+		else if (strcmp(adesc, "f") == 0)
+			((fn_f)ef->fn)(A0f);
+		else if (strcmp(adesc, "ff") == 0)
+			((fn_ff)ef->fn)(A0f, A1f);
+		else if (strcmp(adesc, "ppi") == 0)
+			((fn_ppi)ef->fn)(A0p, A1p, A2i);
+		else if (strcmp(adesc, "pppi") == 0)
+			((fn_pppi)ef->fn)(A0p, A1p, A2p, A3i);
+		else if (strcmp(adesc, "ppf") == 0)
+			((fn_ppf)ef->fn)(A0p, A1p, A2f);
+		else if (strcmp(adesc, "ppff") == 0)
+			((fn_ppff)ef->fn)(A0p, A1p, A2f, A3f);
+		else if (strcmp(adesc, "if") == 0)
+			((fn_if)ef->fn)(A0i, A1f);
+		else if (strcmp(adesc, "iff") == 0)
+			((fn_iff)ef->fn)(A0i, A1f, A2f);
+		else if (strcmp(adesc, "ppiii") == 0) {
+			typedef void (*fn_ppiii)(void *, void *, int, int, int);
+			((fn_ppiii)ef->fn)(A0p, A1p, A2i, A3i, a[4].i);
+		}
+		else if (strcmp(adesc, "ppiiii") == 0) {
+			typedef void (*fn_ppiiii)(void *, void *, int, int, int, int);
+			((fn_ppiiii)ef->fn)(A0p, A1p, A2i, A3i, a[4].i, a[5].i);
+		}
+		else if (strcmp(adesc, "ppffff") == 0) {
+			typedef void (*fn_ppffff)(void *, void *, float, float, float, float);
+			((fn_ppffff)ef->fn)(A0p, A1p, A2f, A3f, a[4].f, a[5].f);
+		}
+		else if (strcmp(adesc, "pppif") == 0) {
+			typedef void (*fn_pppif)(void *, void *, void *, int, float);
+			((fn_pppif)ef->fn)(A0p, A1p, A2p, A3i, a[4].f);
+		}
+		else {
+			fprintf(stderr, "minic: unsupported signature '%s' for void-returning '%s'\n", ef->sig, ef->name);
+		}
+		return minic_val_void();
 	}
 
 	return minic_val_int(0);
