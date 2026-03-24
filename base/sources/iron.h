@@ -61,7 +61,7 @@ buffer_t *embed_get(char *key) {
 }
 #endif
 
-void _kickstart();
+void _kickstart(void);
 bool enable_window = true;
 bool in_background = false;
 int  paused_frames = 0;
@@ -75,7 +75,7 @@ char temp_string_vs[1024 * 128];
 char temp_string_fs[1024 * 128];
 #ifdef IRON_WINDOWS
 wchar_t        temp_wstring[1024 * 32];
-struct HWND__ *iron_windows_window_handle();
+struct HWND__ *iron_windows_window_handle(void);
 #endif
 
 void (*iron_update)(void);

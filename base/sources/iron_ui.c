@@ -44,63 +44,63 @@ f32_array_t *_ui_row5 = NULL;
 f32_array_t *_ui_row6 = NULL;
 f32_array_t *_ui_row7 = NULL;
 
-float UI_SCALE() {
+float UI_SCALE(void) {
 	return current->ops->scale_factor;
 }
 
-float UI_ELEMENT_W() {
+float UI_ELEMENT_W(void) {
 	return theme->ELEMENT_W * UI_SCALE();
 }
 
-float UI_ELEMENT_H() {
+float UI_ELEMENT_H(void) {
 	return theme->ELEMENT_H * UI_SCALE();
 }
 
-float UI_ELEMENT_OFFSET() {
+float UI_ELEMENT_OFFSET(void) {
 	return theme->ELEMENT_OFFSET * UI_SCALE();
 }
 
-float UI_ARROW_SIZE() {
+float UI_ARROW_SIZE(void) {
 	return theme->ARROW_SIZE * UI_SCALE();
 }
 
-float UI_BUTTON_H() {
+float UI_BUTTON_H(void) {
 	return theme->BUTTON_H * UI_SCALE();
 }
 
-float UI_CHECK_SIZE() {
+float UI_CHECK_SIZE(void) {
 	return theme->CHECK_SIZE * UI_SCALE();
 }
 
-float UI_CHECK_SELECT_SIZE() {
+float UI_CHECK_SELECT_SIZE(void) {
 	return theme->CHECK_SELECT_SIZE * UI_SCALE();
 }
 
-float UI_FONT_SIZE() {
+float UI_FONT_SIZE(void) {
 	return theme->FONT_SIZE * UI_SCALE();
 }
 
-float UI_SCROLL_W() {
+float UI_SCROLL_W(void) {
 	return theme->SCROLL_W * UI_SCALE();
 }
 
-float UI_SCROLL_MINI_W() {
+float UI_SCROLL_MINI_W(void) {
 	return theme->SCROLL_MINI_W * UI_SCALE();
 }
 
-float UI_TEXT_OFFSET() {
+float UI_TEXT_OFFSET(void) {
 	return theme->TEXT_OFFSET * UI_SCALE();
 }
 
-float UI_TAB_W() {
+float UI_TAB_W(void) {
 	return theme->TAB_W * UI_SCALE();
 }
 
-float UI_HEADER_DRAG_H() {
-	return 30.0 * UI_SCALE();
+float UI_HEADER_DRAG_H(void) {
+	return theme->ELEMENT_H * UI_SCALE();
 }
 
-float UI_TOOLTIP_DELAY() {
+float UI_TOOLTIP_DELAY(void) {
 	return 0.7;
 }
 

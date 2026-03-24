@@ -400,7 +400,7 @@ bool camera_object_sphere_in_frustum(frustum_plane_array_t *frustum_planes, tran
 // ██║     ██║  ██║╚██████╔╝███████║   ██║   ╚██████╔╝██║ ╚═╝ ██║    ██║     ███████╗██║  ██║██║ ╚████║███████╗
 // ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝    ╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝
 
-frustum_plane_t *frustum_plane_create();
+frustum_plane_t *frustum_plane_create(void);
 void             frustum_plane_normalize(frustum_plane_t *raw);
 f32              frustum_plane_dist_to_sphere(frustum_plane_t *raw, vec4_t sphere_center, f32 sphere_radius);
 void             frustum_plane_set_components(frustum_plane_t *raw, f32 x, f32 y, f32 z, f32 w);
@@ -415,7 +415,7 @@ void             frustum_plane_set_components(frustum_plane_t *raw, f32 x, f32 y
 extern f32_array_t *_world_data_empty_irr;
 world_data_t       *world_data_parse(char *name, char *id);
 world_data_t       *world_data_get_raw_by_name(any_array_t *datas, char *name);
-f32_array_t        *world_data_get_empty_irradiance();
+f32_array_t        *world_data_get_empty_irradiance(void);
 f32_array_t        *world_data_set_irradiance(world_data_t *raw);
 void                world_data_load_envmap(world_data_t *raw);
 
@@ -441,7 +441,7 @@ void                material_context_load(material_context_t *raw);
 // ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝
 
 shader_data_t       *shader_data_create(shader_data_t *raw);
-char                *shader_data_ext();
+char                *shader_data_ext(void);
 shader_data_t       *shader_data_parse(char *file, char *name);
 shader_data_t       *shader_data_get_raw_by_name(shader_data_t_array_t *datas, char *name);
 void                 shader_data_delete(shader_data_t *raw);

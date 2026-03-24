@@ -40,7 +40,7 @@ void     draw_line_aa(float x0, float y0, float x1, float y1, float strength);
 void     draw_string(const char *text, float x, float y);
 void     draw_end(void);
 void     draw_set_color(uint32_t color);
-uint32_t draw_get_color();
+uint32_t draw_get_color(void);
 void     draw_set_pipeline(gpu_pipeline_t *pipeline);
 void     draw_set_transform(mat3_t matrix);
 bool     draw_set_font(draw_font_t *font, int size);

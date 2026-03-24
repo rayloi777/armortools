@@ -3,7 +3,7 @@
 #include "ui_menu.h"
 #include "ui_menubar.h"
 
-static char_ptr_array_t *combo_options;
+static string_array_t *combo_options;
 static char *tab_names[DEMO_TAB_COUNT] = {
     "中文測試",
     "Buttons",
@@ -461,11 +461,11 @@ void demo_ui_render(void *_) {
 
 void demo_ui_init(void) {
     ui_menubar_init();
-    combo_options = char_ptr_array_create(8);
+    combo_options = string_array_create(8);
     gc_root(combo_options);
-    char_ptr_array_push(combo_options, "選項一");
-    char_ptr_array_push(combo_options, "選項二");
-    char_ptr_array_push(combo_options, "選項三");
-    char_ptr_array_push(combo_options, "選項四");
-    char_ptr_array_push(combo_options, "選項五");
+    string_array_push(combo_options, "選項一");
+    string_array_push(combo_options, "選項二");
+    string_array_push(combo_options, "選項三");
+    string_array_push(combo_options, "選項四");
+    string_array_push(combo_options, "選項五");
 }

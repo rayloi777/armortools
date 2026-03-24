@@ -7,7 +7,7 @@ gpu_texture_t *demo_color_wheel;
 gpu_texture_t *demo_color_wheel_gradient;
 gpu_texture_t *demo_noise_texture;
 
-void _kickstart() {
+void _kickstart(void) {
     iron_window_options_t *ops = GC_ALLOC_INIT(iron_window_options_t, {
         .title     = "UI Demo",
         .width     = 1920,

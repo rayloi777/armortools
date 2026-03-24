@@ -29,8 +29,8 @@ void   *any_map_get(any_map_t *m, char *k);
 void         map_delete(any_map_t *m, char *k);
 any_array_t *map_keys(any_map_t *m);
 
-i32_map_t *i32_map_create();
-any_map_t *any_map_create();
+i32_map_t *i32_map_create(void);
+any_map_t *any_map_create(void);
 
 // imap
 
@@ -50,4 +50,4 @@ int          i32_imap_get(i32_imap_t *m, int k);
 void        *any_imap_get(any_imap_t *m, int k);
 void         imap_delete(any_imap_t *m, int k);
 i32_array_t *imap_keys(any_imap_t *m);
-any_imap_t  *any_imap_create();
+any_imap_t  *any_imap_create(void);

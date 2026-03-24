@@ -214,10 +214,10 @@ void gpu_pipeline_compile(gpu_pipeline_t *pipeline);
 void gpu_shader_init(gpu_shader_t *shader, const void *source, size_t length, gpu_shader_type_t type);
 void gpu_shader_destroy(gpu_shader_t *shader);
 
-void  gpu_draw_internal();
+void  gpu_draw_internal(void);
 void  gpu_viewport(int x, int y, int width, int height);
 void  gpu_scissor(int x, int y, int width, int height);
-void  gpu_disable_scissor();
+void  gpu_disable_scissor(void);
 void  gpu_set_pipeline(gpu_pipeline_t *pipeline);
 void  gpu_set_pipeline_internal(gpu_pipeline_t *pipeline);
 void  gpu_set_vertex_buffer(gpu_buffer_t *buffer);
@@ -226,7 +226,7 @@ void  gpu_set_constant_buffer(gpu_buffer_t *buffer, int offset, size_t size);
 void  gpu_get_render_target_pixels(gpu_texture_t *render_target, uint8_t *data);
 void  gpu_set_texture(int unit, gpu_texture_t *texture);
 void  gpu_use_linear_sampling(bool b);
-char *gpu_device_name();
+char *gpu_device_name(void);
 
 bool gpu_raytrace_supported(void);
 void gpu_raytrace_pipeline_init(gpu_raytrace_pipeline_t *pipeline, void *shader, int shader_size, gpu_buffer_t *constant_buffer);
@@ -240,10 +240,10 @@ void gpu_raytrace_set_textures(gpu_texture_t *texpaint0, gpu_texture_t *texpaint
 void gpu_raytrace_set_acceleration_structure(gpu_acceleration_structure_t *accel);
 void gpu_raytrace_set_pipeline(gpu_raytrace_pipeline_t *pipeline);
 void gpu_raytrace_set_target(gpu_texture_t *output);
-void gpu_raytrace_dispatch_rays();
+void gpu_raytrace_dispatch_rays(void);
 
 void _gpu_raytrace_init(buffer_t *shader);
-void _gpu_raytrace_as_init();
+void _gpu_raytrace_as_init(void);
 void _gpu_raytrace_as_add(gpu_buffer_t *vb, gpu_buffer_t *ib, mat4_t transform);
 void _gpu_raytrace_as_build(gpu_buffer_t *vb_full, gpu_buffer_t *ib_full);
 void gpu_raytrace_set_textures(gpu_texture_t *tex0, gpu_texture_t *tex1, gpu_texture_t *tex2, gpu_texture_t *texenv, gpu_texture_t *texsobol,
