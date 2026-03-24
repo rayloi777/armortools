@@ -8,6 +8,7 @@
 static void *g_plugin_fn_on_ui  = NULL;
 static void *g_plugin_fn_on_update = NULL;
 static void *g_plugin_fn_on_delete = NULL;
+static minic_ctx_t *g_plugin_ctx = NULL;
 
 void console_info(char *s) {
     fprintf(stderr, "[INFO] %s\n", s);
@@ -44,29 +45,21 @@ void test_plugin_load(const char *filename) {
         return;
     }
 
-    minic_ctx_t *ctx = minic_eval_named(sys_buffer_to_string(blob), filename);
-    if (ctx == NULL) {
+    g_plugin_ctx = minic_eval_named(sys_buffer_to_string(blob), filename);
+    if (g_plugin_ctx == NULL) {
         iron_log("Failed to eval plugin: %s", filename);
         return;
     }
-
-    minic_ctx_free(ctx);
 }
 
 void render(void) {
     draw_begin(NULL, true, 0xff1a1a2e);
 
     if (g_plugin_fn_on_ui != NULL) {
-        minic_call_fn(g_plugin_fn_on_ui, NULL, 0);
+        minic_ctx_call_fn(g_plugin_ctx, g_plugin_fn_on_ui, NULL, 0);
     }
 
     draw_end();
-}
-
-void update(void) {
-    if (g_plugin_fn_on_update != NULL) {
-        minic_call_fn(g_plugin_fn_on_update, NULL, 0);
-    }
 }
 
 void _kickstart(void) {
@@ -100,7 +93,6 @@ void _kickstart(void) {
     test_plugin_load("data/test_plugin.c");
 
     _iron_set_update_callback(render);
-    iron_set_update_callback(update);
 
     iron_start();
 }
