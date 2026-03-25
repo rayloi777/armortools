@@ -48,6 +48,7 @@ void ui_menu_render(void) {
         ui_menu_y -= iron_window_height() * 2;
     }
 
+    draw_begin(NULL, false, 0);
     ui_begin_region(ui, ui_menu_x, ui_menu_y, menu_w);
     ui->input_enabled = true;
     ui_menu_begin();
@@ -63,6 +64,7 @@ void ui_menu_render(void) {
     ui->ops->theme->ELEMENT_H      = _ELEMENT_H;
     ui_menu_end();
     ui_end_region();
+    draw_end();
     ui->input_enabled = true;
 
     if (ui_menu_show_first) {
