@@ -943,7 +943,8 @@ class WasmExporter extends Exporter {
 	constructor() {
 		super();
 		this.compile_commands = new CompilerCommandsExporter();
-		let compiler          = "clang --target=wasm32 -nostdlib -matomics -mbulk-memory";
+		let clang = goptions.ccompiler === 'clang' ? 'clang' : goptions.ccompiler;
+		let compiler          = clang + " --target=wasm32 -nostdlib -matomics -mbulk-memory";
 		let compilerFlags     = "";
 		this.make =
 		    new MakeExporter(compiler, compiler, compilerFlags, compilerFlags,
@@ -2344,7 +2345,7 @@ function load_project(directory, is_root_project) {
             with_compress : false,
             with_image_write : false,
             with_video_write : false,
-            with_eval : false,
+            with_eval : goptions.with_eval == true,
             with_plugins : false,
             with_kong : false,
             with_raytrace : false,

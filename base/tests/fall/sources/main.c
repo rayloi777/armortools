@@ -31,6 +31,7 @@ void scene_ready() {
 	t->loc         = vec4_create(0, -10, 0, 1.0);
 	t->rot         = quat_from_to(vec4_create(0, 0, 1, 1.0), vec4_create(0, -1, 0, 1.0));
 	transform_build_matrix(t);
+	camera_object_build_mat(scene_camera);
 
 	sys_notify_on_update(scene_update, NULL);
 

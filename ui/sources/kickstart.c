@@ -1,0 +1,93 @@
+
+#include "global.h"
+
+draw_font_t *demo_font;
+ui_theme_t *demo_theme;
+gpu_texture_t *demo_color_wheel;
+gpu_texture_t *demo_color_wheel_gradient;
+gpu_texture_t *demo_noise_texture;
+
+void _kickstart(void) {
+    iron_window_options_t *ops = GC_ALLOC_INIT(iron_window_options_t, {
+        .title     = "UI Demo",
+        .width     = 1920,
+        .height    = 1080,
+        .x         = -1,
+        .y         = -1,
+        .mode      = IRON_WINDOW_MODE_WINDOW,
+        .features  = IRON_WINDOW_FEATURES_RESIZABLE | IRON_WINDOW_FEATURES_MINIMIZABLE | IRON_WINDOW_FEATURES_MAXIMIZABLE,
+        .vsync     = true,
+        .frequency = 60,
+        .depth_bits = 0
+    });
+
+    sys_start(ops);
+
+    ui_children = any_map_create();
+    gc_root(ui_children);
+
+    demo_font = data_get_font("NotoSansTC-Regular.ttf");
+    draw_font_init(demo_font);
+
+    demo_color_wheel = data_get_image("color_wheel.k");
+    demo_color_wheel_gradient = data_get_image("color_wheel_gradient.k");
+    demo_noise_texture = data_get_image("noise256.k");
+
+    demo_theme = ui_theme_create();
+    demo_theme->ELEMENT_H = 24;
+    demo_theme->ELEMENT_OFFSET = 4;
+
+    ui_options_t *ui_ops = GC_ALLOC_INIT(ui_options_t, {
+        .theme = demo_theme,
+        .font = demo_font,
+        .scale_factor = 2.0f,
+        .color_wheel = demo_color_wheel,
+        .black_white_gradient = demo_color_wheel_gradient
+    });
+    ui = ui_create(ui_ops);
+    gc_root(ui);
+
+    demo_ui = GC_ALLOC_INIT(demo_ui_t, {0});
+    gc_root(demo_ui);
+
+    for (i32 i = 0; i < DEMO_WINDOW_COUNT; ++i) {
+        demo_ui->windows[i] = ui_handle_create();
+        gc_root(demo_ui->windows[i]);
+    }
+
+    demo_ui->active_tab = DEMO_TAB_CHINESE;
+    demo_ui->theme = THEME_DARK;
+
+    demo_ui->check_enabled = true;
+    demo_ui->check_visible = true;
+    demo_ui->check_bool = true;
+    demo_ui->radio_selection = 0;
+    demo_ui->panel_expanded = true;
+
+    demo_ui->slider_float = 0.5f;
+    demo_ui->float_value = 42.5f;
+    strcpy(demo_ui->text_input_buffer, "Hello, UI!");
+    strcpy(demo_ui->text_area_buffer, "Multi-line text area.\nSecond line here.");
+    demo_ui->combo_selection = 0;
+    demo_ui->inline_radio_selection = 0;
+
+    demo_ui->color_hue = 0.5f;
+    demo_ui->color_sat = 0.8f;
+    demo_ui->color_val = 0.9f;
+    demo_ui->selected_color = 0xFF8844FF;
+
+    demo_ui->demo_image = demo_noise_texture;
+
+    demo_ui_init();
+
+    draw_font_preload_text_for(demo_font, ui->font_size,
+        "中文測試使用NotoSansTC字型繁體按鈕點擊我確認取消核取方塊啟用選項顯示內容單選甲乙丙滑桿數值文字輸入下拉選單可摺疊面板進階設定顏色選擇器目前IronEngineDemoLayoutDisplayColor");
+
+    ui_begin(ui);
+    ui_end();
+
+    sys_notify_on_update(demo_ui_update, NULL);
+    sys_notify_on_render(demo_ui_render, NULL);
+
+    iron_start();
+}

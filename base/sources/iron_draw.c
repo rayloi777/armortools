@@ -410,6 +410,7 @@ static int stbtt_BakeFontBitmapArr(unsigned char *data, int offset,       // Fon
 }
 
 bool draw_font_load(draw_font_t *font, int size) {
+	draw_font_init(font);
 	if (!draw_prepare_font_load_internal(font, size)) {
 		return true;
 	}
@@ -546,6 +547,17 @@ void draw_font_init(draw_font_t *font) {
 	if (font->glyphs_version != draw_glyphs_version) {
 		font->glyphs_version = draw_glyphs_version;
 		font->blob           = font->buf->buffer;
+		if (font->images != NULL) {
+			for (int i = 0; i < font->m_images_len; ++i) {
+				if (font->images[i].tex != NULL) {
+					free(font->images[i].tex);
+				}
+				if (font->images[i].chars != NULL) {
+					free(font->images[i].chars);
+				}
+			}
+			free(font->images);
+		}
 		font->images         = NULL;
 		font->m_images_len   = 0;
 		font->m_capacity     = 0;
@@ -658,8 +670,50 @@ void draw_font_build_glyphs() {
 }
 
 void draw_font_add_glyph(int glyph) {
+	if (draw_font_has_glyph(glyph)) {
+		return;
+	}
 	i32_array_push(draw_font_glyphs, glyph);
 	draw_font_build_glyphs();
+}
+
+bool draw_font_has_all_glyphs(const char *text) {
+	for (int i = 0; text[i] != 0;) {
+		int l = 0;
+		int codepoint = string_utf8_decode(&text[i], &l);
+		i += l;
+		if (!draw_font_has_glyph(codepoint)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool draw_font_preload_text(const char *text) {
+	return draw_font_preload_text_for(draw_font, draw_font_size, text);
+}
+
+bool draw_font_preload_text_for(draw_font_t *font, int size, const char *text) {
+	bool added = false;
+	for (int i = 0; text[i] != 0;) {
+		int l = 0;
+		int codepoint = string_utf8_decode(&text[i], &l);
+		i += l;
+		if (!draw_font_has_glyph(codepoint)) {
+			i32_array_push(draw_font_glyphs, codepoint);
+			added = true;
+		}
+	}
+	if (added) {
+		draw_font_build_glyphs();
+		draw_font_load(font, size);
+	}
+	return added;
+}
+
+void draw_string_dynamic(const char *text, float x, float y) {
+	draw_font_preload_text(text);
+	draw_string(text, x, y);
 }
 
 int draw_font_count(draw_font_t *font) {
@@ -680,15 +734,31 @@ float draw_sub_string_width(draw_font_t *font, int font_size, const char *text, 
 	draw_font_load(font, font_size);
 	draw_font_image_t *img   = draw_font_get_image_internal(font, font_size);
 	float              width = 0.0;
-	for (int i = start; i < end; ++i) {
-		if (text[i] == '\0')
-			break;
-		width += draw_font_get_char_width_internal(img, text[i]);
+	
+	if (img == NULL || draw_font_glyphs == NULL || draw_font_glyph_blocks == NULL) {
+		return width;
+	}
+	
+	int byte_pos = 0;
+	while (text[byte_pos] != '\0') {
+		int l = 0;
+		int codepoint = string_utf8_decode(&text[byte_pos], &l);
+		if (byte_pos >= start && byte_pos < end) {
+			int char_index = draw_font_get_char_index_internal(codepoint);
+			if (char_index >= 0 && char_index < draw_font_glyphs->length) {
+				width += img->chars[char_index].xadvance;
+			}
+		}
+		byte_pos += l;
+		if (byte_pos >= end) break;
 	}
 	return width;
 }
 
 int draw_string_width(draw_font_t *font, int font_size, const char *text) {
+	if (text == NULL) {
+		return 0;
+	}
 	return (int)draw_sub_string_width(font, font_size, text, 0, (int)strlen(text));
 }
 

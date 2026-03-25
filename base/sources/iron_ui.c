@@ -44,63 +44,63 @@ f32_array_t *_ui_row5 = NULL;
 f32_array_t *_ui_row6 = NULL;
 f32_array_t *_ui_row7 = NULL;
 
-float UI_SCALE() {
+float UI_SCALE(void) {
 	return current->ops->scale_factor;
 }
 
-float UI_ELEMENT_W() {
+float UI_ELEMENT_W(void) {
 	return theme->ELEMENT_W * UI_SCALE();
 }
 
-float UI_ELEMENT_H() {
+float UI_ELEMENT_H(void) {
 	return theme->ELEMENT_H * UI_SCALE();
 }
 
-float UI_ELEMENT_OFFSET() {
+float UI_ELEMENT_OFFSET(void) {
 	return theme->ELEMENT_OFFSET * UI_SCALE();
 }
 
-float UI_ARROW_SIZE() {
+float UI_ARROW_SIZE(void) {
 	return theme->ARROW_SIZE * UI_SCALE();
 }
 
-float UI_BUTTON_H() {
+float UI_BUTTON_H(void) {
 	return theme->BUTTON_H * UI_SCALE();
 }
 
-float UI_CHECK_SIZE() {
+float UI_CHECK_SIZE(void) {
 	return theme->CHECK_SIZE * UI_SCALE();
 }
 
-float UI_CHECK_SELECT_SIZE() {
+float UI_CHECK_SELECT_SIZE(void) {
 	return theme->CHECK_SELECT_SIZE * UI_SCALE();
 }
 
-float UI_FONT_SIZE() {
+float UI_FONT_SIZE(void) {
 	return theme->FONT_SIZE * UI_SCALE();
 }
 
-float UI_SCROLL_W() {
+float UI_SCROLL_W(void) {
 	return theme->SCROLL_W * UI_SCALE();
 }
 
-float UI_SCROLL_MINI_W() {
+float UI_SCROLL_MINI_W(void) {
 	return theme->SCROLL_MINI_W * UI_SCALE();
 }
 
-float UI_TEXT_OFFSET() {
+float UI_TEXT_OFFSET(void) {
 	return theme->TEXT_OFFSET * UI_SCALE();
 }
 
-float UI_TAB_W() {
+float UI_TAB_W(void) {
 	return theme->TAB_W * UI_SCALE();
 }
 
-float UI_HEADER_DRAG_H() {
-	return 30.0 * UI_SCALE();
+float UI_HEADER_DRAG_H(void) {
+	return theme->ELEMENT_H * UI_SCALE();
 }
 
-float UI_TOOLTIP_DELAY() {
+float UI_TOOLTIP_DELAY(void) {
 	return 0.7;
 }
 
@@ -334,11 +334,13 @@ void ui_draw_string(char *text, float x_offset, float y_offset, int align, bool 
 	}
 
 	if (ui_dynamic_glyph_load) {
-		int len = strlen(text);
-		for (int i = 0; i < len; ++i) {
-			if (text[i] > 126 && !draw_font_has_glyph((int)text[i])) {
-				int glyph = text[i];
-				draw_font_add_glyph(glyph);
+		int i = 0;
+		while (text[i] != '\0') {
+			int l = 0;
+			int codepoint = string_utf8_decode(&text[i], &l);
+			i += l;
+			if (codepoint > 127 && !draw_font_has_glyph(codepoint)) {
+				draw_font_add_glyph(codepoint);
 			}
 		}
 	}
@@ -863,6 +865,9 @@ void ui_draw_combo() {
 
 	current->combo_selected_texts_filtered = 0;
 	for (int i = 0; i < current->combo_selected_texts->length; ++i) {
+		if (current->combo_selected_texts->buffer[i] == NULL) {
+			continue;
+		}
 		char str[512];
 		ui_lower_case(str, current->combo_selected_texts->buffer[i]);
 		if (strlen(search) > 0 && strstr(str, search) == NULL) {
@@ -1082,37 +1087,98 @@ void ui_deselect_text(ui_t *ui) {
 #endif
 }
 
-void ui_remove_char_at(char *str, int at) {
+static int ui_utf8_char_len(const char *str, int at) {
+	unsigned char c = (unsigned char)str[at];
+	if ((c & 0x80) == 0) return 1;
+	if ((c & 0xE0) == 0xC0) return 2;
+	if ((c & 0xF0) == 0xE0) return 3;
+	if ((c & 0xF8) == 0xF0) return 4;
+	return 1;
+}
+
+static int ui_utf8_prev_char(const char *str, int at) {
+	int start = at - 1;
+	while (start > 0 && ((str[start] & 0xC0) == 0x80)) {
+		start--;
+	}
+	return start;
+}
+
+static int ui_utf8_next_char(const char *str, int at) {
+	return at + ui_utf8_char_len(str, at);
+}
+
+int ui_remove_char_at(char *str, int at) {
+	int start = at;
+	while (start > 0 && ((str[start] & 0xC0) == 0x80)) {
+		start--;
+	}
+	int char_len = ui_utf8_char_len(str, start);
 	int len = strlen(str);
-	for (int i = at; i < len; ++i) {
-		str[i] = str[i + 1];
+	for (int i = start; i <= len - char_len; ++i) {
+		str[i] = str[i + char_len];
+	}
+	return start;
+}
+
+void ui_remove_chars_at(char *str, int at, int byte_count) {
+	int len = strlen(str);
+	for (int i = at; i <= len - byte_count; ++i) {
+		str[i] = str[i + byte_count];
 	}
 }
 
-void ui_remove_chars_at(char *str, int at, int count) {
-	for (int i = 0; i < count; ++i) {
-		ui_remove_char_at(str, at);
+void ui_insert_char_at(char *str, int at, int codepoint) {
+	char utf8[4];
+	int  bytes = string_utf8_encode(codepoint, utf8);
+	int  len   = strlen(str);
+	for (int i = len + bytes; i > at; --i) {
+		str[i] = str[i - bytes];
 	}
-}
-
-void ui_insert_char_at(char *str, int at, char c) {
-	int len = strlen(str);
-	for (int i = len + 1; i > at; --i) {
-		str[i] = str[i - 1];
+	for (int i = 0; i < bytes; ++i) {
+		str[at + i] = utf8[i];
 	}
-	str[at] = c;
 }
 
 void ui_insert_chars_at(char *str, int at, char *cs) {
-	int len = strlen(cs);
-	for (int i = 0; i < len; ++i) {
-		ui_insert_char_at(str, at + i, cs[i]);
+	int cs_len = strlen(cs);
+	int str_len = strlen(str);
+	for (int i = str_len; i >= at; --i) {
+		str[i + cs_len] = str[i];
 	}
+	for (int i = 0; i < cs_len; ++i) {
+		str[at + i] = cs[i];
+	}
+}
+
+void ui_insert_text_at_cursor(const char *text) {
+	if (current == NULL || current->text_selected_handle == NULL)
+		return;
+	char *dest = current->text_selected;
+	int at = current->cursor_x;
+	int text_len = strlen(text);
+	int dest_len = strlen(dest);
+	for (int i = dest_len; i >= at; --i) {
+		dest[i + text_len] = dest[i];
+	}
+	for (int i = 0; i < text_len; ++i) {
+		dest[at + i] = text[i];
+	}
+	current->cursor_x += text_len;
+	current->highlight_anchor = current->cursor_x;
 }
 
 void ui_update_text_edit(int align, bool editable, bool live_update) {
 	char text[1024];
 	strcpy(text, current->text_selected);
+
+	if (current->ime_committed_text[0] != '\0') {
+		ui_insert_chars_at(text, current->cursor_x, current->ime_committed_text);
+		current->cursor_x += strlen(current->ime_committed_text);
+		current->highlight_anchor = current->cursor_x;
+		current->ime_committed_text[0] = '\0';
+	}
+
 	if (current->is_key_pressed) {                // Process input
 		if (current->key_code == KEY_CODE_LEFT) { // Move cursor
 			if (current->is_ctrl_down) {          // Jump to previous word
@@ -1124,7 +1190,7 @@ void ui_update_text_edit(int align, bool editable, bool live_update) {
 				current->cursor_x = i;
 			}
 			else if (current->cursor_x > 0) {
-				current->cursor_x--;
+				current->cursor_x = ui_utf8_prev_char(text, current->cursor_x);
 			}
 		}
 		else if (current->key_code == KEY_CODE_RIGHT) {
@@ -1138,13 +1204,14 @@ void ui_update_text_edit(int align, bool editable, bool live_update) {
 				current->cursor_x = i;
 			}
 			else if (current->cursor_x < strlen(text)) {
-				current->cursor_x++;
+				current->cursor_x = ui_utf8_next_char(text, current->cursor_x);
 			}
 		}
 		else if (editable && current->key_code == KEY_CODE_BACKSPACE) { // Remove char
 			if (current->cursor_x > 0 && current->highlight_anchor == current->cursor_x) {
-				ui_remove_char_at(text, current->cursor_x - 1);
-				current->cursor_x--;
+				int prev_start = ui_utf8_prev_char(text, current->cursor_x);
+				ui_remove_char_at(text, prev_start);
+				current->cursor_x = prev_start;
 			}
 			else if (current->highlight_anchor < current->cursor_x) {
 				int count = current->cursor_x - current->highlight_anchor;
@@ -1199,7 +1266,8 @@ void ui_update_text_edit(int align, bool editable, bool live_update) {
 			ui_remove_chars_at(text, current->highlight_anchor, current->cursor_x - current->highlight_anchor);
 			ui_insert_char_at(text, current->highlight_anchor, current->key_char);
 
-			current->cursor_x = current->cursor_x + 1 > strlen(text) ? strlen(text) : current->cursor_x + 1;
+			int utf8_bytes = (current->key_char < 0x80) ? 1 : (current->key_char < 0x800) ? 2 : (current->key_char < 0x10000) ? 3 : 4;
+			current->cursor_x = current->cursor_x + utf8_bytes > strlen(text) ? strlen(text) : current->cursor_x + utf8_bytes;
 		}
 		bool selecting =
 		    current->is_shift_down && (current->key_code == KEY_CODE_LEFT || current->key_code == KEY_CODE_RIGHT || current->key_code == KEY_CODE_SHIFT ||
@@ -1278,6 +1346,14 @@ void ui_update_text_edit(int align, bool editable, bool live_update) {
 	float cursor_x   = align == UI_ALIGN_LEFT ? current->_x + strw + off : current->_x + current->_w - strw - off;
 	draw_set_color(theme->TEXT_COL); // Cursor
 	draw_filled_rect(cursor_x, current->_y + current->button_offset_y * 1.5, 1.0 * UI_SCALE(), cursor_height);
+
+	if (current->ime_composing && current->ime_composition[0] != '\0') {
+		float comp_w = draw_string_width(current->ops->font, current->font_size, current->ime_composition);
+		float comp_x = align == UI_ALIGN_LEFT ? current->_x + off : current->_x + current->_w - comp_w - off;
+		float comp_y = current->_y + current->button_offset_y * 1.5;
+		draw_set_color(theme->TEXT_COL);
+		draw_line(comp_x, comp_y + current->font_size + 2, comp_x + comp_w, comp_y + current->font_size + 2, 1.0);
+	}
 
 	strcpy(current->text_selected, text);
 	if (live_update && current->text_selected_handle != NULL) {
@@ -2073,6 +2149,18 @@ char *ui_text_input(ui_handle_t *handle, char *label, int align, bool editable, 
 	}
 	else {
 		ui_draw_string(current->text_selected, theme->TEXT_OFFSET, 0, align, false);
+		if (current->ime_composing && current->ime_composition[0] != '\0') {
+			float text_w = draw_string_width(current->ops->font, current->font_size, current->text_selected);
+			float comp_x = current->_x + theme->TEXT_OFFSET * UI_SCALE() + text_w;
+			float comp_y = current->_y + current->font_offset_y;
+			float screen_x = current->_window_x + comp_x;
+			float screen_y = current->_window_y + current->_y + current->button_offset_y + 100;
+			iron_keyboard_set_ime_position(screen_x, screen_y, current->font_size + 4);
+			draw_set_color(theme->TEXT_COL);
+			draw_string(current->ime_composition, comp_x, comp_y);
+			float comp_w = draw_string_width(current->ops->font, current->font_size, current->ime_composition);
+			draw_line(comp_x, comp_y + current->font_size + 2, comp_x + comp_w, comp_y + current->font_size + 2, 1.0);
+		}
 	}
 
 	ui_end_element();
@@ -2155,9 +2243,11 @@ int ui_combo(ui_handle_t *handle, string_array_t *texts, char *label, bool show_
 			current->combo_selected_texts_filtered = 0;
 			current->combo_search_bar              = search_bar;
 			for (int i = 0; i < texts->length; ++i) { // Adapt combo list width to combo item width
-				int w = (int)draw_string_width(current->ops->font, current->font_size, texts->buffer[i]) + 10;
-				if (current->combo_selected_w < w) {
-					current->combo_selected_w = w;
+				if (texts->buffer[i] != NULL) {
+					int w = (int)draw_string_width(current->ops->font, current->font_size, texts->buffer[i]) + 10;
+					if (current->combo_selected_w < w) {
+						current->combo_selected_w = w;
+					}
 				}
 			}
 			if (current->combo_selected_w > current->_w * 2.0) {
@@ -2208,7 +2298,7 @@ int ui_combo(ui_handle_t *handle, string_array_t *texts, char *label, bool show_
 		current->_x -= 15;
 	}
 	draw_set_color(theme->TEXT_COL); // Value
-	if (handle->i < texts->length) {
+	if (handle->i < texts->length && texts->buffer[handle->i] != NULL) {
 		ui_draw_string(texts->buffer[handle->i], theme->TEXT_OFFSET, 0, align, true);
 	}
 	if (align == UI_ALIGN_RIGHT) {

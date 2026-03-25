@@ -109,7 +109,6 @@ static minic_val_t minic_printf_native(minic_val_t *args, int argc) {
 	int         len = minic_vformat(fmt, args + 1, argc - 1, NULL, 0);
 	char       *buf = (char *)malloc(len + 1);
 	minic_vformat(fmt, args + 1, argc - 1, buf, len + 1);
-	// int written = fputs(buf, stdout);
 	console_log(buf);
 	free(buf);
 	return minic_val_int(len);
@@ -599,7 +598,6 @@ MN(transform_right) {
 MN(transform_up) {
 	RET4(transform_up(AP(0)));
 }
-
 // iron_shape / iron_draw
 MN(line_draw_render) {
 	line_draw_render(M4(0));
@@ -943,7 +941,7 @@ void minic_register_builtins() {
 	static const minic_type_t ui_node_deref_types[] = {MINIC_T_INT, MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_INT,
 	                                                   MINIC_T_PTR, MINIC_T_PTR,  MINIC_T_PTR,  MINIC_T_FLOAT, MINIC_T_INT};
 	minic_register_struct_native("ui_node_t", ui_node_fields, ui_node_offsets, ui_node_types, ui_node_deref_types, 11);
-	minic_struct_set_size("ui_node_t", (int)sizeof(ui_node_t));
+minic_struct_set_size("ui_node_t", (int)sizeof(ui_node_t));
 	minic_struct_field_set_type("ui_node_t", "inputs", "any_array_t");
 	minic_struct_field_set_type("ui_node_t", "outputs", "any_array_t");
 	minic_struct_field_set_type("ui_node_t", "buttons", "any_array_t");
@@ -993,15 +991,24 @@ void minic_register_builtins() {
 		(int)offsetof(vertex_array_t, attrib), (int)offsetof(vertex_array_t, data), (int)offsetof(vertex_array_t, values),
 	};
 	static const minic_type_t va_types[]        = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t va_deref_types[]  = {MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_PTR};
+	static const minic_type_t va_deref_types[]  = {MINIC_T_PTR, MINIC_T_FLOAT, MINIC_T_PTR};
 	minic_register_struct_native("vertex_array_t", va_fields, va_offsets, va_types, va_deref_types, 3);
 	minic_struct_set_size("vertex_array_t", (int)sizeof(vertex_array_t));
-	minic_struct_field_set_type("vertex_array_t", "values", "i16_array_t");
+
+	// mesh_object_t
+	static const char        *mesh_obj_fields[]       = {"base", "data"};
+	static const int          mesh_obj_offsets[]      = {
+		(int)offsetof(mesh_object_t, base), (int)offsetof(mesh_object_t, data),
+	};
+	static const minic_type_t mesh_obj_types[]        = {MINIC_T_PTR, MINIC_T_PTR};
+	static const minic_type_t mesh_obj_deref_types[]  = {MINIC_T_PTR, MINIC_T_PTR};
+	minic_register_struct_native("mesh_object_t", mesh_obj_fields, mesh_obj_offsets, mesh_obj_types, mesh_obj_deref_types, 2);
+	minic_struct_set_size("mesh_object_t", (int)sizeof(mesh_object_t));
+	minic_struct_field_set_type("mesh_object_t", "base", "obj_t");
 
 	// mesh_data_t
-	static const char        *mesh_data_fields[]       = {"name", "scale_pos", "scale_tex", "vertex_arrays", "index_array", "_"};
+	static const char        *mesh_data_fields[]       = {"name", "vertex_count", "vertex_size", "vertex_arrays", "index_array", "_"};
 	static const int          mesh_data_offsets[]      = {
-		(int)offsetof(mesh_data_t, name),          (int)offsetof(mesh_data_t, scale_pos),     (int)offsetof(mesh_data_t, scale_tex),
 		(int)offsetof(mesh_data_t, vertex_arrays), (int)offsetof(mesh_data_t, index_array),   (int)offsetof(mesh_data_t, _),
 	};
 	static const minic_type_t mesh_data_types[]        = {MINIC_T_PTR, MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
@@ -1014,310 +1021,14 @@ void minic_register_builtins() {
 	// camera_data_t
 	static const char        *cam_data_fields[]       = {"name", "near_plane", "far_plane", "fov", "aspect", "frustum_culling", "ortho"};
 	static const int          cam_data_offsets[]      = {
-		(int)offsetof(camera_data_t, name),             (int)offsetof(camera_data_t, near_plane), (int)offsetof(camera_data_t, far_plane),
-		(int)offsetof(camera_data_t, fov),              (int)offsetof(camera_data_t, aspect),     (int)offsetof(camera_data_t, frustum_culling),
-		(int)offsetof(camera_data_t, ortho),
+		(int)offsetof(camera_data_t, near_plane), (int)offsetof(camera_data_t, far_plane),
+		(int)offsetof(camera_data_t, fov),              (int)offsetof(camera_data_t, aspect),
+		(int)offsetof(camera_data_t, frustum_culling),  (int)offsetof(camera_data_t, ortho),
 	};
 	static const minic_type_t cam_data_types[]        = {MINIC_T_PTR, MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_INT, MINIC_T_PTR};
 	static const minic_type_t cam_data_deref_types[]  = {MINIC_T_CHAR, MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_INT, MINIC_T_PTR};
 	minic_register_struct_native("camera_data_t", cam_data_fields, cam_data_offsets, cam_data_types, cam_data_deref_types, 7);
 	minic_struct_set_size("camera_data_t", (int)sizeof(camera_data_t));
-	minic_struct_field_set_type("camera_data_t", "ortho", "f32_array_t");
-
-	// world_data_t
-	static const char        *world_data_fields[]       = {"name", "color", "strength", "irradiance", "radiance", "radiance_mipmaps", "envmap", "_"};
-	static const int          world_data_offsets[]      = {
-		(int)offsetof(world_data_t, name),              (int)offsetof(world_data_t, color),             (int)offsetof(world_data_t, strength),
-		(int)offsetof(world_data_t, irradiance),        (int)offsetof(world_data_t, radiance),          (int)offsetof(world_data_t, radiance_mipmaps),
-		(int)offsetof(world_data_t, envmap),            (int)offsetof(world_data_t, _),
-	};
-	static const minic_type_t world_data_types[]        = {MINIC_T_PTR, MINIC_T_INT, MINIC_T_FLOAT, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_INT, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t world_data_deref_types[]  = {MINIC_T_CHAR, MINIC_T_INT, MINIC_T_FLOAT, MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_INT, MINIC_T_CHAR, MINIC_T_PTR};
-	minic_register_struct_native("world_data_t", world_data_fields, world_data_offsets, world_data_types, world_data_deref_types, 8);
-	minic_struct_set_size("world_data_t", (int)sizeof(world_data_t));
-
-	// vertex_element_t
-	static const char        *ve_fields[]       = {"name", "data"};
-	static const int          ve_offsets[]      = {(int)offsetof(vertex_element_t, name), (int)offsetof(vertex_element_t, data)};
-	static const minic_type_t ve_types[]        = {MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t ve_deref_types[]  = {MINIC_T_CHAR, MINIC_T_CHAR};
-	minic_register_struct_native("vertex_element_t", ve_fields, ve_offsets, ve_types, ve_deref_types, 2);
-	minic_struct_set_size("vertex_element_t", (int)sizeof(vertex_element_t));
-
-	// shader_const_t
-	static const char        *sc_fields[]       = {"name", "type", "link"};
-	static const int          sc_offsets[]      = {(int)offsetof(shader_const_t, name), (int)offsetof(shader_const_t, type), (int)offsetof(shader_const_t, link)};
-	static const minic_type_t sc_types[]        = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t sc_deref_types[]  = {MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_CHAR};
-	minic_register_struct_native("shader_const_t", sc_fields, sc_offsets, sc_types, sc_deref_types, 3);
-	minic_struct_set_size("shader_const_t", (int)sizeof(shader_const_t));
-
-	// tex_unit_t
-	static const char        *tu_fields[]       = {"name", "link"};
-	static const int          tu_offsets[]      = {(int)offsetof(tex_unit_t, name), (int)offsetof(tex_unit_t, link)};
-	static const minic_type_t tu_types[]        = {MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t tu_deref_types[]  = {MINIC_T_CHAR, MINIC_T_CHAR};
-	minic_register_struct_native("tex_unit_t", tu_fields, tu_offsets, tu_types, tu_deref_types, 2);
-	minic_struct_set_size("tex_unit_t", (int)sizeof(tex_unit_t));
-
-	// shader_context_t
-	static const char        *sctx_fields[]       = {"name", "depth_write", "compare_mode", "cull_mode", "vertex_shader", "fragment_shader",
-	                                                  "shader_from_source", "blend_source", "blend_destination", "alpha_blend_source", "alpha_blend_destination",
-	                                                  "color_attachments", "depth_attachment", "vertex_elements", "constants", "texture_units"};
-	static const int          sctx_offsets[]      = {
-		(int)offsetof(shader_context_t, name),                   (int)offsetof(shader_context_t, depth_write),
-		(int)offsetof(shader_context_t, compare_mode),           (int)offsetof(shader_context_t, cull_mode),
-		(int)offsetof(shader_context_t, vertex_shader),          (int)offsetof(shader_context_t, fragment_shader),
-		(int)offsetof(shader_context_t, shader_from_source),     (int)offsetof(shader_context_t, blend_source),
-		(int)offsetof(shader_context_t, blend_destination),      (int)offsetof(shader_context_t, alpha_blend_source),
-		(int)offsetof(shader_context_t, alpha_blend_destination),(int)offsetof(shader_context_t, color_attachments),
-		(int)offsetof(shader_context_t, depth_attachment),       (int)offsetof(shader_context_t, vertex_elements),
-		(int)offsetof(shader_context_t, constants),              (int)offsetof(shader_context_t, texture_units),
-	};
-	static const minic_type_t sctx_types[]        = {MINIC_T_PTR, MINIC_T_INT, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR,
-	                                                  MINIC_T_INT, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR,
-	                                                  MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t sctx_deref_types[]  = {MINIC_T_CHAR, MINIC_T_INT, MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_CHAR,
-	                                                  MINIC_T_INT,  MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_CHAR,
-	                                                  MINIC_T_PTR,  MINIC_T_CHAR, MINIC_T_PTR,  MINIC_T_PTR,  MINIC_T_PTR};
-	minic_register_struct_native("shader_context_t", sctx_fields, sctx_offsets, sctx_types, sctx_deref_types, 16);
-	minic_struct_set_size("shader_context_t", (int)sizeof(shader_context_t));
-	minic_struct_field_set_type("shader_context_t", "color_attachments", "string_array_t");
-	minic_struct_field_set_type("shader_context_t", "vertex_elements", "vertex_element_t_array_t");
-	minic_struct_field_set_type("shader_context_t", "constants", "shader_const_t_array_t");
-	minic_struct_field_set_type("shader_context_t", "texture_units", "tex_unit_t_array_t");
-
-	// shader_data_t
-	static const char        *sd_fields[]       = {"name", "contexts"};
-	static const int          sd_offsets[]      = {(int)offsetof(shader_data_t, name), (int)offsetof(shader_data_t, contexts)};
-	static const minic_type_t sd_types[]        = {MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t sd_deref_types[]  = {MINIC_T_CHAR, MINIC_T_PTR};
-	minic_register_struct_native("shader_data_t", sd_fields, sd_offsets, sd_types, sd_deref_types, 2);
-	minic_struct_set_size("shader_data_t", (int)sizeof(shader_data_t));
-	minic_struct_field_set_type("shader_data_t", "contexts", "any_array_t");
-
-	// bind_const_t
-	static const char        *bc_fields[]       = {"name", "vec"};
-	static const int          bc_offsets[]      = {(int)offsetof(bind_const_t, name), (int)offsetof(bind_const_t, vec)};
-	static const minic_type_t bc_types[]        = {MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t bc_deref_types[]  = {MINIC_T_CHAR, MINIC_T_PTR};
-	minic_register_struct_native("bind_const_t", bc_fields, bc_offsets, bc_types, bc_deref_types, 2);
-	minic_struct_set_size("bind_const_t", (int)sizeof(bind_const_t));
-	minic_struct_field_set_type("bind_const_t", "vec", "f32_array_t");
-
-	// bind_tex_t
-	static const char        *bt_fields[]       = {"name", "file"};
-	static const int          bt_offsets[]      = {(int)offsetof(bind_tex_t, name), (int)offsetof(bind_tex_t, file)};
-	static const minic_type_t bt_types[]        = {MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t bt_deref_types[]  = {MINIC_T_CHAR, MINIC_T_CHAR};
-	minic_register_struct_native("bind_tex_t", bt_fields, bt_offsets, bt_types, bt_deref_types, 2);
-	minic_struct_set_size("bind_tex_t", (int)sizeof(bind_tex_t));
-
-	// material_context_t
-	static const char        *mctx_fields[]       = {"name", "bind_constants", "bind_textures", "_"};
-	static const int          mctx_offsets[]      = {
-		(int)offsetof(material_context_t, name), (int)offsetof(material_context_t, bind_constants),
-		(int)offsetof(material_context_t, bind_textures), (int)offsetof(material_context_t, _),
-	};
-	static const minic_type_t mctx_types[]        = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t mctx_deref_types[]  = {MINIC_T_CHAR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
-	minic_register_struct_native("material_context_t", mctx_fields, mctx_offsets, mctx_types, mctx_deref_types, 4);
-	minic_struct_set_size("material_context_t", (int)sizeof(material_context_t));
-	minic_struct_field_set_type("material_context_t", "bind_constants", "bind_const_t_array_t");
-	minic_struct_field_set_type("material_context_t", "bind_textures", "bind_tex_t_array_t");
-
-	// material_data_t
-	static const char        *md_fields[]       = {"name", "shader", "contexts", "_"};
-	static const int          md_offsets[]      = {
-		(int)offsetof(material_data_t, name), (int)offsetof(material_data_t, shader),
-		(int)offsetof(material_data_t, contexts), (int)offsetof(material_data_t, _),
-	};
-	static const minic_type_t md_types[]        = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t md_deref_types[]  = {MINIC_T_CHAR, MINIC_T_CHAR, MINIC_T_PTR, MINIC_T_PTR};
-	minic_register_struct_native("material_data_t", md_fields, md_offsets, md_types, md_deref_types, 4);
-	minic_struct_set_size("material_data_t", (int)sizeof(material_data_t));
-	minic_struct_field_set_type("material_data_t", "contexts", "material_context_t_array_t");
-
-	// render_target_t
-	static const char        *rt_fields[]       = {"name", "width", "height", "format", "scale", "_image"};
-	static const int          rt_offsets[]      = {
-		(int)offsetof(render_target_t, name),   (int)offsetof(render_target_t, width),  (int)offsetof(render_target_t, height),
-		(int)offsetof(render_target_t, format), (int)offsetof(render_target_t, scale),  (int)offsetof(render_target_t, _image),
-	};
-	static const minic_type_t rt_types[]        = {MINIC_T_PTR, MINIC_T_INT, MINIC_T_INT, MINIC_T_PTR, MINIC_T_FLOAT, MINIC_T_PTR};
-	static const minic_type_t rt_deref_types[]  = {MINIC_T_CHAR, MINIC_T_INT, MINIC_T_INT, MINIC_T_CHAR, MINIC_T_FLOAT, MINIC_T_PTR};
-	minic_register_struct_native("render_target_t", rt_fields, rt_offsets, rt_types, rt_deref_types, 6);
-	minic_struct_set_size("render_target_t", (int)sizeof(render_target_t));
-
-	// object_t
-	static const char        *object_fields[]       = {"uid", "urandom", "raw", "name", "transform", "parent", "children", "visible", "culled", "is_empty", "ext", "ext_type"};
-	static const int          object_offsets[]      = {
-		(int)offsetof(object_t, uid),       (int)offsetof(object_t, urandom),   (int)offsetof(object_t, raw),
-		(int)offsetof(object_t, name),      (int)offsetof(object_t, transform), (int)offsetof(object_t, parent),
-		(int)offsetof(object_t, children),  (int)offsetof(object_t, visible),   (int)offsetof(object_t, culled),
-		(int)offsetof(object_t, is_empty),  (int)offsetof(object_t, ext),       (int)offsetof(object_t, ext_type),
-	};
-	static const minic_type_t object_types[]        = {MINIC_T_INT, MINIC_T_FLOAT, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR,
-	                                                    MINIC_T_PTR, MINIC_T_INT,   MINIC_T_INT, MINIC_T_INT, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t object_deref_types[]  = {MINIC_T_INT, MINIC_T_FLOAT, MINIC_T_PTR, MINIC_T_CHAR, MINIC_T_PTR, MINIC_T_PTR,
-	                                                    MINIC_T_PTR, MINIC_T_INT,   MINIC_T_INT, MINIC_T_INT,  MINIC_T_PTR, MINIC_T_CHAR};
-	minic_register_struct_native("object_t", object_fields, object_offsets, object_types, object_deref_types, 12);
-	minic_struct_set_size("object_t", (int)sizeof(object_t));
-	minic_struct_field_set_type("object_t", "raw", "obj_t");
-	minic_struct_field_set_type("object_t", "transform", "transform_t");
-	minic_struct_field_set_type("object_t", "children", "any_array_t");
-
-	// mesh_object_t
-	static const char        *mo_fields[]       = {"base", "data", "material", "camera_dist", "frustum_culling", "skip_context", "force_context"};
-	static const int          mo_offsets[]      = {
-		(int)offsetof(mesh_object_t, base),            (int)offsetof(mesh_object_t, data),            (int)offsetof(mesh_object_t, material),
-		(int)offsetof(mesh_object_t, camera_dist),     (int)offsetof(mesh_object_t, frustum_culling),  (int)offsetof(mesh_object_t, skip_context),
-		(int)offsetof(mesh_object_t, force_context),
-	};
-	static const minic_type_t mo_types[]        = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_FLOAT, MINIC_T_INT, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t mo_deref_types[]  = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_FLOAT, MINIC_T_INT, MINIC_T_CHAR, MINIC_T_CHAR};
-	minic_register_struct_native("mesh_object_t", mo_fields, mo_offsets, mo_types, mo_deref_types, 7);
-	minic_struct_set_size("mesh_object_t", (int)sizeof(mesh_object_t));
-	minic_struct_field_set_type("mesh_object_t", "base", "object_t");
-	minic_struct_field_set_type("mesh_object_t", "data", "mesh_data_t");
-	minic_struct_field_set_type("mesh_object_t", "material", "material_data_t");
-
-	// transform_t
-	static const char        *transform_fields[]       = {"scale_world", "dirty", "object", "radius"};
-	static const int          transform_offsets[]      = {
-		(int)offsetof(transform_t, scale_world), (int)offsetof(transform_t, dirty),
-		(int)offsetof(transform_t, object),      (int)offsetof(transform_t, radius),
-	};
-	static const minic_type_t transform_types[]        = {MINIC_T_FLOAT, MINIC_T_INT, MINIC_T_PTR, MINIC_T_FLOAT};
-	static const minic_type_t transform_deref_types[]  = {MINIC_T_FLOAT, MINIC_T_INT, MINIC_T_PTR, MINIC_T_FLOAT};
-	minic_register_struct_native("transform_t", transform_fields, transform_offsets, transform_types, transform_deref_types, 4);
-	minic_struct_set_size("transform_t", (int)sizeof(transform_t));
-	minic_struct_field_set_type("transform_t", "object", "object_t");
-
-	// camera_object_t
-	static const char        *camobj_fields[]       = {"base", "data", "frame", "frustum_planes"};
-	static const int          camobj_offsets[]      = {
-		(int)offsetof(camera_object_t, base),  (int)offsetof(camera_object_t, data),
-		(int)offsetof(camera_object_t, frame), (int)offsetof(camera_object_t, frustum_planes),
-	};
-	static const minic_type_t camobj_types[]        = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_INT, MINIC_T_PTR};
-	static const minic_type_t camobj_deref_types[]  = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_INT, MINIC_T_PTR};
-	minic_register_struct_native("camera_object_t", camobj_fields, camobj_offsets, camobj_types, camobj_deref_types, 4);
-	minic_struct_set_size("camera_object_t", (int)sizeof(camera_object_t));
-	minic_struct_field_set_type("camera_object_t", "base", "object_t");
-	minic_struct_field_set_type("camera_object_t", "data", "camera_data_t");
-	minic_struct_field_set_type("camera_object_t", "frustum_planes", "frustum_plane_array_t");
-
-	// frustum_plane_t
-	static const char        *fp_fields[]       = {"constant"};
-	static const int          fp_offsets[]      = {(int)offsetof(frustum_plane_t, constant)};
-	static const minic_type_t fp_types[]        = {MINIC_T_FLOAT};
-	static const minic_type_t fp_deref_types[]  = {MINIC_T_FLOAT};
-	minic_register_struct_native("frustum_plane_t", fp_fields, fp_offsets, fp_types, fp_deref_types, 1);
-	minic_struct_set_size("frustum_plane_t", (int)sizeof(frustum_plane_t));
-
-	// cached_shader_context_t
-	static const char        *csc_fields[]       = {"context"};
-	static const int          csc_offsets[]      = {(int)offsetof(cached_shader_context_t, context)};
-	static const minic_type_t csc_types[]        = {MINIC_T_PTR};
-	static const minic_type_t csc_deref_types[]  = {MINIC_T_PTR};
-	minic_register_struct_native("cached_shader_context_t", csc_fields, csc_offsets, csc_types, csc_deref_types, 1);
-	minic_struct_set_size("cached_shader_context_t", (int)sizeof(cached_shader_context_t));
-	minic_struct_field_set_type("cached_shader_context_t", "context", "shader_context_t");
-
-	// types.h array types
-	minic_register_struct_native("string_t_array_t", array_fields, array_offsets, array_types, array_ptr_derefs, 3);
-	minic_struct_set_size("string_t_array_t", (int)sizeof(string_t_array_t));
-
-	// config_t (16 of 62 fields; most script-relevant)
-	static const char        *config_fields[]       = {"window_w", "window_h", "window_scale", "rp_supersample",
-	                                                    "recent_projects", "plugins", "keymap", "theme",
-	                                                    "undo_steps", "camera_fov", "layer_res",
-	                                                    "brush_live", "node_previews", "material_live",
-	                                                    "workspace", "workflow"};
-	static const int          config_offsets[]      = {
-		(int)offsetof(config_t, window_w),         (int)offsetof(config_t, window_h),         (int)offsetof(config_t, window_scale),
-		(int)offsetof(config_t, rp_supersample),   (int)offsetof(config_t, recent_projects),  (int)offsetof(config_t, plugins),
-		(int)offsetof(config_t, keymap),           (int)offsetof(config_t, theme),            (int)offsetof(config_t, undo_steps),
-		(int)offsetof(config_t, camera_fov),       (int)offsetof(config_t, layer_res),        (int)offsetof(config_t, brush_live),
-		(int)offsetof(config_t, node_previews),    (int)offsetof(config_t, material_live),    (int)offsetof(config_t, workspace),
-		(int)offsetof(config_t, workflow),
-	};
-	static const minic_type_t config_types[]        = {MINIC_T_INT, MINIC_T_INT, MINIC_T_FLOAT, MINIC_T_FLOAT,
-	                                                    MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR,
-	                                                    MINIC_T_INT, MINIC_T_FLOAT, MINIC_T_INT,
-	                                                    MINIC_T_INT, MINIC_T_INT, MINIC_T_INT,
-	                                                    MINIC_T_INT, MINIC_T_INT};
-	static const minic_type_t config_deref_types[]  = {MINIC_T_INT, MINIC_T_INT, MINIC_T_FLOAT, MINIC_T_FLOAT,
-	                                                    MINIC_T_PTR, MINIC_T_PTR, MINIC_T_CHAR, MINIC_T_CHAR,
-	                                                    MINIC_T_INT, MINIC_T_FLOAT, MINIC_T_INT,
-	                                                    MINIC_T_INT, MINIC_T_INT, MINIC_T_INT,
-	                                                    MINIC_T_INT, MINIC_T_INT};
-	minic_register_struct_native("config_t", config_fields, config_offsets, config_types, config_deref_types, 16);
-	minic_struct_set_size("config_t", (int)sizeof(config_t));
-	minic_struct_field_set_type("config_t", "recent_projects", "string_t_array_t");
-	minic_struct_field_set_type("config_t", "plugins", "string_t_array_t");
-
-	// context_t (16 of many fields; most script-relevant)
-	static const char        *ctx_fields[]       = {"paint_object", "ddirty", "pdirty", "rdirty",
-	                                                 "material", "layer", "brush", "tool",
-	                                                 "brush_radius", "brush_opacity", "brush_hardness",
-	                                                 "brush_scale", "brush_angle", "brush_blending",
-	                                                 "viewport_mode", "xray"};
-	static const int          ctx_offsets[]      = {
-		(int)offsetof(context_t, paint_object),    (int)offsetof(context_t, ddirty),           (int)offsetof(context_t, pdirty),
-		(int)offsetof(context_t, rdirty),          (int)offsetof(context_t, material),         (int)offsetof(context_t, layer),
-		(int)offsetof(context_t, brush),           (int)offsetof(context_t, tool),             (int)offsetof(context_t, brush_radius),
-		(int)offsetof(context_t, brush_opacity),   (int)offsetof(context_t, brush_hardness),   (int)offsetof(context_t, brush_scale),
-		(int)offsetof(context_t, brush_angle),     (int)offsetof(context_t, brush_blending),   (int)offsetof(context_t, viewport_mode),
-		(int)offsetof(context_t, xray),
-	};
-	static const minic_type_t ctx_types[]        = {MINIC_T_PTR, MINIC_T_INT, MINIC_T_INT, MINIC_T_INT,
-	                                                 MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_INT,
-	                                                 MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_FLOAT,
-	                                                 MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_INT,
-	                                                 MINIC_T_INT, MINIC_T_INT};
-	static const minic_type_t ctx_deref_types[]  = {MINIC_T_PTR, MINIC_T_INT, MINIC_T_INT, MINIC_T_INT,
-	                                                 MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_INT,
-	                                                 MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_FLOAT,
-	                                                 MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_INT,
-	                                                 MINIC_T_INT, MINIC_T_INT};
-	minic_register_struct_native("context_t", ctx_fields, ctx_offsets, ctx_types, ctx_deref_types, 16);
-	minic_struct_set_size("context_t", (int)sizeof(context_t));
-	minic_struct_field_set_type("context_t", "paint_object", "mesh_object_t");
-
-	// project_format_t (16 of 25 fields; packed_assets, icons, mesh_assets, atlas, envmap_blur omitted)
-	static const char        *pf_fields[]       = {"version", "assets", "is_bgra", "envmap",
-	                                                "envmap_strength", "envmap_angle", "camera_fov",
-	                                                "camera_world", "camera_origin", "swatches",
-	                                                "brush_nodes", "material_nodes",
-	                                                "font_assets", "layer_datas", "mesh_datas", "script_datas"};
-	static const int          pf_offsets[]      = {
-		(int)offsetof(project_format_t, version),         (int)offsetof(project_format_t, assets),           (int)offsetof(project_format_t, is_bgra),
-		(int)offsetof(project_format_t, envmap),          (int)offsetof(project_format_t, envmap_strength),  (int)offsetof(project_format_t, envmap_angle),
-		(int)offsetof(project_format_t, camera_fov),      (int)offsetof(project_format_t, camera_world),     (int)offsetof(project_format_t, camera_origin),
-		(int)offsetof(project_format_t, swatches),        (int)offsetof(project_format_t, brush_nodes),      (int)offsetof(project_format_t, material_nodes),
-		(int)offsetof(project_format_t, font_assets),     (int)offsetof(project_format_t, layer_datas),      (int)offsetof(project_format_t, mesh_datas),
-		(int)offsetof(project_format_t, script_datas),
-	};
-	static const minic_type_t pf_types[]        = {MINIC_T_PTR, MINIC_T_PTR, MINIC_T_INT, MINIC_T_PTR,
-	                                                MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_FLOAT,
-	                                                MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR,
-	                                                MINIC_T_PTR, MINIC_T_PTR,
-	                                                MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
-	static const minic_type_t pf_deref_types[]  = {MINIC_T_CHAR, MINIC_T_PTR, MINIC_T_INT, MINIC_T_CHAR,
-	                                                MINIC_T_FLOAT, MINIC_T_FLOAT, MINIC_T_FLOAT,
-	                                                MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR,
-	                                                MINIC_T_PTR, MINIC_T_PTR,
-	                                                MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR, MINIC_T_PTR};
-	minic_register_struct_native("project_format_t", pf_fields, pf_offsets, pf_types, pf_deref_types, 16);
-	minic_struct_set_size("project_format_t", (int)sizeof(project_format_t));
-	minic_struct_field_set_type("project_format_t", "assets", "string_t_array_t");
-	minic_struct_field_set_type("project_format_t", "camera_world", "f32_array_t");
-	minic_struct_field_set_type("project_format_t", "camera_origin", "f32_array_t");
-	minic_struct_field_set_type("project_format_t", "font_assets", "string_t_array_t");
-	minic_struct_field_set_type("project_format_t", "script_datas", "string_t_array_t");
-
 	// iron_math
 	R(iron_random_init, "v(i)");
 	R(iron_random_get, "i()");

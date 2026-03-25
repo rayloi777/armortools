@@ -34,3 +34,4 @@ char        *to_lower_case(char *s);
 char        *to_upper_case(char *s);
 char        *trim_end(char *str);
 int          string_utf8_decode(const char *str, int *i);
+int          string_utf8_encode(int codepoint, char *out);

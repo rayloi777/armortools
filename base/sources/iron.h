@@ -61,7 +61,7 @@ buffer_t *embed_get(char *key) {
 }
 #endif
 
-void _kickstart();
+void _kickstart(void);
 bool enable_window = true;
 bool in_background = false;
 int  paused_frames = 0;
@@ -75,7 +75,7 @@ char temp_string_vs[1024 * 128];
 char temp_string_fs[1024 * 128];
 #ifdef IRON_WINDOWS
 wchar_t        temp_wstring[1024 * 32];
-struct HWND__ *iron_windows_window_handle();
+struct HWND__ *iron_windows_window_handle(void);
 #endif
 
 void (*iron_update)(void);
@@ -325,6 +325,31 @@ void _key_press(unsigned int character, void *data) {
 #ifdef IDLE_SLEEP
 	paused_frames = 0;
 #endif
+}
+
+void _ime_composition(const char *composition, int cursor_pos, void *data) {
+	if (ui_get_current() == NULL)
+		return;
+	ui_t *ui = ui_get_current();
+	strncpy(ui->ime_composition, composition, 511);
+	ui->ime_composition[511] = '\0';
+	ui->ime_cursor_pos = cursor_pos;
+	ui->ime_composing = (composition[0] != '\0');
+}
+
+void _ime_commit(const char *text, void *data) {
+	if (ui_get_current() == NULL)
+		return;
+	ui_t *ui = ui_get_current();
+	if (ui->ime_composing) {
+		ui->ime_composing = false;
+		ui->ime_composition[0] = '\0';
+	}
+	strncpy(ui->ime_committed_text, text, 1023);
+	ui->ime_committed_text[1023] = '\0';
+}
+
+void _ime_text_inserted(const char *text, void *data) {
 }
 
 void _mouse_down(int button, int x, int y, void *data) {
@@ -589,6 +614,9 @@ void _iron_init(iron_window_options_t *ops) {
 	iron_set_copy_callback(_copy, NULL);
 	iron_set_paste_callback(_paste, NULL);
 	iron_keyboard_set_key_press_callback(_key_press, NULL);
+	iron_keyboard_set_ime_composition_callback(_ime_composition, NULL);
+	iron_keyboard_set_ime_commit_callback(_ime_commit, NULL);
+	iron_keyboard_set_ime_text_inserted_callback(_ime_text_inserted, NULL);
 #ifdef WITH_AUDIO
 	iron_a1_init();
 	iron_a2_init();

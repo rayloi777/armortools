@@ -85,7 +85,7 @@ vec2_t vec2_sub(vec2_t a, vec2_t b);
 float  vec2_cross(vec2_t a, vec2_t b);
 vec2_t vec2_norm(vec2_t v);
 float  vec2_dot(vec2_t a, vec2_t b);
-vec2_t vec2_nan();
+vec2_t vec2_nan(void);
 bool   vec2_isnan(vec2_t v);
 
 vec4_t vec4_create(float x, float y, float z, float w);
@@ -111,10 +111,10 @@ float  vec4_dist(vec4_t v1, vec4_t v2);
 float  vec4_fdist(float v1x, float v1y, float v1z, float v2x, float v2y, float v2z);
 vec4_t vec4_reflect(vec4_t a, vec4_t n);
 vec4_t vec4_clamp(vec4_t a, float min, float max);
-vec4_t vec4_x_axis();
-vec4_t vec4_y_axis();
-vec4_t vec4_z_axis();
-vec4_t vec4_nan();
+vec4_t vec4_x_axis(void);
+vec4_t vec4_y_axis(void);
+vec4_t vec4_z_axis(void);
+vec4_t vec4_nan(void);
 bool   vec4_isnan(vec4_t v);
 
 quat_t quat_create(float x, float y, float z, float w);
@@ -132,14 +132,14 @@ quat_t quat_from_to(vec4_t v0, vec4_t v1);
 quat_t quat_inv(quat_t q);
 
 mat3_t mat3_create(float _00, float _10, float _20, float _01, float _11, float _21, float _02, float _12, float _22);
-mat3_t mat3_identity();
+mat3_t mat3_identity(void);
 mat3_t mat3_translation(float x, float y);
 mat3_t mat3_rotation(float alpha);
 mat3_t mat3_scale(mat3_t m, vec4_t v);
 mat3_t mat3_set_from4(mat4_t m4);
 mat3_t mat3_multmat(mat3_t a, mat3_t b);
 mat3_t mat3_transpose(mat3_t m);
-mat3_t mat3_nan();
+mat3_t mat3_nan(void);
 bool   mat3_isnan(mat3_t m);
 
 typedef struct mat4_decomposed {
@@ -150,7 +150,7 @@ typedef struct mat4_decomposed {
 
 mat4_t mat4_create(float _00, float _10, float _20, float _30, float _01, float _11, float _21, float _31, float _02, float _12, float _22, float _32,
                    float _03, float _13, float _23, float _33);
-mat4_t mat4_identity();
+mat4_t mat4_identity(void);
 mat4_t mat4_from_f32_array(f32_array_t *a, int offset);
 mat4_t mat4_persp(float fov_y, float aspect, float zn, float zf);
 mat4_t mat4_ortho(float left, float right, float bottom, float top, float znear, float zfar);
@@ -178,7 +178,7 @@ vec4_t             mat4_up(mat4_t m);
 f32_array_t       *mat4_to_f32_array(mat4_t m);
 float              mat4_cofactor(float m0, float m1, float m2, float m3, float m4, float m5, float m6, float m7, float m8);
 float              mat4_determinant(mat4_t m);
-mat4_t             mat4_nan();
+mat4_t             mat4_nan(void);
 bool               mat4_isnan(mat4_t m);
 
 #define mat4nan (mat4_nan())

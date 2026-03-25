@@ -1,4 +1,5 @@
 #include "engine.h"
+#include <stdio.h>
 #include <limits.h>
 
 i32 _object_uid_counter = 0;
@@ -984,7 +985,7 @@ bool mesh_object_cull_mesh(mesh_object_t *raw, char *context, camera_object_t *c
 
 void mesh_object_render(mesh_object_t *raw, char *context, string_array_t *bind_params) {
 	if (!raw->base->visible) {
-		return; // Skip render if object is hidden
+		return;
 	}
 	if (mesh_object_cull_mesh(raw, context, scene_camera)) {
 		return;
@@ -1130,7 +1131,7 @@ void camera_object_build_mat(camera_object_t *raw) {
 	transform_build_matrix(raw->base->transform);
 
 	raw->v  = mat4_inv(raw->base->transform->world);
-	raw->vp = mat4_mult_mat(raw->v, raw->p);
+	raw->vp = mat4_mult_mat(raw->p, raw->v);
 
 	if (raw->data->frustum_culling) {
 		camera_object_build_view_frustum(raw->vp, raw->frustum_planes);
@@ -1641,8 +1642,10 @@ void uniforms_set_obj_const(object_t *obj, i32 loc, shader_const_t *c) {
 			m = mat4_inv(obj->transform->world_unpack);
 		}
 		else if (string_equals(c->link, "_world_view_proj_matrix")) {
-			m = mat4_mult_mat(obj->transform->world_unpack, camera->v);
-			m = mat4_mult_mat(m, camera->p);
+			m = mat4_mult_mat(camera->vp, obj->transform->world_unpack);
+			if (mat4_isnan(m) || isinf(m.m[0])) {
+				m = mat4_nan();
+			}
 		}
 		else if (string_equals(c->link, "_world_wiew_matrix")) {
 			m = mat4_mult_mat(obj->transform->world_unpack, camera->v);
@@ -2379,16 +2382,15 @@ object_t *scene_create_object(obj_t *o, scene_t *format, object_t *parent) {
 }
 
 object_t *scene_create_mesh_object(obj_t *o, scene_t *format, object_t *parent, material_data_t *material) {
-	// Mesh reference
 	any_array_t *ref         = string_split(o->data_ref, "/");
 	char        *object_file = "";
 	char        *data_ref    = "";
 	char        *scene_name  = format->name;
-	if (ref->length == 2) { // File reference
+	if (ref->length == 2) {
 		object_file = (char *)ref->buffer[0];
 		data_ref    = (char *)ref->buffer[1];
 	}
-	else { // Local mesh data
+	else {
 		object_file = scene_name;
 		data_ref    = o->data_ref;
 	}

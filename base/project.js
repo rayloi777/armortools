@@ -18,6 +18,7 @@ project.add_assets("assets/*", {destination : "data/{name}"});
 project.add_assets("assets/licenses/**", {destination : "data/licenses/{name}"});
 project.add_assets("assets/themes/*.json", {destination : "data/themes/{name}"});
 project.add_cfiles("sources/*.c");
+
 if (platform != "wasm") {
 	project.add_cfiles("sources/libs/gc.c");
 }

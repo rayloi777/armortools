@@ -887,8 +887,7 @@ void main() {\n\
 	void *plugin = plugin_create();\n\
 	plugin_notify_on_ui(plugin, on_ui);\n\
 	h1 = ui_handle_create();\n\
-}\n\
-";
+}\n";
 		if (!ends_with(plugin_name, ".c")) {
 			plugin_name = string("%s.c", plugin_name);
 		}

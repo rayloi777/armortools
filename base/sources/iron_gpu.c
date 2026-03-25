@@ -1,5 +1,6 @@
 #include "iron_gpu.h"
 #include "iron_system.h"
+#include <stdio.h>
 #include "iron_math.h"
 #include <string.h>
 
