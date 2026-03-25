@@ -158,11 +158,11 @@ armortools/
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.1.1 | 創建 engine/ 目錄結構 | `engine/` | 待辦 |
-| 1.1.2 | 下載 Flecs 單頭文件 | `sources/ecs/flecs/flecs.h` | 待辦 |
-| 1.1.3 | 編寫 project.js 構建配置 | `engine/project.js` | 待辦 |
-| 1.1.4 | 創建 game_engine.h/c 入口 | `engine/sources/game_engine.h/c` | 待辦 |
-| 1.1.5 | 測試編譯 (macOS Metal) | - | 待辦 |
+| 1.1.1 | 創建 engine/ 目錄結構 | `engine/` | ✓ 完成 |
+| 1.1.2 | 下載 Flecs 單頭文件 | `sources/ecs/flecs/flecs.h` | ✓ 完成 |
+| 1.1.3 | 編寫 project.js 構建配置 | `engine/project.js` | ✓ 完成 |
+| 1.1.4 | 創建 game_engine.h/c 入口 | `engine/sources/game_engine.h/c` | ✓ 完成 |
+| 1.1.5 | 測試編譯 (macOS Metal) | - | ✓ 完成 |
 
 **project.js 示例**:
 
@@ -206,11 +206,11 @@ return project;
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.2.1 | 創建 ecs_world.h 類型定義 | `engine/sources/ecs/ecs_world.h` | 待辦 |
-| 1.2.2 | 實現 ecs_world.c 初始化 | `engine/sources/ecs/ecs_world.c` | 待辦 |
-| 1.2.3 | 實現 ecs_components.c 內建組件 | `engine/sources/ecs/ecs_components.h/c` | 待辦 |
+| 1.2.1 | 創建 ecs_world.h 類型定義 | `engine/sources/ecs/ecs_world.h` | ✓ 完成 |
+| 1.2.2 | 實現 ecs_world.c 初始化 (Flecs v4.0.0) | `engine/sources/ecs/ecs_world.c` | ✓ 完成 |
+| 1.2.3 | 下載 flecs.c 實現 | `engine/sources/ecs/flecs/flecs.c` | ✓ 完成 |
 | 1.2.4 | 實現 ecs_dynamic.c 動態組件 | `engine/sources/ecs/ecs_dynamic.h/c` | 待辦 |
-| 1.2.5 | 測試：創建 Flecs World | - | 待辦 |
+| 1.2.5 | 測試：創建 Flecs World | - | ✓ 完成 |
 
 **API 函數清單**:
 
