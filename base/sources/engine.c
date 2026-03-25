@@ -1131,7 +1131,7 @@ void camera_object_build_mat(camera_object_t *raw) {
 	transform_build_matrix(raw->base->transform);
 
 	raw->v  = mat4_inv(raw->base->transform->world);
-	raw->vp = mat4_mult_mat(raw->p, raw->v);
+	raw->vp = mat4_mult_mat(raw->v, raw->p);
 
 	if (raw->data->frustum_culling) {
 		camera_object_build_view_frustum(raw->vp, raw->frustum_planes);
@@ -1642,10 +1642,8 @@ void uniforms_set_obj_const(object_t *obj, i32 loc, shader_const_t *c) {
 			m = mat4_inv(obj->transform->world_unpack);
 		}
 		else if (string_equals(c->link, "_world_view_proj_matrix")) {
-			m = mat4_mult_mat(camera->vp, obj->transform->world_unpack);
-			if (mat4_isnan(m) || isinf(m.m[0])) {
-				m = mat4_nan();
-			}
+			m = mat4_mult_mat(obj->transform->world_unpack, camera->v);
+			m = mat4_mult_mat(m, camera->p);
 		}
 		else if (string_equals(c->link, "_world_wiew_matrix")) {
 			m = mat4_mult_mat(obj->transform->world_unpack, camera->v);

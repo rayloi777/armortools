@@ -1,4 +1,5 @@
 #include "iron_array.h"
+#include "iron_json.h"
 #include "iron_string.h"
 #include "minic.h"
 #include <math.h>

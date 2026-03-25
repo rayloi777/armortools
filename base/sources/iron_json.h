@@ -7,8 +7,9 @@
 void      *json_parse(char *s);
 any_map_t *json_parse_to_map(char *s);
 
-void  json_encode_begin(void);
-char *json_encode_end(void);
+void      json_encode_begin(void);
+char     *json_encode_end(void);
+buffer_t *json_encode_to_armpack(char *json);
 void  json_encode_string(char *k, char *v);
 void  json_encode_string_array(char *k, string_array_t *a);
 void  json_encode_f32(char *k, float f);
