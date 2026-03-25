@@ -6,7 +6,9 @@ let project = new Project("IronGame");
 project.add_project("../base");
 
 project.add_include_dir("sources");
+project.add_include_dir("sources/ecs/flecs");
 
+project.add_cfiles("sources/ecs/flecs/flecs.c");
 project.add_cfiles("sources/game_engine.c");
 project.add_cfiles("sources/core/runtime_api.c");
 project.add_cfiles("sources/core/entity_api.c");
