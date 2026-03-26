@@ -1,6 +1,7 @@
 #include "game_engine.h"
 #include "core/game_loop.h"
 #include "core/runtime_api.h"
+#include "core/system_api.h"
 #include "ecs/ecs_world.h"
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
@@ -57,9 +58,10 @@ void context_set_viewport_shader(void) {}
 void import_mesh_importers(void) {}
 void import_texture_importers(void) {}
 
+void game_engine_init(void) {
     system_api_init();
     
-    ecs_register_components(g_world->world);
+    g_world = game_world_create();
     ecs_dynamic_init();
     runtime_api_set_world(g_world);
     runtime_api_register();
@@ -67,22 +69,11 @@ void import_texture_importers(void) {}
     game_loop_init(g_world);
     
     _iron_set_update_callback(game_loop_update);
-}
-    
-    ecs_dynamic_init();
-    ecs_register_components(g_world->world);
-    runtime_api_set_world(g_world);
-    runtime_api_register();
-    
-    game_loop_init(g_world);
-    
     g_initialized = true;
-    printf("Game Engine Initialized\n");
 }
 
 void game_engine_shutdown(void) {
     if (!g_initialized) return;
-    
     printf("Game Engine Shutting Down...\n");
     
     game_loop_shutdown();
