@@ -2,7 +2,7 @@
 #include "ecs_world.h"
 #include "ecs_components.h"
 #include "flecs.h"
-#include <iron.h>
+#include <engine.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -39,18 +39,18 @@ static void bridge_system(ecs_iter_t *it) {
         if (render_obj[i].transform != NULL && render_obj[i].dirty) {
             transform_t *t = (transform_t *)render_obj[i].transform;
             
-            t->loc_x = pos[i].x;
-            t->loc_y = pos[i].y;
-            t->loc_z = pos[i].z;
+            t->loc.x = pos[i].x;
+            t->loc.y = pos[i].y;
+            t->loc.z = pos[i].z;
             
-            t->rot_x = rot[i].x;
-            t->rot_y = rot[i].y;
-            t->rot_z = rot[i].z;
-            t->rot_w = rot[i].w;
+            t->rot.x = rot[i].x;
+            t->rot.y = rot[i].y;
+            t->rot.z = rot[i].z;
+            t->rot.w = rot[i].w;
             
-            t->scale_x = scale[i].x;
-            t->scale_y = scale[i].y;
-            t->scale_z = scale[i].z;
+            t->scale.x = scale[i].x;
+            t->scale.y = scale[i].y;
+            t->scale.z = scale[i].z;
             
             t->dirty = true;
             transform_build_matrix(t);
@@ -74,11 +74,11 @@ void ecs_bridge_init(void) {
     
     ecs_system_desc_t sys_desc = {0};
     sys_desc.entity = 0;
-    sys_desc.query.filter.terms[0].id = ecs_component_TransformPosition();
-    sys_desc.query.filter.terms[1].id = ecs_component_TransformRotation();
-    sys_desc.query.filter.terms[2].id = ecs_component_TransformScale();
-    sys_desc.query.filter.terms[3].id = ecs_component_RenderObject();
-    sys_desc.query.filter.terms[4].id = ecs_component_RenderMesh();
+    sys_desc.query.terms[0].id = ecs_component_TransformPosition();
+    sys_desc.query.terms[1].id = ecs_component_TransformRotation();
+    sys_desc.query.terms[2].id = ecs_component_TransformScale();
+    sys_desc.query.terms[3].id = ecs_component_RenderObject();
+    sys_desc.query.terms[4].id = ecs_component_RenderMesh();
     sys_desc.callback = bridge_system;
     
     g_bridge_system = ecs_system_init(ecs, &sys_desc);
@@ -122,18 +122,18 @@ void ecs_bridge_sync_transform(uint64_t entity) {
     
     transform_t *t = (transform_t *)render_obj->transform;
     
-    t->loc_x = pos->x;
-    t->loc_y = pos->y;
-    t->loc_z = pos->z;
+    t->loc.x = pos->x;
+    t->loc.y = pos->y;
+    t->loc.z = pos->z;
     
-    t->rot_x = rot->x;
-    t->rot_y = rot->y;
-    t->rot_z = rot->z;
-    t->rot_w = rot->w;
+    t->rot.x = rot->x;
+    t->rot.y = rot->y;
+    t->rot.z = rot->z;
+    t->rot.w = rot->w;
     
-    t->scale_x = scale->x;
-    t->scale_y = scale->y;
-    t->scale_z = scale->z;
+    t->scale.x = scale->x;
+    t->scale.y = scale->y;
+    t->scale.z = scale->z;
     
     t->dirty = true;
     transform_build_matrix(t);
