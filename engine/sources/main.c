@@ -1,0 +1,25 @@
+#include "global.h"
+
+// Unity Build - 包含所有源文件
+#include "game_engine.c"
+#include "core/runtime_api.c"
+#include "core/entity_api.c"
+#include "core/component_api.c"
+#include "core/system_api.c"
+#include "core/query_api.c"
+#include "core/game_loop.c"
+#include "core/input.c"
+#include "core/prefab.c"
+#include "core/prefab_load.c"
+#include "core/prefab_save.c"
+#include "ecs/ecs_world.c"
+#include "ecs/ecs_components.c"
+#include "ecs/ecs_dynamic.c"
+#include "ecs/ecs_bridge.c"
+#include "components/transform.c"
+#include "components/mesh_renderer.c"
+#include "components/camera.c"
+
+// Base minic library
+#include "../../base/sources/libs/minic.c"
+#include "../../base/sources/libs/minic_ext.c"

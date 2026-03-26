@@ -10,12 +10,12 @@
 
 static registered_system_t g_systems[MAX_SYSTEMS];
 static int g_system_count = 0;
-static bool g_initialized = false;
+static bool g_system_api_initialized = false;
 
 void system_api_init(void) {
-    if (g_initialized) return;
+    if (g_system_api_initialized) return;
     memset(g_systems, 0, sizeof(g_systems));
-    g_initialized = true;
+    g_system_api_initialized = true;
 }
 
 static ecs_entity_t phase_to_flecs(system_phase_t phase) {

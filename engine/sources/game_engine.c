@@ -6,11 +6,6 @@
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
 #include "ecs/ecs_bridge.h"
-#include <iron.h>
-#include <minic.h>
-#include <stdio.h>
-#include <stdbool.h>
-#include <gc.h>
 
 static game_world_t *g_world = NULL;
 static bool g_initialized = false;

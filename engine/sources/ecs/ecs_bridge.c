@@ -2,9 +2,6 @@
 #include "ecs_world.h"
 #include "ecs_components.h"
 #include "flecs.h"
-#include <engine.h>
-#include <stdio.h>
-#include <string.h>
 
 static game_world_t *g_game_world = NULL;
 static ecs_entity_t g_bridge_system = 0;

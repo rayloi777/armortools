@@ -7,20 +7,27 @@
 #include "ecs/ecs_world.h"
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
 #include <minic.h>
 
 static game_world_t *g_runtime_world = NULL;
 
-void minic_register_builtins(void) {
+static minic_val_t minic_printf(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    const char *str = (const char *)args[0].p;
+    if (str) {
+        fprintf(stderr, "%s\n", str);
+    }
+    return minic_val_int(str ? (int)strlen(str) : 0);
 }
-
+void minic_register_builtins(void) {
+    minic_register_native("printf", minic_printf);
+}
 void runtime_api_set_world(game_world_t *world) {
     g_runtime_world = world;
 }
-
 static uint64_t minic_component_register(const char *name, int size) {
     if (!g_runtime_world || !name) return 0;
     
@@ -36,92 +43,72 @@ static uint64_t minic_component_register(const char *name, int size) {
     
     return component_register(g_runtime_world, &desc);
 }
-
 static int minic_component_add_field(uint64_t component_id, const char *name, int type, int offset) {
     return component_add_field(component_id, name, type, (size_t)offset);
 }
-
 static uint64_t minic_component_get_id(const char *name) {
     if (!g_runtime_world || !name) return 0;
     return component_get_id(g_runtime_world, name);
 }
-
 static uint64_t minic_entity_create(void) {
     if (!g_runtime_world) return 0;
     return entity_create(g_runtime_world);
 }
-
 static uint64_t minic_entity_create_named(const char *name) {
     if (!g_runtime_world || !name) return 0;
     return entity_create_with_name(g_runtime_world, name);
 }
-
 static void minic_entity_destroy(uint64_t entity) {
     if (!g_runtime_world || entity == 0) return;
     entity_destroy(g_runtime_world, entity);
 }
-
 static void minic_entity_add(uint64_t entity, uint64_t component_id) {
     if (!g_runtime_world || entity == 0 || component_id == 0) return;
     entity_add_component(g_runtime_world, entity, component_id);
 }
-
 static void minic_entity_remove(uint64_t entity, uint64_t component_id) {
     if (!g_runtime_world || entity == 0 || component_id == 0) return;
     entity_remove_component(g_runtime_world, entity, component_id);
 }
-
 static int minic_entity_has(uint64_t entity, uint64_t component_id) {
     if (!g_runtime_world || entity == 0 || component_id == 0) return 0;
     return entity_has_component(g_runtime_world, entity, component_id) ? 1 : 0;
 }
-
 static void *minic_entity_get(uint64_t entity, uint64_t component_id) {
     if (!g_runtime_world || entity == 0 || component_id == 0) return NULL;
     return entity_get_component_data(g_runtime_world, entity, component_id);
 }
-
 static void minic_entity_set_data(uint64_t entity, uint64_t component_id, void *data) {
     if (!g_runtime_world || entity == 0 || component_id == 0 || !data) return;
     entity_set_component_data(g_runtime_world, entity, component_id, data);
 }
-
 static void minic_comp_set_int(uint64_t comp_id, void *data, const char *field, int value) {
     component_set_field_int(comp_id, data, field, (int32_t)value);
 }
-
 static void minic_comp_set_float(uint64_t comp_id, void *data, const char *field, float value) {
     component_set_field_float(comp_id, data, field, value);
 }
-
 static void minic_comp_set_ptr(uint64_t comp_id, void *data, const char *field, void *value) {
     component_set_field_ptr(comp_id, data, field, value);
 }
-
 static int minic_comp_get_int(uint64_t comp_id, void *data, const char *field) {
     return component_get_field_int(comp_id, data, field);
 }
-
 static float minic_comp_get_float(uint64_t comp_id, void *data, const char *field) {
     return component_get_field_float(comp_id, data, field);
 }
-
 static void *minic_comp_get_ptr(uint64_t comp_id, void *data, const char *field) {
     return component_get_field_ptr(comp_id, data, field);
 }
-
 static float minic_sys_delta(void) {
     return game_loop_get_delta_time();
 }
-
 static float minic_sys_time(void) {
     return game_loop_get_time();
 }
-
 static uint64_t minic_sys_frame(void) {
     return game_loop_get_frame_count();
 }
-
 void runtime_api_register(void) {
     printf("Registering runtime APIs...\n");
     
