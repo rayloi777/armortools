@@ -16,11 +16,65 @@ static minic_val_t minic_printf(minic_val_t *args, int argc) {
     if (argc < 1 || args[0].type != MINIC_T_PTR) {
         return minic_val_int(0);
     }
-    const char *str = (const char *)args[0].p;
-    if (str) {
-        fprintf(stderr, "%s\n", str);
+    const char *fmt = (const char *)args[0].p;
+    if (!fmt) {
+        return minic_val_int(0);
     }
-    return minic_val_int(str ? (int)strlen(str) : 0);
+    
+    int arg_idx = 1;
+    char output[1024];
+    int out_pos = 0;
+    
+    while (*fmt && out_pos < 1020) {
+        if (*fmt != '%') {
+            output[out_pos++] = *fmt++;
+            continue;
+        }
+        
+        fmt++;
+        char spec = *fmt++;
+        char tmp[128];
+        
+        if (spec == 'd' || spec == 'i') {
+            int iv = (arg_idx < argc) ? (int)minic_val_to_d(args[arg_idx++]) : 0;
+            snprintf(tmp, sizeof(tmp), "%d", iv);
+        }
+        else if (spec == 'u') {
+            unsigned uv = (arg_idx < argc) ? (unsigned)(int)minic_val_to_d(args[arg_idx++]) : 0;
+            snprintf(tmp, sizeof(tmp), "%u", uv);
+        }
+        else if (spec == 'f' || spec == 'g') {
+            double dv = (arg_idx < argc) ? minic_val_to_d(args[arg_idx++]) : 0.0;
+            snprintf(tmp, sizeof(tmp), "%g", dv);
+        }
+        else if (spec == 's') {
+            const char *sv = (arg_idx < argc && args[arg_idx].type == MINIC_T_PTR) ? (const char *)args[arg_idx++].p : "(null)";
+            snprintf(tmp, sizeof(tmp), "%s", sv);
+        }
+        else if (spec == 'p') {
+            void *pv = (arg_idx < argc && args[arg_idx].type == MINIC_T_PTR) ? args[arg_idx++].p : NULL;
+            snprintf(tmp, sizeof(tmp), "%p", pv);
+        }
+        else if (spec == '%') {
+            output[out_pos++] = '%';
+            continue;
+        }
+        else {
+            snprintf(tmp, sizeof(tmp), "%%%c", spec);
+        }
+        
+        int len = (int)strlen(tmp);
+        if (out_pos + len < 1020) {
+            memcpy(output + out_pos, tmp, len);
+            out_pos += len;
+        }
+    }
+    
+    output[out_pos++] = '\n';
+    output[out_pos] = '\0';
+    fprintf(stderr, "%s", output);
+    
+    return minic_val_int(out_pos);
 }
 void minic_register_builtins(void) {
     minic_register_native("printf", minic_printf);
@@ -73,6 +127,10 @@ static void minic_entity_remove(uint64_t entity, uint64_t component_id) {
 static int minic_entity_has(uint64_t entity, uint64_t component_id) {
     if (!g_runtime_world || entity == 0 || component_id == 0) return 0;
     return entity_has_component(g_runtime_world, entity, component_id) ? 1 : 0;
+}
+static int minic_entity_exists(uint64_t entity) {
+    if (!g_runtime_world || entity == 0) return 0;
+    return entity_exists(g_runtime_world, entity) ? 1 : 0;
 }
 static void *minic_entity_get(uint64_t entity, uint64_t component_id) {
     if (!g_runtime_world || entity == 0 || component_id == 0) return NULL;
@@ -129,6 +187,7 @@ void runtime_api_register(void) {
     minic_register("entity_add", "v(i,i)", (minic_ext_fn_raw_t)minic_entity_add);
     minic_register("entity_remove", "v(i,i)", (minic_ext_fn_raw_t)minic_entity_remove);
     minic_register("entity_has", "i(i,i)", (minic_ext_fn_raw_t)minic_entity_has);
+    minic_register("entity_exists", "i(i)", (minic_ext_fn_raw_t)minic_entity_exists);
     minic_register("entity_get", "p(i,i)", (minic_ext_fn_raw_t)minic_entity_get);
     minic_register("entity_set_data", "v(i,i,p)", (minic_ext_fn_raw_t)minic_entity_set_data);
     

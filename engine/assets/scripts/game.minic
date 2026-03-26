@@ -1,4 +1,75 @@
  float main() {
-    printf("Test\n");
+    printf("=== ECS Test with Format Specifiers ===\n");
+    
+    int pos = component_get_id("TransformPosition");
+    int rot = component_get_id("TransformRotation");
+    int scale = component_get_id("TransformScale");
+    int render = component_get_id("RenderMesh");
+    
+    printf("pos=%d rot=%d scale=%d render=%d\n", pos, rot, scale, render);
+    
+    int ent1 = entity_create();
+    int ent2 = entity_create();
+    int ent3 = entity_create_named("Player");
+    
+    printf("ent1=%d ent2=%d ent3=%d\n", ent1, ent2, ent3);
+    
+    entity_add(ent1, pos);
+    entity_add(ent1, rot);
+    entity_add(ent1, scale);
+    
+    entity_add(ent2, pos);
+    entity_add(ent2, scale);
+    
+    entity_add(ent3, pos);
+    entity_add(ent3, rot);
+    entity_add(ent3, scale);
+    entity_add(ent3, render);
+    
+    int e1_has_pos = entity_has(ent1, pos);
+    int e1_has_rot = entity_has(ent1, rot);
+    int e1_has_scale = entity_has(ent1, scale);
+    int e1_has_render = entity_has(ent1, render);
+    
+    int e2_has_pos = entity_has(ent2, pos);
+    int e2_has_rot = entity_has(ent2, rot);
+    int e2_has_scale = entity_has(ent2, scale);
+    int e2_has_render = entity_has(ent2, render);
+    
+    int e3_has_pos = entity_has(ent3, pos);
+    int e3_has_rot = entity_has(ent3, rot);
+    int e3_has_scale = entity_has(ent3, scale);
+    int e3_has_render = entity_has(ent3, render);
+    
+    printf("e1: pos=%d rot=%d scale=%d render=%d\n", e1_has_pos, e1_has_rot, e1_has_scale, e1_has_render);
+    printf("e2: pos=%d rot=%d scale=%d render=%d\n", e2_has_pos, e2_has_rot, e2_has_scale, e2_has_render);
+    printf("e3: pos=%d rot=%d scale=%d render=%d\n", e3_has_pos, e3_has_rot, e3_has_scale, e3_has_render);
+    
+    if (e1_has_pos == 1 && e1_has_rot == 1 && e1_has_scale == 1 && e1_has_render == 0) {
+        printf("Entity1: pos rot scale OK, no render OK\n");
+    }
+    if (e2_has_pos == 1 && e2_has_rot == 0 && e2_has_scale == 1 && e2_has_render == 0) {
+        printf("Entity2: pos scale OK, no rot render OK\n");
+    }
+    if (e3_has_pos == 1 && e3_has_rot == 1 && e3_has_scale == 1 && e3_has_render == 1) {
+        printf("Entity3: has all components OK\n");
+    }
+    
+    entity_remove(ent3, render);
+    int e3_render_after = entity_has(ent3, render);
+    printf("e3_render_after_remove=%d\n", e3_render_after);
+    if (e3_render_after == 0) {
+        printf("Entity3 render removed OK\n");
+    }
+    
+    int e2_pos_before = entity_has(ent2, pos);
+    entity_destroy(ent2);
+    int e2_exists = entity_exists(ent2);
+    printf("e2_pos_before=%d e2_exists=%d\n", e2_pos_before, e2_exists);
+    if (e2_exists == 0) {
+        printf("Entity2 destroyed - entity_exists returns 0 OK\n");
+    }
+    
+    printf("=== ECS Test Complete ===\n");
     return 0.0;
 }

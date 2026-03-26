@@ -40,6 +40,7 @@ void entity_remove_component(struct game_world_t *world, uint64_t entity, uint64
 bool entity_has_component(struct game_world_t *world, uint64_t entity, uint64_t component_id) {
     if (!world || !world->world || entity == 0) return false;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
+    if (!ecs_is_alive(ecs, (ecs_entity_t)entity)) return false;
     return ecs_has_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id);
 }
 
@@ -56,6 +57,7 @@ void entity_set_component_data(struct game_world_t *world, uint64_t entity, uint
 void *entity_get_component_data(struct game_world_t *world, uint64_t entity, uint64_t component_id) {
     if (!world || !world->world || entity == 0) return NULL;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
+    if (!ecs_is_alive(ecs, (ecs_entity_t)entity)) return NULL;
     return (void *)ecs_get_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id);
 }
 
