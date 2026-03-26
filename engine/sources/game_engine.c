@@ -7,12 +7,31 @@
 #include "ecs/ecs_dynamic.h"
 #include "ecs/ecs_bridge.h"
 #include <iron.h>
+#include <minic.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <gc.h>
 
 static game_world_t *g_world = NULL;
 static bool g_initialized = false;
+
+static void load_and_run_script(const char *path) {
+    iron_file_reader_t reader;
+    if (iron_file_reader_open(&reader, path, IRON_FILE_TYPE_ASSET)) {
+        size_t size = iron_file_reader_size(&reader);
+        char *script = malloc(size + 1);
+        if (script) {
+            iron_file_reader_read(&reader, script, size);
+            script[size] = '\0';
+            minic_ctx_t *ctx = minic_eval(script);
+            minic_ctx_free(ctx);
+            free(script);
+        }
+        iron_file_reader_close(&reader);
+    } else {
+        fprintf(stderr, "Failed to open script: %s\n", path);
+    }
+}
 
 void console_trace(char *s) {
     fprintf(stderr, "%s\n", s);
@@ -128,6 +147,7 @@ void _kickstart(void) {
     
     sys_start(ops);
     game_engine_init();
+    load_and_run_script("data/game.minic");
     _iron_set_update_callback(game_loop_update);
     game_engine_start();
 }

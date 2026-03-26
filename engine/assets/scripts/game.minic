@@ -1,1 +1,5 @@
-printf("Hello from Iron Game Engine!\n");
+float main() {
+    printf("Hello from Minic!\n");
+    float x = 42.0;
+    return x;
+}
