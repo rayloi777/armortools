@@ -1,2 +1,5 @@
-zsh:1: command not found: xcode-block
-zsh:1: command not found: xcode-block
+#!/usr/bin/env bash
+
+. `dirname "$0"`/tools/platform.sh
+MAKE="`dirname "$0"`/tools/bin/$IRON_PLATFORM/amake"
+exec $MAKE `dirname "$0"`/tools/make.js "$@"

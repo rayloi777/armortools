@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <libs/minic.h>
+#include <minic.h>
 
 static game_world_t *g_runtime_world = NULL;
 

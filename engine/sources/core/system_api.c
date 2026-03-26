@@ -178,11 +178,7 @@ void system_enable(struct game_world_t *world, uint64_t system_id, bool enabled)
     sys->enabled = enabled;
     
     ecs_world_t *ecs = (ecs_world_t *)world->world;
-    if (enabled) {
-        ecs_enable(ecs, (ecs_entity_t)system_id);
-    } else {
-        ecs_disable(ecs, (ecs_entity_t)system_id);
-    }
+    ecs_enable(ecs, (ecs_entity_t)system_id, enabled);
 }
 
 bool system_is_enabled(struct game_world_t *world, uint64_t system_id) {
