@@ -20,19 +20,7 @@ float main() {
     entity_add(entity1, vel_comp);
     printf("Added components to entity1\n");
     
-    float initial_x = 0.0;
-    float initial_y = 0.0;
-    float initial_z = 0.0;
-    float initial_vx = 0.0;
-    float initial_vy = 0.0;
-    float initial_vz = 0.0;
-    entity_set_data(entity1, pos_comp, &initial_x);
-    entity_set_data(entity1, vel_comp, &initial_vx);
-    printf("Allocated component storage\n");
-    
     void *pos = entity_get(entity1, pos_comp);
-    printf("Got Position data pointer=%p\n", pos);
-    
     if (pos != 0) {
         printf("Setting Position via comp_set_float...\n");
         comp_set_float(pos_comp, pos, "x", 1.5);
@@ -42,9 +30,6 @@ float main() {
         float x = comp_get_float(pos_comp, pos, "x");
         float y = comp_get_float(pos_comp, pos, "y");
         float z = comp_get_float(pos_comp, pos, "z");
-        printf("Testing direct printf: ");
-        printf("%f", 3.14159);
-        printf("\n");
         printf("x = %f, y = %f, z = %f\n", x, y, z);
         
         if (x > 1.4 && x < 1.6 && y > 2.4 && y < 2.6 && z > 3.4 && z < 3.6) {
@@ -54,7 +39,6 @@ float main() {
         }
     } else {
         printf("entity_get returned NULL pointer\n");
-        printf("Need to set initial data first\n");
     }
     
     printf("=== Dynamic Component Test Complete ===\n");

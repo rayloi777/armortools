@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 struct game_world_t;
+typedef uint64_t ecs_entity_t;
 
 typedef void (*system_callback_t)(void *it);
 
@@ -25,6 +26,8 @@ typedef struct {
     void *minic_callback;
     void *user_context;
     bool enabled;
+    ecs_entity_t last_entities[256];
+    int last_count;
 } registered_system_t;
 
 uint64_t system_create(
@@ -54,4 +57,5 @@ registered_system_t *system_get_by_id(uint64_t system_id);
 registered_system_t *system_get_by_name(const char *name);
 
 void system_api_init(void);
+void system_api_set_world(struct game_world_t *world);
 void system_api_register(void);

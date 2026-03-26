@@ -11,6 +11,11 @@
 static registered_system_t g_systems[MAX_SYSTEMS];
 static int g_system_count = 0;
 static bool g_system_api_initialized = false;
+static game_world_t *g_system_world = NULL;
+
+void system_api_set_world(game_world_t *world) {
+    g_system_world = world;
+}
 
 void system_api_init(void) {
     if (g_system_api_initialized) return;
@@ -71,6 +76,11 @@ static void system_trampoline(ecs_iter_t *it) {
     }
     
     if (!sys || !sys->enabled) return;
+    
+    sys->last_count = it->count;
+    for (int i = 0; i < it->count && i < 256; i++) {
+        sys->last_entities[i] = it->entities[i];
+    }
     
     if (sys->minic_callback) {
         minic_val_t args[2];
@@ -206,14 +216,19 @@ void *system_get_context(struct game_world_t *world, uint64_t system_id) {
     return sys->user_context;
 }
 
-static int minic_system_create(
-    game_world_t *world,
-    const char *name,
-    system_phase_t phase,
-    const uint64_t *component_ids,
-    int component_count
-) {
-    return (int)system_create_with_components(world, name, phase, component_ids, component_count, NULL);
+static minic_val_t minic_system_create_native(minic_val_t *args, int argc) {
+    if (argc < 4) return minic_val_int(0);
+    const char *name = (const char *)args[0].p;
+    int phase = (int)minic_val_to_d(args[1]);
+    int comp_count = (int)minic_val_to_d(args[2]);
+    
+    uint64_t comp_ids[16] = {0};
+    for (int i = 0; i < comp_count && i < 16; i++) {
+        comp_ids[i] = (uint64_t)(int)minic_val_to_d(args[3 + i]);
+    }
+    
+    uint64_t result = system_create_with_components(g_system_world, name, phase, comp_ids, comp_count, NULL);
+    return minic_val_int((int)result);
 }
 
 static int minic_system_destroy(game_world_t *world, const char *name) {
@@ -247,30 +262,29 @@ static void *minic_system_get_context(game_world_t *world, const char *name) {
     return system_get_context(world, sys->flecs_id);
 }
 
-static int minic_system_get_entity_count(game_world_t *world, const char *name) {
-    (void)world;
-    (void)name;
-    return g_system_count;
+static int minic_system_get_entity_count(const char *name) {
+    registered_system_t *sys = system_get_by_name(name);
+    if (!sys) return 0;
+    return sys->last_count;
 }
 
-static uint64_t minic_system_get_entity(game_world_t *world, const char *name, int index) {
-    (void)world;
-    (void)name;
-    (void)index;
-    return 0;
+static uint64_t minic_system_get_entity(const char *name, int index) {
+    registered_system_t *sys = system_get_by_name(name);
+    if (!sys || index < 0 || index >= sys->last_count) return 0;
+    return sys->last_entities[index];
 }
 
 void system_api_register(void) {
     system_api_init();
     
-    minic_register("system_create", "i(p,i,p,i)", (minic_ext_fn_raw_t)minic_system_create);
+    minic_register_native("system_create", minic_system_create_native);
     minic_register("system_destroy", "i(p,p)", (minic_ext_fn_raw_t)minic_system_destroy);
     minic_register("system_enable", "v(p,p,i)", (minic_ext_fn_raw_t)minic_system_enable);
     minic_register("system_is_enabled", "i(p,p)", (minic_ext_fn_raw_t)minic_system_is_enabled);
     minic_register("system_set_context", "v(p,p,p)", (minic_ext_fn_raw_t)minic_system_set_context);
     minic_register("system_get_context", "p(p,p)", (minic_ext_fn_raw_t)minic_system_get_context);
-    minic_register("system_get_entity_count", "i(p,p)", (minic_ext_fn_raw_t)minic_system_get_entity_count);
-    minic_register("system_get_entity", "i(p,p,i)", (minic_ext_fn_raw_t)minic_system_get_entity);
+    minic_register("system_get_entity_count", "i(p)", (minic_ext_fn_raw_t)minic_system_get_entity_count);
+    minic_register("system_get_entity", "i(p,i)", (minic_ext_fn_raw_t)minic_system_get_entity);
     
     minic_register("PHASE_PRE_UPDATE", "i", NULL);
     minic_register("PHASE_UPDATE", "i", NULL);

@@ -267,6 +267,7 @@ void runtime_api_register(void) {
     
     component_api_register();
     entity_api_register();
+    system_api_set_world(g_runtime_world);
     system_api_register();
     query_api_register();
     
