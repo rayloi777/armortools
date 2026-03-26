@@ -1,5 +1,4 @@
-float main() {
-    printf("Hello from Minic!\n");
-    float x = 42.0;
-    return x;
+ float main() {
+    printf("Test\n");
+    return 0.0;
 }

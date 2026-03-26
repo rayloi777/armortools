@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+struct game_world_t;
+
+void ecs_bridge_set_world(struct game_world_t *world);
 void ecs_bridge_init(void);
 void ecs_bridge_shutdown(void);
 

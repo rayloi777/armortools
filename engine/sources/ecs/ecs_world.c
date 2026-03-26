@@ -4,15 +4,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-ECS_COMPONENT_DECLARE(TransformPosition);
-ECS_COMPONENT_DECLARE(TransformRotation);
-ECS_COMPONENT_DECLARE(TransformScale);
-ECS_COMPONENT_DECLARE(EntityName);
-ECS_COMPONENT_DECLARE(EntityActive);
-ECS_COMPONENT_DECLARE(RenderObject);
-ECS_COMPONENT_DECLARE(RenderMesh);
-ECS_COMPONENT_DECLARE(EntityScript);
-
 game_world_t *game_world_create(void) {
     game_world_t *gw = malloc(sizeof(game_world_t));
     if (!gw) return NULL;
@@ -23,14 +14,7 @@ game_world_t *game_world_create(void) {
         return NULL;
     }
     
-    ECS_COMPONENT_DEFINE(world, TransformPosition);
-    ECS_COMPONENT_DEFINE(world, TransformRotation);
-    ECS_COMPONENT_DEFINE(world, TransformScale);
-    ECS_COMPONENT_DEFINE(world, EntityName);
-    ECS_COMPONENT_DEFINE(world, EntityActive);
-    ECS_COMPONENT_DEFINE(world, RenderObject);
-    ECS_COMPONENT_DEFINE(world, RenderMesh);
-    ECS_COMPONENT_DEFINE(world, EntityScript);
+    ecs_register_components(world);
     
     gw->world = world;
     gw->delta_time = 0.0f;

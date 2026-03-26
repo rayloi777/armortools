@@ -77,6 +77,10 @@ void game_engine_init(void) {
     
     g_world = game_world_create();
     ecs_dynamic_init();
+    
+    ecs_bridge_set_world(g_world);
+    ecs_bridge_init();
+    
     runtime_api_set_world(g_world);
     runtime_api_register();
     
