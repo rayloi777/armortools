@@ -2,9 +2,13 @@
 #include "core/game_loop.h"
 #include "core/runtime_api.h"
 #include "ecs/ecs_world.h"
+#include "ecs/ecs_components.h"
+#include "ecs/ecs_dynamic.h"
+#include "ecs/ecs_bridge.h"
 #include <iron.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <gc.h>
 
 static game_world_t *g_world = NULL;
 static bool g_initialized = false;
@@ -64,6 +68,9 @@ void game_engine_init(void) {
         return;
     }
     
+    ecs_dynamic_init();
+    ecs_register_components(g_world->world);
+    runtime_api_set_world(g_world);
     runtime_api_register();
     
     game_loop_init(g_world);
@@ -78,6 +85,7 @@ void game_engine_shutdown(void) {
     printf("Game Engine Shutting Down...\n");
     
     game_loop_shutdown();
+    ecs_dynamic_shutdown();
     game_world_destroy(g_world);
     g_world = NULL;
     g_initialized = false;

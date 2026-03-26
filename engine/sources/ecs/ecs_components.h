@@ -30,3 +30,14 @@ typedef struct {
 } EntityScript;
 
 void ecs_register_components(void *world);
+
+uint64_t ecs_get_builtin_component(const char *name);
+
+uint64_t ecs_component_TransformPosition(void);
+uint64_t ecs_component_TransformRotation(void);
+uint64_t ecs_component_TransformScale(void);
+uint64_t ecs_component_EntityName(void);
+uint64_t ecs_component_EntityActive(void);
+uint64_t ecs_component_RenderObject(void);
+uint64_t ecs_component_RenderMesh(void);
+uint64_t ecs_component_EntityScript(void);

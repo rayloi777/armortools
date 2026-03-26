@@ -1,5 +1,6 @@
 #include "entity_api.h"
 #include "ecs/ecs_world.h"
+#include "ecs/ecs_dynamic.h"
 #include "flecs.h"
 #include <stdio.h>
 #include <string.h>
@@ -13,8 +14,9 @@ uint64_t entity_create(struct game_world_t *world) {
 uint64_t entity_create_with_name(struct game_world_t *world, const char *name) {
     if (!world || !world->world || !name) return 0;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
-    (void)name;
-    return (uint64_t)ecs_new(ecs);
+    ecs_entity_t e = ecs_new(ecs);
+    ecs_set_name(ecs, e, name);
+    return (uint64_t)e;
 }
 
 void entity_destroy(struct game_world_t *world, uint64_t entity) {
@@ -44,13 +46,17 @@ bool entity_has_component(struct game_world_t *world, uint64_t entity, uint64_t 
 void entity_set_component_data(struct game_world_t *world, uint64_t entity, uint64_t component_id, const void *data) {
     if (!world || !world->world || entity == 0 || !data) return;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
-    ecs_set_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id, sizeof(void*), data);
+    
+    dynamic_component_t *dc = ecs_dynamic_component_get(component_id);
+    if (dc && dc->size > 0) {
+        ecs_set_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id, dc->size, data);
+    }
 }
 
 void *entity_get_component_data(struct game_world_t *world, uint64_t entity, uint64_t component_id) {
     if (!world || !world->world || entity == 0) return NULL;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
-    return ecs_get_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id);
+    return (void *)ecs_get_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id);
 }
 
 bool entity_is_valid(struct game_world_t *world, uint64_t entity) {
@@ -63,6 +69,12 @@ bool entity_exists(struct game_world_t *world, uint64_t entity) {
     if (!world || !world->world || entity == 0) return false;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
     return ecs_exists(ecs, (ecs_entity_t)entity);
+}
+
+const char *entity_get_name(struct game_world_t *world, uint64_t entity) {
+    if (!world || !world->world || entity == 0) return NULL;
+    ecs_world_t *ecs = (ecs_world_t *)world->world;
+    return ecs_get_name(ecs, (ecs_entity_t)entity);
 }
 
 void entity_api_register(void) {
