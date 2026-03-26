@@ -144,6 +144,25 @@ static minic_val_t minic_component_add_field_native(minic_val_t *args, int argc)
     return minic_val_int(result);
 }
 
+static int minic_component_get_alignment(uint64_t comp_id) {
+    return (int)component_get_alignment(comp_id);
+}
+
+static int minic_component_get_field_count(uint64_t comp_id) {
+    return component_get_field_count(comp_id);
+}
+
+static minic_val_t minic_component_get_field_info_native(minic_val_t *args, int argc) {
+    if (argc < 4) return minic_val_int(-1);
+    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    int field_index = (int)minic_val_to_d(args[1]);
+    char *name_out = (char *)args[2].p;
+    int *type_out = (int *)args[3].p;
+    size_t offset_out = 0;
+    int result = component_get_field_info(comp_id, field_index, name_out, type_out, &offset_out);
+    return minic_val_int(result);
+}
+
 void minic_register_builtins(void) {
     minic_register_native("printf", minic_printf);
 }
@@ -197,6 +216,30 @@ static int minic_entity_exists(uint64_t entity) {
     if (!g_runtime_world || entity == 0) return 0;
     return entity_exists(g_runtime_world, entity) ? 1 : 0;
 }
+static int minic_entity_is_valid(uint64_t entity) {
+    if (!g_runtime_world || entity == 0) return 0;
+    return entity_is_valid(g_runtime_world, entity) ? 1 : 0;
+}
+static const char *minic_entity_get_name(uint64_t entity) {
+    if (!g_runtime_world || entity == 0) return NULL;
+    return entity_get_name(g_runtime_world, entity);
+}
+static minic_val_t minic_entity_set_name_native(minic_val_t *args, int argc) {
+    if (argc < 2) return minic_val_void();
+    uint64_t entity = (uint64_t)(int)minic_val_to_d(args[0]);
+    const char *name = (const char *)args[1].p;
+    if (!g_runtime_world || entity == 0 || !name) return minic_val_void();
+    entity_set_name(g_runtime_world, entity, name);
+    return minic_val_void();
+}
+static uint64_t minic_entity_get_parent(uint64_t entity) {
+    if (!g_runtime_world || entity == 0) return 0;
+    return entity_get_parent(g_runtime_world, entity);
+}
+static void minic_entity_set_parent(uint64_t child, uint64_t parent) {
+    if (!g_runtime_world || child == 0) return;
+    entity_set_parent(g_runtime_world, child, parent);
+}
 static void *minic_entity_get(uint64_t entity, uint64_t component_id) {
     if (!g_runtime_world || entity == 0 || component_id == 0) return NULL;
     return entity_get_component_data(g_runtime_world, entity, component_id);
@@ -232,6 +275,9 @@ void runtime_api_register(void) {
     minic_register("component_get_id", "i(p)", (minic_ext_fn_raw_t)minic_component_get_id);
     minic_register("component_get_name", "p(i)", (minic_ext_fn_raw_t)component_get_name);
     minic_register("component_get_size", "i(i)", (minic_ext_fn_raw_t)component_get_size);
+    minic_register("component_get_alignment", "i(i)", (minic_ext_fn_raw_t)minic_component_get_alignment);
+    minic_register("component_get_field_count", "i(i)", (minic_ext_fn_raw_t)minic_component_get_field_count);
+    minic_register_native("component_get_field_info", minic_component_get_field_info_native);
     
     minic_register("entity_create", "i()", (minic_ext_fn_raw_t)minic_entity_create);
     minic_register("entity_create_named", "i(p)", (minic_ext_fn_raw_t)minic_entity_create_named);
@@ -240,6 +286,11 @@ void runtime_api_register(void) {
     minic_register("entity_remove", "v(i,i)", (minic_ext_fn_raw_t)minic_entity_remove);
     minic_register("entity_has", "i(i,i)", (minic_ext_fn_raw_t)minic_entity_has);
     minic_register("entity_exists", "i(i)", (minic_ext_fn_raw_t)minic_entity_exists);
+    minic_register("entity_is_valid", "i(i)", (minic_ext_fn_raw_t)minic_entity_is_valid);
+    minic_register("entity_get_name", "p(i)", (minic_ext_fn_raw_t)minic_entity_get_name);
+    minic_register_native("entity_set_name", minic_entity_set_name_native);
+    minic_register("entity_get_parent", "i(i)", (minic_ext_fn_raw_t)minic_entity_get_parent);
+    minic_register("entity_set_parent", "v(i,i)", (minic_ext_fn_raw_t)minic_entity_set_parent);
     minic_register("entity_get", "p(i,i)", (minic_ext_fn_raw_t)minic_entity_get);
     minic_register_native("entity_set_data", minic_entity_set_data_native);
     

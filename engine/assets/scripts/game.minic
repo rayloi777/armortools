@@ -1,4 +1,4 @@
- float main() {
+float main() {
     printf("=== Dynamic Component Test ===\n");
     
     int pos_comp = component_register("Position", 12);

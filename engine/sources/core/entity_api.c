@@ -79,6 +79,32 @@ const char *entity_get_name(struct game_world_t *world, uint64_t entity) {
     return ecs_get_name(ecs, (ecs_entity_t)entity);
 }
 
+void entity_set_name(struct game_world_t *world, uint64_t entity, const char *name) {
+    if (!world || !world->world || entity == 0 || !name) return;
+    ecs_world_t *ecs = (ecs_world_t *)world->world;
+    ecs_set_name(ecs, (ecs_entity_t)entity, name);
+}
+
+uint64_t entity_get_parent(struct game_world_t *world, uint64_t entity) {
+    if (!world || !world->world || entity == 0) return 0;
+    ecs_world_t *ecs = (ecs_world_t *)world->world;
+    ecs_entity_t parent = ecs_get_target(ecs, (ecs_entity_t)entity, EcsChildOf, 0);
+    return (uint64_t)parent;
+}
+
+void entity_set_parent(struct game_world_t *world, uint64_t child, uint64_t parent) {
+    if (!world || !world->world || child == 0) return;
+    ecs_world_t *ecs = (ecs_world_t *)world->world;
+    if (parent == 0) {
+        ecs_entity_t current_parent = ecs_get_target(ecs, (ecs_entity_t)child, EcsChildOf, 0);
+        if (current_parent != 0) {
+            ecs_remove_pair(ecs, (ecs_entity_t)child, EcsChildOf, current_parent);
+        }
+    } else {
+        ecs_add_pair(ecs, (ecs_entity_t)child, EcsChildOf, (ecs_entity_t)parent);
+    }
+}
+
 void entity_api_register(void) {
     printf("Entity API registered\n");
 }
