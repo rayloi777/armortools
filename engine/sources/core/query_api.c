@@ -6,6 +6,8 @@
 #include <string.h>
 #include <libs/minic.h>
 
+#define ECS_ITER_SIZE sizeof(ecs_iter_t)
+
 static runtime_query_t g_queries[MAX_QUERIES];
 static bool g_query_api_initialized = false;
 static game_world_t *g_query_world = NULL;
@@ -59,8 +61,15 @@ int query_create(const char *filter_expr) {
     strncpy(q->filter, filter_expr, sizeof(q->filter) - 1);
     q->filter[sizeof(q->filter) - 1] = '\0';
     q->valid = true;
+    q->iter_started = false;
     q->last_count = 0;
     memset(q->last_entities, 0, sizeof(q->last_entities));
+    q->cached_it = malloc(ECS_ITER_SIZE);
+    if (!q->cached_it) {
+        printf("ERROR: Failed to allocate query iterator\n");
+        ecs_query_fini(query);
+        return -1;
+    }
     
     printf("Query created: id=%d, filter=%s\n", (int)(q - g_queries), filter_expr);
     return (int)(q - g_queries);
@@ -70,12 +79,18 @@ void query_destroy(int query_id) {
     runtime_query_t *q = get_query_by_id(query_id);
     if (!q) return;
     
+    if (q->cached_it) {
+        free(q->cached_it);
+        q->cached_it = NULL;
+    }
+    
     if (q->flecs_query) {
         ecs_query_fini((ecs_query_t *)q->flecs_query);
     }
     
     q->valid = false;
     q->flecs_query = 0;
+    q->iter_started = false;
     q->last_count = 0;
     memset(q->last_entities, 0, sizeof(q->last_entities));
 }
@@ -87,17 +102,22 @@ bool query_next(int query_id) {
     ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
     ecs_query_t *query = (ecs_query_t *)q->flecs_query;
     
-    ecs_iter_t it = ecs_query_iter(ecs, query);
+    if (!q->iter_started) {
+        *(ecs_iter_t*)q->cached_it = ecs_query_iter(ecs, query);
+        q->iter_started = true;
+    }
     
-    if (!ecs_query_next(&it)) {
+    if (!ecs_query_next((ecs_iter_t*)q->cached_it)) {
         q->last_count = 0;
         memset(q->last_entities, 0, sizeof(q->last_entities));
+        q->iter_started = false;
         return false;
     }
     
-    q->last_count = it.count;
-    for (int i = 0; i < it.count && i < 256; i++) {
-        q->last_entities[i] = (uint64_t)it.entities[i];
+    ecs_iter_t *it = (ecs_iter_t*)q->cached_it;
+    q->last_count = it->count;
+    for (int i = 0; i < it->count && i < 256; i++) {
+        q->last_entities[i] = (uint64_t)it->entities[i];
     }
     
     return true;

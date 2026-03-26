@@ -1,46 +1,46 @@
+void Position_ctor(void* data, void* comp_id) {
+    printf("  [ctor] Position created at %p\n", data);
+}
+
+void Position_dtor(void* data, void* comp_id) {
+    printf("  [dtor] Position destroyed at %p\n", data);
+}
+
 float main() {
-    printf("=== Dynamic Component Test ===\n");
+    printf("=== Lifecycle Callback Test ===\n");
     
     int pos_comp = component_register("Position", 12);
     component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
     component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
     component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
-    printf("Created Position component id=%d\n", pos_comp);
     
-    int vel_comp = component_register("Velocity", 12);
-    component_add_field(vel_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(vel_comp, "y", TYPE_FLOAT, 4);
-    component_add_field(vel_comp, "z", TYPE_FLOAT, 8);
-    printf("Created Velocity component id=%d\n", vel_comp);
+    printf("Setting hooks for Position...\n");
+    component_set_hooks("Position", "Position_ctor", "Position_dtor");
     
-    int entity1 = entity_create();
-    printf("Created entity1=%d\n", entity1);
+    printf("Creating entities with Position component...\n");
+    int e1 = entity_create();
+    entity_add(e1, pos_comp);
     
-    entity_add(entity1, pos_comp);
-    entity_add(entity1, vel_comp);
-    printf("Added components to entity1\n");
+    int e2 = entity_create();
+    entity_add(e2, pos_comp);
     
-    void *pos = entity_get(entity1, pos_comp);
-    if (pos != 0) {
-        printf("Setting Position via comp_set_float...\n");
-        comp_set_float(pos_comp, pos, "x", 1.5);
-        comp_set_float(pos_comp, pos, "y", 2.5);
-        comp_set_float(pos_comp, pos, "z", 3.5);
-        
-        float x = comp_get_float(pos_comp, pos, "x");
-        float y = comp_get_float(pos_comp, pos, "y");
-        float z = comp_get_float(pos_comp, pos, "z");
-        printf("x = %f, y = %f, z = %f\n", x, y, z);
-        
-        if (x > 1.4 && x < 1.6 && y > 2.4 && y < 2.6 && z > 3.4 && z < 3.6) {
-            printf("comp_set/get float: PASS\n");
-        } else {
-            printf("comp_set/get float: FAIL\n");
-        }
-    } else {
-        printf("entity_get returned NULL pointer\n");
-    }
+    printf("e1=%d, e2=%d\n", e1, e2);
     
-    printf("=== Dynamic Component Test Complete ===\n");
+    printf("Setting component data...\n");
+    comp_set_float(pos_comp, entity_get(e1, pos_comp), "x", 1.0);
+    comp_set_float(pos_comp, entity_get(e1, pos_comp), "y", 2.0);
+    comp_set_float(pos_comp, entity_get(e1, pos_comp), "z", 3.0);
+    
+    comp_set_float(pos_comp, entity_get(e2, pos_comp), "x", 4.0);
+    comp_set_float(pos_comp, entity_get(e2, pos_comp), "y", 5.0);
+    comp_set_float(pos_comp, entity_get(e2, pos_comp), "z", 6.0);
+    
+    printf("Removing component from e1...\n");
+    entity_remove(e1, pos_comp);
+    
+    printf("Destroying e2...\n");
+    entity_destroy(e2);
+    
+    printf("=== Done ===\n");
     return 0.0;
 }

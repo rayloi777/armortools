@@ -9,6 +9,11 @@
 
 static game_world_t *g_world = NULL;
 static bool g_initialized = false;
+static minic_ctx_t *g_script_ctx = NULL;
+
+minic_ctx_t *game_engine_get_minic_ctx(void) {
+    return g_script_ctx;
+}
 
 static void load_and_run_script(const char *path) {
     iron_file_reader_t reader;
@@ -18,8 +23,11 @@ static void load_and_run_script(const char *path) {
         if (script) {
             iron_file_reader_read(&reader, script, size);
             script[size] = '\0';
-            minic_ctx_t *ctx = minic_eval(script);
-            minic_ctx_free(ctx);
+            if (g_script_ctx) {
+                minic_ctx_free(g_script_ctx);
+            }
+            g_script_ctx = minic_ctx_create(script);
+            minic_ctx_run(g_script_ctx);
             free(script);
         }
         iron_file_reader_close(&reader);

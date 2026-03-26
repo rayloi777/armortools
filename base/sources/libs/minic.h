@@ -84,6 +84,8 @@ void minic_register_struct_native(const char *name, const char **fields, const i
                                   int field_count);
 
 void        *minic_alloc(int size);
+minic_ctx_t *minic_ctx_create(const char *src);
+void         minic_ctx_run(minic_ctx_t *ctx);
 minic_ctx_t *minic_eval(const char *src);
 minic_ctx_t *minic_eval_named(const char *src, const char *filename);
 void         minic_struct_field_set_type(const char *struct_name, const char *field_name, const char *field_struct_name);
@@ -92,6 +94,7 @@ void         minic_ctx_free(minic_ctx_t *ctx);
 float        minic_ctx_result(minic_ctx_t *ctx);
 minic_val_t  minic_ctx_call_fn(minic_ctx_t *ctx, void *fn_ptr, minic_val_t *args, int argc);
 void         minic_register(const char *name, const char *sig, minic_ext_fn_raw_t fn);
+void        *minic_ctx_get_fn(minic_ctx_t *ctx, const char *name);
 void         minic_register_native(const char *name, minic_native_fn_t fn);
 void         minic_register_struct(const char *name, const char **fields, int field_count);
 void         minic_register_enum(const char *typedef_name, const char **names, const int *values, int count);

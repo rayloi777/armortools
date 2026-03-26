@@ -2301,21 +2301,17 @@ static void minic_register_funcs(minic_env_t *e) {
 	}
 }
 
-minic_ctx_t *minic_eval_named(const char *src, const char *filename) {
+minic_ctx_t *minic_ctx_create(const char *src) {
 	minic_register_builtins();
 
 	minic_ctx_t *ctx = (minic_ctx_t *)malloc(sizeof(minic_ctx_t));
 	memset(ctx, 0, sizeof(minic_ctx_t));
 	ctx->mem      = (minic_u8 *)malloc(MINIC_MEM_SIZE);
 	ctx->mem_used = 0;
-	// Copy source so the context stays valid after the caller frees its buffer
 	int src_len   = (int)strlen(src);
 	ctx->src_copy = (char *)malloc(src_len + 1);
 	memcpy(ctx->src_copy, src, src_len + 1);
 
-	// Save and install arena pointers so minic_alloc and the lexer use this context
-	minic_u8 *prev_mem      = minic_active_mem;
-	int      *prev_mem_used = minic_active_mem_used;
 	minic_active_mem        = ctx->mem;
 	minic_active_mem_used   = &ctx->mem_used;
 
@@ -2328,7 +2324,7 @@ minic_ctx_t *minic_eval_named(const char *src, const char *filename) {
 	minic_env_t *e    = &ctx->e;
 	e->lex.src        = ctx->src_copy;
 	e->lex.pos        = 0;
-	e->filename       = filename;
+	e->filename       = "<script>";
 	e->var_cap        = var_cap;
 	e->vars           = minic_alloc(var_cap * sizeof(minic_var_t));
 	e->arr_cap        = arr_cap;
@@ -2343,14 +2339,13 @@ minic_ctx_t *minic_eval_named(const char *src, const char *filename) {
 	e->vartype_cap    = 64;
 	e->vartypes       = minic_alloc(e->vartype_cap * sizeof(minic_vartype_t));
 
-	// Seed env with globally pre-registered struct definitions
 	for (int i = 0; i < minic_global_struct_count && e->struct_count < e->struct_cap; ++i) {
 		minic_struct_def_t *dst = &e->structs[e->struct_count++];
 		strncpy(dst->name, minic_global_structs[i].name, 63);
 		dst->field_count       = minic_global_structs[i].field_count;
 		dst->size              = minic_global_structs[i].size;
 		dst->has_native_layout = minic_global_structs[i].has_native_layout;
-		for (int j = 0; j < dst->field_count; ++j) {
+		for (int j = 0; j < dst->field_count; j++) {
 			strncpy(dst->fields[j], minic_global_structs[i].fields[j], 63);
 			strncpy(dst->field_struct_names[j], minic_global_structs[i].field_struct_names[j], 63);
 			dst->field_offsets[j]      = minic_global_structs[i].field_offsets[j];
@@ -2370,14 +2365,34 @@ minic_ctx_t *minic_eval_named(const char *src, const char *filename) {
 		minic_lex_next(&e->lex);
 	}
 
-	minic_env_t *prev_env = minic_active_env;
-	minic_active_env      = e;
+	return ctx;
+}
+
+void minic_ctx_run(minic_ctx_t *ctx) {
+	if (!ctx) return;
+
+	minic_u8 *prev_mem      = minic_active_mem;
+	int      *prev_mem_used = minic_active_mem_used;
+	minic_env_t *prev_env   = minic_active_env;
+
+	minic_active_mem        = ctx->mem;
+	minic_active_mem_used   = &ctx->mem_used;
+	minic_env_t *e = &ctx->e;
+	minic_active_env = e;
+
 	minic_parse_block(e);
+
 	minic_active_env      = prev_env;
 	minic_active_mem      = prev_mem;
 	minic_active_mem_used = prev_mem_used;
 
 	ctx->result = e->error ? -1.0f : (float)minic_val_to_d(e->return_val);
+}
+
+minic_ctx_t *minic_eval_named(const char *src, const char *filename) {
+	minic_ctx_t *ctx = minic_ctx_create(src);
+	minic_ctx_run(ctx);
+	(void)filename;
 	return ctx;
 }
 
@@ -2395,6 +2410,16 @@ void minic_ctx_free(minic_ctx_t *ctx) {
 
 float minic_ctx_result(minic_ctx_t *ctx) {
 	return ctx ? ctx->result : -1.0f;
+}
+
+void *minic_ctx_get_fn(minic_ctx_t *ctx, const char *name) {
+    if (!ctx || !name) return NULL;
+    for (int i = 0; i < ctx->e.func_count; i++) {
+        if (strcmp(ctx->e.funcs[i].name, name) == 0) {
+            return &ctx->e.funcs[i];
+        }
+    }
+    return NULL;
 }
 
 minic_val_t minic_ctx_call_fn(minic_ctx_t *ctx, void *fn_ptr, minic_val_t *args, int argc) {

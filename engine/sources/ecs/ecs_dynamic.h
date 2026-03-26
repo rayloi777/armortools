@@ -26,6 +26,8 @@ typedef struct {
     int field_count;
     dynamic_field_t fields[16];
     void *type_info;
+    char ctor_name[64];
+    char dtor_name[64];
 } dynamic_component_t;
 
 void ecs_dynamic_init(void);
@@ -33,6 +35,7 @@ void ecs_dynamic_shutdown(void);
 
 uint64_t ecs_dynamic_component_create(struct game_world_t *world, const char *name, size_t size, size_t alignment);
 int ecs_dynamic_component_add_field(uint64_t component_id, const char *name, int type, size_t offset);
+int ecs_dynamic_component_set_hooks(struct game_world_t *world, uint64_t component_id, const char *ctor_name, const char *dtor_name);
 dynamic_component_t *ecs_dynamic_component_get(uint64_t component_id);
 dynamic_component_t *ecs_dynamic_component_find(const char *name);
 

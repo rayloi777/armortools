@@ -188,6 +188,12 @@ static uint64_t minic_component_get_id(const char *name) {
     if (!g_runtime_world || !name) return 0;
     return component_get_id(g_runtime_world, name);
 }
+static int minic_component_set_hooks(const char *name, const char *ctor_name, const char *dtor_name) {
+    if (!g_runtime_world || !name) return -1;
+    uint64_t comp_id = component_get_id(g_runtime_world, name);
+    if (comp_id == 0) return -1;
+    return ecs_dynamic_component_set_hooks(g_runtime_world, comp_id, ctor_name, dtor_name);
+}
 static uint64_t minic_entity_create(void) {
     if (!g_runtime_world) return 0;
     return entity_create(g_runtime_world);
@@ -280,6 +286,7 @@ void runtime_api_register(void) {
     minic_register("component_get_alignment", "i(i)", (minic_ext_fn_raw_t)minic_component_get_alignment);
     minic_register("component_get_field_count", "i(i)", (minic_ext_fn_raw_t)minic_component_get_field_count);
     minic_register_native("component_get_field_info", minic_component_get_field_info_native);
+    minic_register("component_set_hooks", "i(p,p,p)", (minic_ext_fn_raw_t)minic_component_set_hooks);
     
     minic_register("entity_create", "i()", (minic_ext_fn_raw_t)minic_entity_create);
     minic_register("entity_create_named", "i(p)", (minic_ext_fn_raw_t)minic_entity_create_named);

@@ -11,8 +11,10 @@ typedef struct {
     uint64_t flecs_query;
     char filter[256];
     bool valid;
+    bool iter_started;
     int last_count;
     uint64_t last_entities[256];
+    void *cached_it;
 } runtime_query_t;
 
 void query_api_register(void);
