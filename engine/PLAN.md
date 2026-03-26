@@ -254,10 +254,10 @@ typedef struct { object_t *object; transform_t *transform; bool dirty; } IronObj
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.3.1 | 創建 component_registry.h 類型 | `engine/sources/core/component_registry.h` | 待辦 |
-| 1.3.2 | 實現 component_registry.c | `engine/sources/core/component_registry.c` | 待辦 |
-| 1.3.3 | 實現 component_api.c 運行時 API | `engine/sources/core/component_api.c` | 待辦 |
-| 1.3.4 | 測試：運行時註冊組件 | - | 待辦 |
+| 1.3.1 | 創建 component_registry.h 類型 | `engine/sources/core/component_registry.h` | ✓ 完成 |
+| 1.3.2 | 實現 component_registry.c | `engine/sources/core/component_registry.c` | ✓ 完成 |
+| 1.3.3 | 實現 component_api.c 運行時 API | `engine/sources/core/component_api.c` | ✓ 完成 |
+| 1.3.4 | 測試：運行時註冊組件 | - | ✓ 完成 |
 
 **API 函數清單**:
 
@@ -314,10 +314,10 @@ component_add_field(input_type, "jump", TYPE_INT, 8);
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.4.1 | 實現 entity_api.c | `engine/sources/core/entity_api.c` | 待辦 |
-| 1.4.2 | 實現父子層級關係 | `engine/sources/core/entity_api.c` | 待辦 |
-| 1.4.3 | 實現便捷創建函數 | `engine/sources/core/entity_api.c` | 待辦 |
-| 1.4.4 | 測試：運行時創建實體 | - | 待辦 |
+| 1.4.1 | 實現 entity_api.c | `engine/sources/core/entity_api.c` | ✓ 完成 |
+| 1.4.2 | 實現父子層級關係 | `engine/sources/core/entity_api.c` | ✓ 完成 |
+| 1.4.3 | 實現便捷創建函數 | `engine/sources/core/entity_api.c` | ✓ 完成 |
+| 1.4.4 | 測試：運行時創建實體 | - | ✓ 完成 |
 
 **API 函數清單**:
 
@@ -383,10 +383,10 @@ e_health.current = 50.0; e_health.max = 50.0;
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.5.1 | 創建 system_api.h 類型 | `engine/sources/core/system_api.h` | 待辦 |
-| 1.5.2 | 實現 system_api.c | `engine/sources/core/system_api.c` | 待辦 |
-| 1.5.3 | 實現 query_api.c | `engine/sources/core/query_api.h/c` | 待辦 |
-| 1.5.4 | 測試：運行時註冊系統 | - | 待辦 |
+| 1.5.1 | 創建 system_api.h 類型 | `engine/sources/core/system_api.h` | ✓ 完成 |
+| 1.5.2 | 實現 system_api.c | `engine/sources/core/system_api.c` | ✓ 完成 |
+| 1.5.3 | 實現 query_api.c | `engine/sources/core/query_api.h/c` | ✓ 完成 |
+| 1.5.4 | 測試：運行時註冊系統 | - | ✓ 完成 |
 
 **API 函數清單**:
 
