@@ -17,13 +17,14 @@
 | **Entity API** | ✅ 完成 | CRUD 操作正常，含父子關係 |
 | **Component API** | ✅ 完成 | field count/info/alignment 全部完成 |
 | **System API** | ✅ 完成 | minic_system_get_entity() 正常工作 |
-| **Query API** | ✅ 完成 | 支持 AND, OR, NOT 查詢 |
+| **Query API** | ✅ 完成 | 支持 AND, OR, NOT 查詢，線程安全 |
+| **Lifecycle Callbacks** | ✅ 完成 | ctor/dtor 回調完整實現 |
 | **Game Loop** | ✅ 完成 | delta/time/frame 正常 |
+| **Minic 綁定** | ✅ 完成 | 全部 ~25 個函數已完成 |
 | **Input 系統** | ❌ 未實現 | 完全缺失 |
 | **Prefab 系統** | ❌ 未實現 | 可延後 |
-| **Minic 綁定** | ✅ 完成 | 全部 ~20 個函數已完成 |
 
-**完成度: 85%**
+**完成度: 90%**
 
 ---
 
@@ -46,6 +47,7 @@
 - `component_get_id()` / `component_get_name()` / `component_get_size()` - 獲取組件信息
 - `component_get_field_count()` / `component_get_field_info()` - 獲取字段信息
 - `component_get_alignment()` - 獲取對齊
+- `component_set_hooks()` - 設置生命週期回調
 - `comp_set/get_int/float/ptr` - 字段讀寫
 
 ### System API
@@ -61,10 +63,46 @@
 - `query_count(query_id)` - 獲取實體數量
 - `query_get(query_id, index)` - 獲取實體 ID
 
+### Lifecycle Callbacks (生命週期回調)
+- `component_set_hooks("ComponentName", "CtorName", "DtorName")` - 設置回調函數
+- **ctor 回調**: 組件添加時自動調用，用於初始化
+- **dtor 回調**: 組件移除或實體銷毀時調用，用於清理
+
+**回調函數簽名:**
+```c
+void Position_ctor(void* data, void* comp_id) {
+    comp_set_float(comp_id, data, "x", 1.0f);  // 設置初始值
+    comp_set_float(comp_id, data, "y", 2.0f);
+    comp_set_float(comp_id, data, "z", 3.0f);
+}
+
+void Position_dtor(void* data, void* comp_id) {
+    // 清理資源
+}
+```
+
+**使用方式:**
+```c
+int pos_comp = component_register("Position", 12);
+component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
+component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
+component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
+component_set_hooks("Position", "Position_ctor", "Position_dtor");
+
+int e1 = entity_create();
+entity_add(e1, pos_comp);  // 自動調用 Position_ctor
+entity_remove(e1, pos_comp);  // 自動調用 Position_dtor
+```
+
 ### Game Loop
 - `sys_delta()` - 獲取時間增量
 - `sys_time()` - 獲取總時間
 - `sys_frame()` - 獲取幀計數
+
+### Minic API 新增功能
+- `minic_ctx_create()` - 創建 Minic 上下文（2階段初始化）
+- `minic_ctx_run()` - 運行腳本
+- `minic_ctx_get_fn()` - 從 C 調用 Minic 函數
 
 ---
 
@@ -132,7 +170,7 @@ bool input_key_released(const char *key) {
 }
 ```
 
-### 整合游戲循環
+### 整合遊戲循環
 
 在 `game_loop_update()` 中調用 `input_update()`:
 
@@ -225,73 +263,52 @@ Phase 2: Prefab 系統 (3-5天，可延後)
 完成後，應該能夠編寫完整的遊戲腳本:
 
 ```c
+// 組件回調示例
+void Position_ctor(void* data, void* comp_id) {
+    comp_set_float(comp_id, data, "x", 0.0f);
+    comp_set_float(comp_id, data, "y", 0.0f);
+    comp_set_float(comp_id, data, "z", 0.0f);
+}
+
+void Health_ctor(void* data, void* comp_id) {
+    comp_set_float(comp_id, data, "current", 100.0f);
+    comp_set_float(comp_id, data, "max", 100.0f);
+}
+
 float main() {
     // 創建組件
     int pos_comp = component_register("Position", 12);
     component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
     component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
     component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
-    
-    int vel_comp = component_register("Velocity", 12);
-    component_add_field(vel_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(vel_comp, "y", TYPE_FLOAT, 4);
-    component_add_field(vel_comp, "z", TYPE_FLOAT, 8);
+    component_set_hooks("Position", "Position_ctor", NULL);
     
     int health_comp = component_register("Health", 8);
     component_add_field(health_comp, "current", TYPE_FLOAT, 0);
     component_add_field(health_comp, "max", TYPE_FLOAT, 4);
+    component_set_hooks("Health", "Health_ctor", NULL);
     
     // 創建實體
-    int player = entity_create("Player");
-    entity_set_name(player, "Player");
+    int player = entity_create();
     entity_add(player, pos_comp);
-    entity_add(player, vel_comp);
     entity_add(player, health_comp);
-    
-    // 創建查詢
-    int move_q = query_create("Position, Velocity");
-    int health_q = query_create("Health");
     
     // 遊戲循環
     while (entity_is_valid(player)) {
-        // 玩家輸入
-        if (input_key_down("W")) {
-            // 設置速度
-        }
-        
         // 移動系統
+        int move_q = query_create("Position");
         while (query_next(move_q)) {
             int count = query_count(move_q);
             for (int i = 0; i < count; i++) {
                 int e = query_get(move_q, i);
                 void *pos = entity_get(e, pos_comp);
-                void *vel = entity_get(e, vel_comp);
                 
-                float vz = comp_get_float(vel_comp, vel, "z");
-                float px = comp_get_float(pos_comp, pos, "x");
-                float pz = comp_get_float(pos_comp, pos, "z");
-                
-                comp_set_float(pos_comp, pos, "x", px + 0.0 * sys_delta());
-                comp_set_float(pos_comp, pos, "z", pz + vz * sys_delta());
+                float x = comp_get_float(pos_comp, pos, "x");
+                comp_set_float(pos_comp, pos, "x", x + 1.0 * sys_delta());
             }
         }
-        
-        // 健康系統
-        while (query_next(health_q)) {
-            int count = query_count(health_q);
-            for (int i = 0; i < count; i++) {
-                int e = query_get(health_q, i);
-                void *health = entity_get(e, health_comp);
-                float current = comp_get_float(health_comp, health, "current");
-                if (current < 100.0) {
-                    comp_set_float(health_comp, health, "current", current + 1.0 * sys_delta());
-                }
-            }
-        }
+        query_destroy(move_q);
     }
-    
-    query_destroy(move_q);
-    query_destroy(health_q);
     
     return 0.0;
 }
@@ -307,6 +324,8 @@ float main() {
 |------|----------|
 | `engine/sources/core/runtime_api.c` | 已添加 Input 綁定 |
 | `engine/sources/core/game_loop.c` | 添加 input_update 調用 |
+| `base/sources/libs/minic.c` | 添加 2階段初始化 API |
+| `base/sources/libs/minic.h` | 添加 minic_ctx_create/run/get_fn |
 
 ### 需要實現的新文件
 
@@ -328,7 +347,56 @@ float main() {
 
 | Commit | 描述 |
 |--------|------|
+| `c3de5dc1` | Complete ECS lifecycle callbacks and Query API thread safety |
 | `ef4ccc8c` | Fix minic FFI for ECS component access |
 | `b03311c1` | Complete Entity and Component API |
 | `d6e65c2e` | Fix System API: system_get_entity and system_create |
 | `045fca96` | Implement Query API for ECS |
+
+---
+
+## 實現細節
+
+### Minic 2階段初始化
+
+為了解決生命週期回調需要在腳本運行時訪問 Minic 函數的問題，引入了 2 階段初始化:
+
+```c
+// 舊方式（一次性）
+minic_ctx_t *ctx = minic_eval(script);  // ctx 在腳本運行完後才返回
+// 問題：回調在腳本運行期間觸發，但 ctx 尚未返回
+
+// 新方式（2階段）
+minic_ctx_t *ctx = minic_ctx_create(script);  // 立即返回 ctx
+minic_ctx_run(ctx);  // 運行腳本，回調可以訪問 ctx
+```
+
+### Query API 線程安全
+
+每個查詢有自己的 `cached_it` 迭代器，避免多線程環境下的狀態競爭:
+
+```c
+typedef struct {
+    uint64_t flecs_query;
+    char filter[256];
+    bool valid;
+    bool iter_started;
+    int last_count;
+    uint64_t last_entities[256];
+    void *cached_it;  // 每個查詢獨立存儲
+} runtime_query_t;
+```
+
+### 回調函數查找
+
+通過 `minic_ctx_get_fn()` 在運行時查找 Minic 函數:
+
+```c
+void *fn = minic_ctx_get_fn(ctx, "Position_ctor");
+if (fn) {
+    minic_val_t args[2];
+    args[0].p = data;
+    args[1].p = (void*)comp_id;
+    minic_call_fn(fn, args, 2);
+}
+```

@@ -1,46 +1,54 @@
 void Position_ctor(void* data, void* comp_id) {
-    printf("  [ctor] Position created at %p\n", data);
+    comp_set_float(comp_id, data, "x", 1.0f);
+    comp_set_float(comp_id, data, "y", 2.0f);
+    comp_set_float(comp_id, data, "z", 3.0f);
+    
+    float x = comp_get_float(comp_id, data, "x");
+    float y = comp_get_float(comp_id, data, "y");
+    float z = comp_get_float(comp_id, data, "z");
+    printf("  [ctor] Position initialized to (%f, %f, %f)\n", x, y, z);
 }
 
 void Position_dtor(void* data, void* comp_id) {
-    printf("  [dtor] Position destroyed at %p\n", data);
+    printf("  [dtor] Position cleanup\n");
 }
 
 float main() {
-    printf("=== Lifecycle Callback Test ===\n");
+    printf("=== Callback Data Access Test ===\n");
     
     int pos_comp = component_register("Position", 12);
     component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
     component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
     component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
-    
-    printf("Setting hooks for Position...\n");
     component_set_hooks("Position", "Position_ctor", "Position_dtor");
     
-    printf("Creating entities with Position component...\n");
+    printf("Creating entity...\n");
     int e1 = entity_create();
     entity_add(e1, pos_comp);
     
-    int e2 = entity_create();
-    entity_add(e2, pos_comp);
+    printf("Getting component data after ctor...\n");
+    void* e1_pos = entity_get(e1, pos_comp);
+    float x = comp_get_float(pos_comp, e1_pos, "x");
+    float y = comp_get_float(pos_comp, e1_pos, "y");
+    float z = comp_get_float(pos_comp, e1_pos, "z");
+    printf("  Verified values: x=%f, y=%f, z=%f\n", x, y, z);
     
-    printf("e1=%d, e2=%d\n", e1, e2);
-    
-    printf("Setting component data...\n");
-    comp_set_float(pos_comp, entity_get(e1, pos_comp), "x", 1.0);
-    comp_set_float(pos_comp, entity_get(e1, pos_comp), "y", 2.0);
-    comp_set_float(pos_comp, entity_get(e1, pos_comp), "z", 3.0);
-    
-    comp_set_float(pos_comp, entity_get(e2, pos_comp), "x", 4.0);
-    comp_set_float(pos_comp, entity_get(e2, pos_comp), "y", 5.0);
-    comp_set_float(pos_comp, entity_get(e2, pos_comp), "z", 6.0);
-    
-    printf("Removing component from e1...\n");
+    printf("Removing component...\n");
     entity_remove(e1, pos_comp);
     
-    printf("Destroying e2...\n");
-    entity_destroy(e2);
+    printf("Re-adding component...\n");
+    entity_add(e1, pos_comp);
     
-    printf("=== Done ===\n");
+    printf("Getting new component data...\n");
+    e1_pos = entity_get(e1, pos_comp);
+    x = comp_get_float(pos_comp, e1_pos, "x");
+    y = comp_get_float(pos_comp, e1_pos, "y");
+    z = comp_get_float(pos_comp, e1_pos, "z");
+    printf("  New values after re-add: x=%f, y=%f, z=%f\n", x, y, z);
+    
+    printf("Destroying entity...\n");
+    entity_destroy(e1);
+    
+    printf("=== Test Complete ===\n");
     return 0.0;
 }
