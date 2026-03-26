@@ -57,16 +57,17 @@ void context_set_viewport_shader(void) {}
 void import_mesh_importers(void) {}
 void import_texture_importers(void) {}
 
-void game_engine_init(void) {
-    if (g_initialized) return;
+    system_api_init();
     
-    printf("Game Engine Initializing...\n");
+    ecs_register_components(g_world->world);
+    ecs_dynamic_init();
+    runtime_api_set_world(g_world);
+    runtime_api_register();
     
-    g_world = game_world_create();
-    if (!g_world) {
-        fprintf(stderr, "Failed to create game world\n");
-        return;
-    }
+    game_loop_init(g_world);
+    
+    _iron_set_update_callback(game_loop_update);
+}
     
     ecs_dynamic_init();
     ecs_register_components(g_world->world);

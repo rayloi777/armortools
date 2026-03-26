@@ -18,12 +18,30 @@ typedef enum {
     SYSTEM_PHASE_SHUTDOWN
 } system_phase_t;
 
+typedef struct {
+    char name[64];
+    uint64_t flecs_id;
+    system_phase_t phase;
+    void *minic_callback;
+    void *user_context;
+    bool enabled;
+} registered_system_t;
+
 uint64_t system_create(
     struct game_world_t *world,
     const char *name,
     system_phase_t phase,
-    const char *query,
+    const char *query_expr,
     system_callback_t callback
+);
+
+uint64_t system_create_with_components(
+    struct game_world_t *world,
+    const char *name,
+    system_phase_t phase,
+    const uint64_t *component_ids,
+    int component_count,
+    void *minic_callback
 );
 
 void system_destroy(struct game_world_t *world, uint64_t system_id);
@@ -32,4 +50,8 @@ bool system_is_enabled(struct game_world_t *world, uint64_t system_id);
 void system_set_context(struct game_world_t *world, uint64_t system_id, void *ctx);
 void *system_get_context(struct game_world_t *world, uint64_t system_id);
 
+registered_system_t *system_get_by_id(uint64_t system_id);
+registered_system_t *system_get_by_name(const char *name);
+
+void system_api_init(void);
 void system_api_register(void);
