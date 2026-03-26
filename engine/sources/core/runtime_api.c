@@ -269,6 +269,7 @@ void runtime_api_register(void) {
     entity_api_register();
     system_api_set_world(g_runtime_world);
     system_api_register();
+    query_api_set_world(g_runtime_world);
     query_api_register();
     
     minic_register("component_register", "i(p,i)", (minic_ext_fn_raw_t)minic_component_register);
