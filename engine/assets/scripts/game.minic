@@ -1,75 +1,62 @@
  float main() {
-    printf("=== ECS Test with Format Specifiers ===\n");
+    printf("=== Dynamic Component Test ===\n");
     
-    int pos = component_get_id("TransformPosition");
-    int rot = component_get_id("TransformRotation");
-    int scale = component_get_id("TransformScale");
-    int render = component_get_id("RenderMesh");
+    int pos_comp = component_register("Position", 12);
+    component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
+    printf("Created Position component id=%d\n", pos_comp);
     
-    printf("pos=%d rot=%d scale=%d render=%d\n", pos, rot, scale, render);
+    int vel_comp = component_register("Velocity", 12);
+    component_add_field(vel_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(vel_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(vel_comp, "z", TYPE_FLOAT, 8);
+    printf("Created Velocity component id=%d\n", vel_comp);
     
-    int ent1 = entity_create();
-    int ent2 = entity_create();
-    int ent3 = entity_create_named("Player");
+    int entity1 = entity_create();
+    printf("Created entity1=%d\n", entity1);
     
-    printf("ent1=%d ent2=%d ent3=%d\n", ent1, ent2, ent3);
+    entity_add(entity1, pos_comp);
+    entity_add(entity1, vel_comp);
+    printf("Added components to entity1\n");
     
-    entity_add(ent1, pos);
-    entity_add(ent1, rot);
-    entity_add(ent1, scale);
+    float initial_x = 0.0;
+    float initial_y = 0.0;
+    float initial_z = 0.0;
+    float initial_vx = 0.0;
+    float initial_vy = 0.0;
+    float initial_vz = 0.0;
+    entity_set_data(entity1, pos_comp, &initial_x);
+    entity_set_data(entity1, vel_comp, &initial_vx);
+    printf("Allocated component storage\n");
     
-    entity_add(ent2, pos);
-    entity_add(ent2, scale);
+    void *pos = entity_get(entity1, pos_comp);
+    printf("Got Position data pointer=%p\n", pos);
     
-    entity_add(ent3, pos);
-    entity_add(ent3, rot);
-    entity_add(ent3, scale);
-    entity_add(ent3, render);
-    
-    int e1_has_pos = entity_has(ent1, pos);
-    int e1_has_rot = entity_has(ent1, rot);
-    int e1_has_scale = entity_has(ent1, scale);
-    int e1_has_render = entity_has(ent1, render);
-    
-    int e2_has_pos = entity_has(ent2, pos);
-    int e2_has_rot = entity_has(ent2, rot);
-    int e2_has_scale = entity_has(ent2, scale);
-    int e2_has_render = entity_has(ent2, render);
-    
-    int e3_has_pos = entity_has(ent3, pos);
-    int e3_has_rot = entity_has(ent3, rot);
-    int e3_has_scale = entity_has(ent3, scale);
-    int e3_has_render = entity_has(ent3, render);
-    
-    printf("e1: pos=%d rot=%d scale=%d render=%d\n", e1_has_pos, e1_has_rot, e1_has_scale, e1_has_render);
-    printf("e2: pos=%d rot=%d scale=%d render=%d\n", e2_has_pos, e2_has_rot, e2_has_scale, e2_has_render);
-    printf("e3: pos=%d rot=%d scale=%d render=%d\n", e3_has_pos, e3_has_rot, e3_has_scale, e3_has_render);
-    
-    if (e1_has_pos == 1 && e1_has_rot == 1 && e1_has_scale == 1 && e1_has_render == 0) {
-        printf("Entity1: pos rot scale OK, no render OK\n");
-    }
-    if (e2_has_pos == 1 && e2_has_rot == 0 && e2_has_scale == 1 && e2_has_render == 0) {
-        printf("Entity2: pos scale OK, no rot render OK\n");
-    }
-    if (e3_has_pos == 1 && e3_has_rot == 1 && e3_has_scale == 1 && e3_has_render == 1) {
-        printf("Entity3: has all components OK\n");
-    }
-    
-    entity_remove(ent3, render);
-    int e3_render_after = entity_has(ent3, render);
-    printf("e3_render_after_remove=%d\n", e3_render_after);
-    if (e3_render_after == 0) {
-        printf("Entity3 render removed OK\n");
+    if (pos != 0) {
+        printf("Setting Position via comp_set_float...\n");
+        comp_set_float(pos_comp, pos, "x", 1.5);
+        comp_set_float(pos_comp, pos, "y", 2.5);
+        comp_set_float(pos_comp, pos, "z", 3.5);
+        
+        float x = comp_get_float(pos_comp, pos, "x");
+        float y = comp_get_float(pos_comp, pos, "y");
+        float z = comp_get_float(pos_comp, pos, "z");
+        printf("Testing direct printf: ");
+        printf("%f", 3.14159);
+        printf("\n");
+        printf("x = %f, y = %f, z = %f\n", x, y, z);
+        
+        if (x > 1.4 && x < 1.6 && y > 2.4 && y < 2.6 && z > 3.4 && z < 3.6) {
+            printf("comp_set/get float: PASS\n");
+        } else {
+            printf("comp_set/get float: FAIL\n");
+        }
+    } else {
+        printf("entity_get returned NULL pointer\n");
+        printf("Need to set initial data first\n");
     }
     
-    int e2_pos_before = entity_has(ent2, pos);
-    entity_destroy(ent2);
-    int e2_exists = entity_exists(ent2);
-    printf("e2_pos_before=%d e2_exists=%d\n", e2_pos_before, e2_exists);
-    if (e2_exists == 0) {
-        printf("Entity2 destroyed - entity_exists returns 0 OK\n");
-    }
-    
-    printf("=== ECS Test Complete ===\n");
+    printf("=== Dynamic Component Test Complete ===\n");
     return 0.0;
 }
