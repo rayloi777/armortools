@@ -10,4 +10,6 @@ project.add_cfiles("sources/ecs/flecs/flecs.c");
 project.add_assets("assets/scripts/*.minic", {destination: "data/{name}"});
 project.add_assets("assets/systems/*.minic", {destination: "data/systems/{name}"});
 project.add_assets("assets/prefabs/*.json", {destination: "data/{name}"});
+project.add_assets("assets/*.png", {destination: "data/{name}"});
+project.add_assets("assets/images/*.png", {destination: "data/{name}"});
 return project;

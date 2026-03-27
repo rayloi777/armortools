@@ -1,0 +1,53 @@
+// FrogSystem - 1000 frogs bouncing with ECS + 2D rendering
+
+int g_pos_comp = -1;
+int g_vel_comp = -1;
+int g_query = -1;
+
+int init(void) {
+    printf("FrogSystem: Init\n");
+    
+    g_pos_comp = component_lookup("FrogTransform2D");
+    g_vel_comp = component_lookup("FrogVelocity2D");
+    
+    printf("FrogSystem: pos_comp=%d vel_comp=%d\n", g_pos_comp, g_vel_comp);
+    
+    if (g_pos_comp < 0 || g_vel_comp < 0) {
+        printf("FrogSystem: Components not found\n");
+        return 0;
+    }
+    
+    g_query = query_new();
+    query_with(g_query, g_pos_comp);
+    query_with(g_query, g_vel_comp);
+    query_find(g_query);
+    
+    int i = 0;
+    while (i < 1000) {
+        int e = entity_create();
+        entity_add(e, g_pos_comp);
+        entity_add(e, g_vel_comp);
+        
+        void *pos = entity_get(e, g_pos_comp);
+        void *vel = entity_get(e, g_vel_comp);
+        
+        float rx = rand_float() * 1280.0;
+        float ry = rand_float() * 720.0;
+        comp_set_float(g_pos_comp, pos, "x", rx);
+        comp_set_float(g_pos_comp, pos, "y", ry);
+        
+        float vx = (rand_float() - 0.5) * 400.0;
+        float vy = (rand_float() - 0.5) * 400.0;
+        comp_set_float(g_vel_comp, vel, "vx", vx);
+        comp_set_float(g_vel_comp, vel, "vy", vy);
+        
+        i = i + 1;
+    }
+    
+    printf("FrogSystem: Created 1000 frogs\n");
+    return 0;
+}
+
+int step(void) {
+    return 0;
+}

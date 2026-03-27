@@ -194,6 +194,7 @@ void _kickstart(void) {
     minic_system_load("HealthSystem", "data/systems/health_system.minic");
     minic_system_load("MouseSystem", "data/systems/mouse_system.minic");
     minic_system_load("GamepadSystem", "data/systems/gamepad_system.minic");
+    minic_system_load("FrogSystem", "data/systems/frog_system.minic");
     minic_system_call_init();
     
     _iron_set_update_callback(game_loop_update);

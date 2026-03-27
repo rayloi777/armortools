@@ -277,6 +277,49 @@ static float minic_sys_time(void) {
 static uint64_t minic_sys_frame(void) {
     return game_loop_get_frame_count();
 }
+static float minic_rand_float(void) {
+    return (float)rand() / (float)RAND_MAX;
+}
+static minic_val_t minic_rand_range(minic_val_t *args, int argc) {
+    if (argc < 2) return minic_val_float(0.0f);
+    float min = (float)minic_val_to_d(args[0]);
+    float max = (float)minic_val_to_d(args[1]);
+    float result = min + (max - min) * ((float)rand() / (float)RAND_MAX);
+    return minic_val_float(result);
+}
+
+static minic_val_t minic_sprite_load(minic_val_t *args, int argc) {
+    if (argc < 1) return minic_val_void();
+    const char *name = (const char*)args[0].p;
+    if (!name) return minic_val_void();
+    gpu_texture_t *tex = data_get_image((char*)name);
+    return minic_val_ptr(tex);
+}
+
+static minic_val_t minic_sprite_draw(minic_val_t *args, int argc) {
+    if (argc < 5) return minic_val_void();
+    void *tex = (void*)args[0].p;
+    float x = (float)minic_val_to_d(args[1]);
+    float y = (float)minic_val_to_d(args[2]);
+    float w = (float)minic_val_to_d(args[3]);
+    float h = (float)minic_val_to_d(args[4]);
+    draw_scaled_image(tex, x, y, w, h);
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_begin(minic_val_t *args, int argc) {
+    void *target = (argc > 0 && args[0].p) ? args[0].p : NULL;
+    bool clear = (argc < 2) ? true : (bool)(int)minic_val_to_d(args[1]);
+    int color = (argc < 3) ? 0 : (int)minic_val_to_d(args[2]);
+    draw_begin(target, clear, color);
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_end(minic_val_t *args, int argc) {
+    (void)argc; (void)args;
+    draw_end();
+    return minic_val_void();
+}
 
 static minic_val_t minic_keyboard_down(minic_val_t *args, int argc) {
     if (argc < 1 || args[0].type != MINIC_T_PTR) {
@@ -513,6 +556,13 @@ void runtime_api_register(void) {
     minic_register("sys_delta", "f()", (minic_ext_fn_raw_t)minic_sys_delta);
     minic_register("sys_time", "f()", (minic_ext_fn_raw_t)minic_sys_time);
     minic_register("sys_frame", "i()", (minic_ext_fn_raw_t)minic_sys_frame);
+    minic_register("rand_float", "f()", (minic_ext_fn_raw_t)minic_rand_float);
+    minic_register("rand_range", "f(ff)", (minic_ext_fn_raw_t)minic_rand_range);
+    
+    minic_register_native("sprite_load", minic_sprite_load);
+    minic_register_native("sprite_draw", minic_sprite_draw);
+    minic_register_native("draw_begin", minic_draw_begin);
+    minic_register_native("draw_end", minic_draw_end);
     
     minic_register_native("dbg_entity_has_comp", minic_dbg_entity_has_comp);
     

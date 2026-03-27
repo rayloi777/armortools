@@ -11,6 +11,14 @@ int init(void) {
     component_add_field(vel_comp, "vy", TYPE_FLOAT, 4);
     component_add_field(vel_comp, "vz", TYPE_FLOAT, 8);
     
+    int frog_pos_comp = component_register("FrogTransform2D", 8);
+    component_add_field(frog_pos_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(frog_pos_comp, "y", TYPE_FLOAT, 4);
+    
+    int frog_vel_comp = component_register("FrogVelocity2D", 8);
+    component_add_field(frog_vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(frog_vel_comp, "vy", TYPE_FLOAT, 4);
+    
     printf("Creating 5 test entities...\n");
     int i = 0;
     while (i < 5) {
