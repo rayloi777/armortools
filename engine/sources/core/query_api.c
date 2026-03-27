@@ -68,12 +68,10 @@ int query_create(const char *filter_expr) {
     q->component_count = 0;
     q->cached_it = malloc(ECS_ITER_SIZE);
     if (!q->cached_it) {
-        printf("ERROR: Failed to allocate query iterator\n");
         ecs_query_fini(query);
         return -1;
     }
     
-    printf("Query created: id=%d, filter=%s\n", (int)(q - g_queries), filter_expr);
     return (int)(q - g_queries);
 }
 
@@ -82,7 +80,6 @@ int query_new(void) {
     
     runtime_query_t *q = find_free_query();
     if (!q) {
-        printf("ERROR: Max queries reached\n");
         return -1;
     }
     
@@ -90,11 +87,9 @@ int query_new(void) {
     q->valid = true;
     q->cached_it = malloc(ECS_ITER_SIZE);
     if (!q->cached_it) {
-        printf("ERROR: Failed to allocate query iterator\n");
         return -1;
     }
     
-    printf("Query created: id=%d (empty)\n", (int)(q - g_queries));
     return (int)(q - g_queries);
 }
 
@@ -130,19 +125,14 @@ static bool build_filter_and_run(runtime_query_t *q) {
         }
     }
     
-    printf("[query] build_filter: '%s' for components [%llu, %llu]\n", filter, (unsigned long long)q->components[0], (unsigned long long)q->components[1]);
-    
     ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
     ecs_query_desc_t desc = {0};
     desc.expr = filter;
     
     ecs_query_t *query = ecs_query_init(ecs, &desc);
     if (!query) {
-        printf("ERROR: Failed to create query: %s\n", filter);
         return false;
     }
-    
-    printf("[query] query created successfully\n");
     
     q->flecs_query = (uint64_t)query;
     strncpy(q->filter, filter, sizeof(q->filter) - 1);
@@ -174,6 +164,12 @@ int query_find(int query_id) {
         return q->last_count;
     }
     return 0;
+}
+
+int query_count_cached(int query_id) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q) return 0;
+    return q->last_count;
 }
 
 int query_entities(int query_id, uint64_t *entities, int max) {
@@ -257,7 +253,19 @@ int query_count(int query_id) {
 uint64_t query_get(int query_id, int index) {
     runtime_query_t *q = get_query_by_id(query_id);
     if (!q || index < 0 || index >= q->last_count) return 0;
-    return q->last_entities[index];
+    
+    uint64_t entity = q->last_entities[index];
+    
+    if (g_query_world && g_query_world->world) {
+        ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
+        if (!ecs_is_alive(ecs, (ecs_entity_t)entity)) {
+            printf("[query_get] Entity %llu is no longer alive (ecs_is_alive=false)\n", 
+                   (unsigned long long)entity);
+            return 0;
+        }
+    }
+    
+    return entity;
 }
 
 void query_api_register(void) {
@@ -273,6 +281,7 @@ void query_api_register(void) {
     minic_register("query_with", "i(i,I)", (minic_ext_fn_raw_t)query_with);
     minic_register("query_find", "i(i)", (minic_ext_fn_raw_t)query_find);
     minic_register_native("query_entities", minic_query_entities_native);
+    minic_register("query_count_cached", "i(i)", (minic_ext_fn_raw_t)query_count_cached);
     minic_register("query_free", "v(i)", (minic_ext_fn_raw_t)query_free);
     
     printf("Query API registered\n");

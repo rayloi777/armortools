@@ -31,7 +31,7 @@ void game_loop_update(void) {
     
     game_world_progress(g_loop_world, g_delta_time);
     
-    minic_system_call_update();
+    minic_system_call_step();
 }
 
 float game_loop_get_delta_time(void) {

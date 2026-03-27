@@ -1,72 +1,47 @@
-int pos_comp = -1;
-int vel_comp = -1;
+int g_pos_comp = -1;
+int g_vel_comp = -1;
+int g_query = -1;
+int g_frame = 0;
+int g_cached_count = 0;
 
-void init() {
-    printf("[MovementSystem] init() called\n");
+int init(void) {
+    g_pos_comp = component_lookup("Position");
+    g_vel_comp = component_lookup("Velocity");
     
-    pos_comp = component_lookup("Position");
-    vel_comp = component_lookup("Velocity");
-    
-    if (pos_comp < 0) {
-        printf("[MovementSystem] Position component not found, creating...\n");
-        pos_comp = component_register("Position", 12);
-        component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
-        component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
-        component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
+    if (g_pos_comp < 0 || g_vel_comp < 0) {
+        return -1;
     }
     
-    if (vel_comp < 0) {
-        printf("[MovementSystem] Velocity component not found, creating...\n");
-        vel_comp = component_register("Velocity", 12);
-        component_add_field(vel_comp, "vx", TYPE_FLOAT, 0);
-        component_add_field(vel_comp, "vy", TYPE_FLOAT, 4);
-        component_add_field(vel_comp, "vz", TYPE_FLOAT, 8);
-    }
+    g_query = query_new();
+    query_with(g_query, g_pos_comp);
+    query_with(g_query, g_vel_comp);
+    g_cached_count = query_find(g_query);
     
-    printf("[MovementSystem] Components: Position=%d, Velocity=%d\n", pos_comp, vel_comp);
+    return 0;
 }
 
-float update() {
+int step() {
     float dt = sys_delta();
+    g_frame = g_frame + 1;
     
-    int query = query_new();
-    query_with(query, pos_comp);
-    query_with(query, vel_comp);
-    
-    int count = query_find(query);
-    
-    int i = 0;
-    while (i < count) {
-        int e = query_get(query, i);
-        void* pos = entity_get(e, pos_comp);
-        void* vel = entity_get(e, vel_comp);
+    if (g_frame == 60) {
+        printf("[MovementSystem] Frame 60: Destroying entity 514\n", g_frame);
+        entity_destroy(514);
         
-        if (pos != 0) {
-            if (vel != 0) {
-                float px = comp_get_float(pos_comp, pos, "x");
-                float py = comp_get_float(pos_comp, pos, "y");
-                float pz = comp_get_float(pos_comp, pos, "z");
-                
-                float vx = comp_get_float(vel_comp, vel, "vx");
-                float vy = comp_get_float(vel_comp, vel, "vy");
-                float vz = comp_get_float(vel_comp, vel, "vz");
-                
-                px = px + vx * dt;
-                py = py + vy * dt;
-                pz = pz + vz * dt;
-                
-                comp_set_float(pos_comp, pos, "x", px);
-                comp_set_float(pos_comp, pos, "y", py);
-                comp_set_float(pos_comp, pos, "z", pz);
-            }
+        printf("[MovementSystem] Frame 60: Cached count before rebuild: %d\n", g_cached_count);
+        
+        int i = 0;
+        while (i < g_cached_count) {
+            int e = query_get(g_query, i);
+            printf("[MovementSystem] query_get(%d) returned: %d\n", i, e);
+            i = i + 1;
         }
-        i = i + 1;
     }
     
-    query_free(query);
-    return 0.0;
-}
-
-int dummy() {
+    if (g_frame == 61) {
+        g_cached_count = query_find(g_query);
+        printf("[MovementSystem] Frame 61: Cached count after rebuild: %d\n", g_cached_count);
+    }
+    
     return 0;
 }

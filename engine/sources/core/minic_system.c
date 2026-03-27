@@ -63,20 +63,20 @@ int minic_system_load(const char *name, const char *path) {
     
     minic_ctx_run(ctx);
     
-    void *update_fn = minic_ctx_get_fn(ctx, "update");
+    void *step_fn = minic_ctx_get_fn(ctx, "step");
     void *init_fn = minic_ctx_get_fn(ctx, "init");
     
     minic_system_t *sys = &g_minic_systems[g_minic_system_count];
     strncpy(sys->name, name, sizeof(sys->name) - 1);
     sys->name[sizeof(sys->name) - 1] = '\0';
     sys->ctx = ctx;
-    sys->update_fn = update_fn;
+    sys->step_fn = step_fn;
     sys->init_fn = init_fn;
     
     g_minic_system_count++;
     
-    printf("[minic_system] Loaded '%s' from '%s' (update=%p, init=%p)\n", 
-           name, path, update_fn, init_fn);
+    printf("[minic_system] Loaded '%s' from '%s' (step=%p, init=%p)\n", 
+           name, path, step_fn, init_fn);
     
     return 0;
 }
@@ -87,16 +87,16 @@ void minic_system_unload_all(void) {
             minic_ctx_free(g_minic_systems[i].ctx);
             g_minic_systems[i].ctx = NULL;
         }
-        g_minic_systems[i].update_fn = NULL;
+        g_minic_systems[i].step_fn = NULL;
         g_minic_systems[i].init_fn = NULL;
     }
     g_minic_system_count = 0;
 }
 
-void minic_system_call_update(void) {
+void minic_system_call_step(void) {
     for (int i = 0; i < g_minic_system_count; i++) {
-        if (g_minic_systems[i].update_fn) {
-            minic_call_fn(g_minic_systems[i].update_fn, NULL, 0);
+        if (g_minic_systems[i].step_fn) {
+            minic_call_fn(g_minic_systems[i].step_fn, NULL, 0);
         }
     }
 }
@@ -104,7 +104,6 @@ void minic_system_call_update(void) {
 void minic_system_call_init(void) {
     for (int i = 0; i < g_minic_system_count; i++) {
         if (g_minic_systems[i].init_fn) {
-            printf("[minic_system] Calling init for '%s'\n", g_minic_systems[i].name);
             minic_call_fn(g_minic_systems[i].init_fn, NULL, 0);
         }
     }

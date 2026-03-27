@@ -156,9 +156,9 @@ void _kickstart(void) {
     
     sys_start(ops);
     game_engine_init();
-    load_and_run_script("data/game.minic");
     
     printf("Loading Minic systems...\n");
+    minic_system_load("Game", "data/game.minic");
     minic_system_load("MovementSystem", "data/systems/movement_system.minic");
     minic_system_call_init();
     
