@@ -21,6 +21,15 @@ int init(void) {
 int step() {
     float dt = sys_delta();
     
+    int w_down = keyboard_down("w");
+    int s_down = keyboard_down("s");
+    int a_down = keyboard_down("a");
+    int d_down = keyboard_down("d");
+    
+    if (w_down > 0 || s_down > 0 || a_down > 0 || d_down > 0) {
+        printf("[MovementSystem] W=%d S=%d A=%d D=%d\n", w_down, s_down, a_down, d_down);
+    }
+    
     int count = query_find(g_query);
     
     int i = 0;
@@ -30,9 +39,32 @@ int step() {
         void* vel = entity_get(e, g_vel_comp);
         
         if (pos != 0 && vel != 0) {
-            float px = comp_get_float(g_pos_comp, pos, "x") + comp_get_float(g_vel_comp, vel, "vx") * dt;
-            float py = comp_get_float(g_pos_comp, pos, "y") + comp_get_float(g_vel_comp, vel, "vy") * dt;
-            float pz = comp_get_float(g_pos_comp, pos, "z") + comp_get_float(g_vel_comp, vel, "vz") * dt;
+            float vx = comp_get_float(g_vel_comp, vel, "vx");
+            float vy = comp_get_float(g_vel_comp, vel, "vy");
+            float vz = comp_get_float(g_vel_comp, vel, "vz");
+            
+            float speed = 100.0;
+            
+            if (w_down > 0) {
+                vz = vz - speed * dt;
+            }
+            if (s_down > 0) {
+                vz = vz + speed * dt;
+            }
+            if (a_down > 0) {
+                vx = vx - speed * dt;
+            }
+            if (d_down > 0) {
+                vx = vx + speed * dt;
+            }
+            
+            comp_set_float(g_vel_comp, vel, "vx", vx);
+            comp_set_float(g_vel_comp, vel, "vy", vy);
+            comp_set_float(g_vel_comp, vel, "vz", vz);
+            
+            float px = comp_get_float(g_pos_comp, pos, "x") + vx * dt;
+            float py = comp_get_float(g_pos_comp, pos, "y") + vy * dt;
+            float pz = comp_get_float(g_pos_comp, pos, "z") + vz * dt;
             
             comp_set_float(g_pos_comp, pos, "x", px);
             comp_set_float(g_pos_comp, pos, "y", py);

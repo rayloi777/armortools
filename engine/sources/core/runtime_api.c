@@ -9,6 +9,7 @@
 #include "ecs/ecs_dynamic.h"
 
 #include <minic.h>
+#include <iron_input.h>
 
 static game_world_t *g_runtime_world = NULL;
 
@@ -276,6 +277,48 @@ static float minic_sys_time(void) {
 static uint64_t minic_sys_frame(void) {
     return game_loop_get_frame_count();
 }
+
+static minic_val_t minic_keyboard_down(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    const char *key = (const char *)args[0].p;
+    if (!key) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(keyboard_down((char*)key) ? 1 : 0);
+}
+
+static minic_val_t minic_keyboard_started(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    const char *key = (const char *)args[0].p;
+    if (!key) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(keyboard_started((char*)key) ? 1 : 0);
+}
+
+static minic_val_t minic_keyboard_released(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    const char *key = (const char *)args[0].p;
+    if (!key) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(keyboard_released((char*)key) ? 1 : 0);
+}
+
+static minic_val_t minic_mouse_view_x(void) {
+    return minic_val_float(mouse_view_x());
+}
+
+static minic_val_t minic_mouse_view_y(void) {
+    return minic_val_float(mouse_view_y());
+}
+
 void runtime_api_register(void) {
     printf("Registering runtime APIs...\n");
     
@@ -330,6 +373,12 @@ void runtime_api_register(void) {
     minic_register("TYPE_BOOL", "i", NULL);
     minic_register("TYPE_PTR", "i", NULL);
     minic_register("TYPE_STRING", "i", NULL);
+    
+    minic_register_native("keyboard_down", minic_keyboard_down);
+    minic_register_native("keyboard_started", minic_keyboard_started);
+    minic_register_native("keyboard_released", minic_keyboard_released);
+    minic_register_native("mouse_view_x", minic_mouse_view_x);
+    minic_register_native("mouse_view_y", minic_mouse_view_y);
     
     printf("Runtime APIs registered\n");
 }

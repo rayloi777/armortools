@@ -77,7 +77,6 @@ static bool cmd   = false;
 		return;
 
 	[self interpretKeyEvents:[NSArray arrayWithObject:theEvent]];
-	return;
 
 	NSString *characters = [theEvent charactersIgnoringModifiers];
 	if ([characters length]) {

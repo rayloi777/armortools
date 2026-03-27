@@ -7,10 +7,20 @@
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
 #include "ecs/ecs_bridge.h"
+#include <iron_input.h>
+#include <iron.h>
 
 static game_world_t *g_world = NULL;
 static bool g_initialized = false;
 static minic_ctx_t *g_script_ctx = NULL;
+
+static void engine_keyboard_down_callback(i32 code) {
+    keyboard_down_listener(code);
+}
+
+static void engine_keyboard_up_callback(i32 code) {
+    keyboard_up_listener(code);
+}
 
 minic_ctx_t *game_engine_get_minic_ctx(void) {
     return g_script_ctx;
@@ -92,6 +102,11 @@ void game_engine_init(void) {
     
     runtime_api_set_world(g_world);
     runtime_api_register();
+    
+    input_register();
+    
+    iron_set_keyboard_down_callback(engine_keyboard_down_callback);
+    iron_set_keyboard_up_callback(engine_keyboard_up_callback);
     
     game_loop_init(g_world);
     
