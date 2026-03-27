@@ -1,0 +1,28 @@
+int g_query = -1;
+
+int init(void) {
+    g_query = query_new();
+    return 0;
+}
+
+int step() {
+    int left_down = mouse_down("left");
+    int left_started = mouse_started("left");
+    int left_released = mouse_released("left");
+    
+    int right_down = mouse_down("right");
+    int right_started = mouse_started("right");
+    
+    int mouse_x = mouse_x();
+    int mouse_y = mouse_y();
+    int mouse_dx_val = mouse_dx();
+    int mouse_dy_val = mouse_dy();
+    int wheel = mouse_wheel_delta();
+    
+    if (left_down > 0 || left_started > 0 || left_released > 0 || right_down > 0 || right_started > 0) {
+        printf("[MouseSystem] left: down=%d started=%d released=%d | right: down=%d started=%d | pos=(%d,%d) delta=(%d,%d) wheel=%d\n",
+               left_down, left_started, left_released, right_down, right_started, mouse_x, mouse_y, mouse_dx_val, mouse_dy_val, wheel);
+    }
+    
+    return 0;
+}

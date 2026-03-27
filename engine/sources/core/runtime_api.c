@@ -319,6 +319,59 @@ static minic_val_t minic_mouse_view_y(void) {
     return minic_val_float(mouse_view_y());
 }
 
+static minic_val_t minic_mouse_down(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    const char *button = (const char *)args[0].p;
+    if (!button) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(mouse_down((char*)button) ? 1 : 0);
+}
+
+static minic_val_t minic_mouse_started(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    const char *button = (const char *)args[0].p;
+    if (!button) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(mouse_started((char*)button) ? 1 : 0);
+}
+
+static minic_val_t minic_mouse_released(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    const char *button = (const char *)args[0].p;
+    if (!button) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(mouse_released((char*)button) ? 1 : 0);
+}
+
+static minic_val_t minic_mouse_x(void) {
+    return minic_val_float(mouse_x);
+}
+
+static minic_val_t minic_mouse_y(void) {
+    return minic_val_float(mouse_y);
+}
+
+static minic_val_t minic_mouse_dx(void) {
+    return minic_val_float(mouse_movement_x);
+}
+
+static minic_val_t minic_mouse_dy(void) {
+    return minic_val_float(mouse_movement_y);
+}
+
+static minic_val_t minic_mouse_wheel_delta(void) {
+    return minic_val_float(mouse_wheel_delta);
+}
+
 void runtime_api_register(void) {
     printf("Registering runtime APIs...\n");
     
@@ -379,6 +432,14 @@ void runtime_api_register(void) {
     minic_register_native("keyboard_released", minic_keyboard_released);
     minic_register_native("mouse_view_x", minic_mouse_view_x);
     minic_register_native("mouse_view_y", minic_mouse_view_y);
+    minic_register_native("mouse_down", minic_mouse_down);
+    minic_register_native("mouse_started", minic_mouse_started);
+    minic_register_native("mouse_released", minic_mouse_released);
+    minic_register_native("mouse_x", minic_mouse_x);
+    minic_register_native("mouse_y", minic_mouse_y);
+    minic_register_native("mouse_dx", minic_mouse_dx);
+    minic_register_native("mouse_dy", minic_mouse_dy);
+    minic_register_native("mouse_wheel_delta", minic_mouse_wheel_delta);
     
     printf("Runtime APIs registered\n");
 }

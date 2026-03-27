@@ -22,6 +22,18 @@ static void engine_keyboard_up_callback(i32 code) {
     keyboard_up_listener(code);
 }
 
+static void engine_mouse_down_callback(i32 button, i32 x, i32 y) {
+    mouse_down_listener(button, x, y);
+}
+
+static void engine_mouse_up_callback(i32 button, i32 x, i32 y) {
+    mouse_up_listener(button, x, y);
+}
+
+static void engine_mouse_move_callback(i32 x, i32 y, i32 dx, i32 dy) {
+    mouse_move_listener(x, y, dx, dy);
+}
+
 minic_ctx_t *game_engine_get_minic_ctx(void) {
     return g_script_ctx;
 }
@@ -107,6 +119,9 @@ void game_engine_init(void) {
     
     iron_set_keyboard_down_callback(engine_keyboard_down_callback);
     iron_set_keyboard_up_callback(engine_keyboard_up_callback);
+    iron_set_mouse_down_callback(engine_mouse_down_callback);
+    iron_set_mouse_up_callback(engine_mouse_up_callback);
+    iron_set_mouse_move_callback(engine_mouse_move_callback);
     
     game_loop_init(g_world);
     
@@ -176,6 +191,7 @@ void _kickstart(void) {
     minic_system_load("Game", "data/game.minic");
     minic_system_load("MovementSystem", "data/systems/movement_system.minic");
     minic_system_load("HealthSystem", "data/systems/health_system.minic");
+    minic_system_load("MouseSystem", "data/systems/mouse_system.minic");
     minic_system_call_init();
     
     _iron_set_update_callback(game_loop_update);
