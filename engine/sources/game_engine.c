@@ -160,6 +160,7 @@ void _kickstart(void) {
     printf("Loading Minic systems...\n");
     minic_system_load("Game", "data/game.minic");
     minic_system_load("MovementSystem", "data/systems/movement_system.minic");
+    minic_system_load("HealthSystem", "data/systems/health_system.minic");
     minic_system_call_init();
     
     _iron_set_update_callback(game_loop_update);

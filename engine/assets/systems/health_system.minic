@@ -1,0 +1,38 @@
+int g_health_comp = -1;
+int g_query = -1;
+
+int init(void) {
+    g_health_comp = component_lookup("Health");
+    
+    if (g_health_comp < 0) {
+        return -1;
+    }
+    
+    g_query = query_new();
+    query_with(g_query, g_health_comp);
+    query_find(g_query);
+    
+    return 0;
+}
+
+int step() {
+    int count = query_find(g_query);
+    
+    int i = 0;
+    while (i < count) {
+        int e = query_get(g_query, i);
+        void* health = entity_get(e, g_health_comp);
+        
+        if (health != 0) {
+            float hp = comp_get_float(g_health_comp, health, "hp");
+            
+            if (hp > 0.0) {
+                hp = hp - 1.0;
+                comp_set_float(g_health_comp, health, "hp", hp);
+            }
+        }
+        i = i + 1;
+    }
+    
+    return 0;
+}
