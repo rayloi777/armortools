@@ -311,6 +311,17 @@ static minic_val_t minic_keyboard_released(minic_val_t *args, int argc) {
     return minic_val_int(keyboard_released((char*)key) ? 1 : 0);
 }
 
+static minic_val_t minic_keyboard_repeat(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    const char *key = (const char *)args[0].p;
+    if (!key) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(keyboard_repeat((char*)key) ? 1 : 0);
+}
+
 static minic_val_t minic_mouse_view_x(void) {
     return minic_val_float(mouse_view_x());
 }
@@ -430,6 +441,7 @@ void runtime_api_register(void) {
     minic_register_native("keyboard_down", minic_keyboard_down);
     minic_register_native("keyboard_started", minic_keyboard_started);
     minic_register_native("keyboard_released", minic_keyboard_released);
+    minic_register_native("keyboard_repeat", minic_keyboard_repeat);
     minic_register_native("mouse_view_x", minic_mouse_view_x);
     minic_register_native("mouse_view_y", minic_mouse_view_y);
     minic_register_native("mouse_down", minic_mouse_down);
