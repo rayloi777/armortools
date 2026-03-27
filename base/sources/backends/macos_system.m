@@ -850,6 +850,7 @@ void iron_init(iron_window_options_t *win) {
 		add_menubar();
 
 #ifdef WITH_GAMEPAD
+		static struct HIDManager *hidManager;
 		hidManager = (struct HIDManager *)malloc(sizeof(struct HIDManager));
 		HIDManager_init(hidManager);
 #endif
@@ -1004,8 +1005,6 @@ int iron_window_display() {
 }
 
 #ifdef WITH_GAMEPAD
-
-static struct HIDManager *hidManager;
 
 bool iron_gamepad_connected(int num) {
 	return true;
@@ -1188,14 +1187,14 @@ static void valueAvailableCallback(void *inContext, IOReturn inResult, void *inS
 		IOHIDElementRef    elementRef = IOHIDValueGetElement(valueRef);
 		IOHIDElementCookie cookie     = IOHIDElementGetCookie(elementRef);
 
-		for (int i = 0, c = sizeof(pad->buttons); i < c; ++i) {
+		for (int i = 0; i < 15; ++i) {
 			if (cookie == pad->buttons[i]) {
 				buttonChanged(pad, elementRef, valueRef, i);
 				break;
 			}
 		}
 
-		for (int i = 0, c = sizeof(pad->axis); i < c; ++i) {
+		for (int i = 0; i < 6; ++i) {
 			if (cookie == pad->axis[i]) {
 				axisChanged(pad, elementRef, valueRef, i);
 				break;

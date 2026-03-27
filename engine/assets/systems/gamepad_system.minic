@@ -1,0 +1,48 @@
+int g_query = -1;
+
+int init(void) {
+    g_query = query_new();
+    return 0;
+}
+
+int step() {
+    int a_started = gamepad_started("a");
+    int a_released = gamepad_released("a");
+
+    int b_started = gamepad_started("b");
+    int x_started = gamepad_started("x");
+    int y_started = gamepad_started("y");
+
+    int options_started = gamepad_started("options");
+    int share_started = gamepad_started("share");
+
+    int l1_down = gamepad_down("l1");
+    int r1_down = gamepad_down("r1");
+
+    float lx = gamepad_stick_left_x(0);
+    float ly = gamepad_stick_left_y(0);
+    float rx = gamepad_stick_right_x(0);
+    float ry = gamepad_stick_right_y(0);
+
+    float dx = gamepad_stick_delta_x(0);
+    float dy = gamepad_stick_delta_y(0);
+
+    if (a_started || a_released || b_started || x_started || y_started || options_started || share_started || l1_down || r1_down) {
+        printf("[GamepadSystem] buttons: a=(%d,%d) b=%d x=%d y=%d options=%d share=%d l1=%d r1=%d\n",
+               a_started, a_released, b_started, x_started, y_started, options_started, share_started, l1_down, r1_down);
+    }
+
+    int lxi = lx * 100.0;
+    int lyi = ly * 100.0;
+    int rxi = rx * 100.0;
+    int ryi = ry * 100.0;
+    int dxi = dx * 100.0;
+    int dyi = dy * 100.0;
+
+    if (lxi > 10 || lxi < -10 || lyi > 10 || lyi < -10 || rxi > 10 || rxi < -10 || ryi > 10 || ryi < -10 || dxi > 5 || dxi < -5 || dyi > 5 || dyi < -5) {
+        printf("[GamepadSystem] sticks: left=(%d,%d) right=(%d,%d) delta=(%d,%d)\n",
+               lxi, lyi, rxi, ryi, dxi, dyi);
+    }
+
+    return 0;
+}

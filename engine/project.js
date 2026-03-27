@@ -1,4 +1,5 @@
 let flags = globalThis.flags;
+flags.with_gamepad = true;
 
 let project = new Project("IronGame");
 project.add_project("../base");

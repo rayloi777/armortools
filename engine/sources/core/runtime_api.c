@@ -383,6 +383,90 @@ static minic_val_t minic_mouse_wheel_delta(void) {
     return minic_val_float(mouse_wheel_delta);
 }
 
+static minic_val_t minic_gamepad_down(minic_val_t *args, int argc) {
+    if (argc < 2 || args[0].type != MINIC_T_INT || args[1].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    const char *button = (const char *)args[1].p;
+    if (!button) {
+        return minic_val_int(0);
+    }
+    return minic_val_int((int)gamepad_down(i, (char*)button));
+}
+
+static minic_val_t minic_gamepad_started(minic_val_t *args, int argc) {
+    if (argc < 2 || args[0].type != MINIC_T_INT || args[1].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    const char *button = (const char *)args[1].p;
+    if (!button) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(gamepad_started(i, (char*)button) ? 1 : 0);
+}
+
+static minic_val_t minic_gamepad_released(minic_val_t *args, int argc) {
+    if (argc < 2 || args[0].type != MINIC_T_INT || args[1].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    const char *button = (const char *)args[1].p;
+    if (!button) {
+        return minic_val_int(0);
+    }
+    return minic_val_int(gamepad_released(i, (char*)button) ? 1 : 0);
+}
+
+static minic_val_t minic_gamepad_stick_left_x(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_INT) {
+        return minic_val_float(0.0f);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    return minic_val_float(gamepad_stick_left_x(i));
+}
+
+static minic_val_t minic_gamepad_stick_left_y(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_INT) {
+        return minic_val_float(0.0f);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    return minic_val_float(gamepad_stick_left_y(i));
+}
+
+static minic_val_t minic_gamepad_stick_right_x(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_INT) {
+        return minic_val_float(0.0f);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    return minic_val_float(gamepad_stick_right_x(i));
+}
+
+static minic_val_t minic_gamepad_stick_right_y(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_INT) {
+        return minic_val_float(0.0f);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    return minic_val_float(gamepad_stick_right_y(i));
+}
+
+static minic_val_t minic_gamepad_stick_delta_x(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_INT) {
+        return minic_val_float(0.0f);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    return minic_val_float(gamepad_stick_delta_x(i));
+}
+
+static minic_val_t minic_gamepad_stick_delta_y(minic_val_t *args, int argc) {
+    if (argc < 1 || args[0].type != MINIC_T_INT) {
+        return minic_val_float(0.0f);
+    }
+    int i = (int)minic_val_to_d(args[0]);
+    return minic_val_float(gamepad_stick_delta_y(i));
+}
+
 void runtime_api_register(void) {
     printf("Registering runtime APIs...\n");
     
@@ -452,6 +536,16 @@ void runtime_api_register(void) {
     minic_register_native("mouse_dx", minic_mouse_dx);
     minic_register_native("mouse_dy", minic_mouse_dy);
     minic_register_native("mouse_wheel_delta", minic_mouse_wheel_delta);
+    
+    minic_register_native("gamepad_down", minic_gamepad_down);
+    minic_register_native("gamepad_started", minic_gamepad_started);
+    minic_register_native("gamepad_released", minic_gamepad_released);
+    minic_register_native("gamepad_stick_left_x", minic_gamepad_stick_left_x);
+    minic_register_native("gamepad_stick_left_y", minic_gamepad_stick_left_y);
+    minic_register_native("gamepad_stick_right_x", minic_gamepad_stick_right_x);
+    minic_register_native("gamepad_stick_right_y", minic_gamepad_stick_right_y);
+    minic_register_native("gamepad_stick_delta_x", minic_gamepad_stick_delta_x);
+    minic_register_native("gamepad_stick_delta_y", minic_gamepad_stick_delta_y);
     
     printf("Runtime APIs registered\n");
 }

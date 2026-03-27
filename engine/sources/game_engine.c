@@ -116,6 +116,7 @@ void game_engine_init(void) {
     runtime_api_register();
     
     input_register();
+    gamepad_reset();
     
     iron_set_keyboard_down_callback(engine_keyboard_down_callback);
     iron_set_keyboard_up_callback(engine_keyboard_up_callback);
@@ -192,6 +193,7 @@ void _kickstart(void) {
     minic_system_load("MovementSystem", "data/systems/movement_system.minic");
     minic_system_load("HealthSystem", "data/systems/health_system.minic");
     minic_system_load("MouseSystem", "data/systems/mouse_system.minic");
+    minic_system_load("GamepadSystem", "data/systems/gamepad_system.minic");
     minic_system_call_init();
     
     _iron_set_update_callback(game_loop_update);

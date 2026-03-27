@@ -316,7 +316,7 @@ void input_register(void) {
 	string_array_push(gamepad_buttons_xbox, "home");
 	string_array_push(gamepad_buttons_xbox, "touchpad");
 
-	gamepad_buttons = gamepad_buttons_ps;
+	gamepad_buttons = gamepad_buttons_xbox;
 
 	gamepad_raws = any_array_create(0);
 	gc_root(gamepad_raws);
@@ -889,7 +889,23 @@ void keyboard_up_listener(i32 code) {
 
 #ifdef WITH_GAMEPAD
 
-void gamepad_end_frame(void) {}
+void gamepad_end_frame(void) {
+	for (i32 i = 0; i < (i32)gamepad_raws->length; ++i) {
+		gamepad_t *g = gamepad_raws->buffer[i];
+		for (i32 j = 0; j < (i32)g->buttons_started->length; ++j) {
+			g->buttons_started->buffer[j] = false;
+			g->buttons_released->buffer[j] = false;
+		}
+		g->left_stick->movement_x  = g->left_stick->x - g->left_stick->last_x;
+		g->left_stick->movement_y  = g->left_stick->y - g->left_stick->last_y;
+		g->right_stick->movement_x = g->right_stick->x - g->right_stick->last_x;
+		g->right_stick->movement_y = g->right_stick->y - g->right_stick->last_y;
+		g->left_stick->last_x      = g->left_stick->x;
+		g->left_stick->last_y      = g->left_stick->y;
+		g->right_stick->last_x     = g->right_stick->x;
+		g->right_stick->last_y     = g->right_stick->y;
+	}
+}
 
 gamepad_stick_t *gamepad_stick_create(void) {
 	gamepad_stick_t *raw = gc_alloc(sizeof(gamepad_stick_t));
@@ -959,22 +975,67 @@ bool gamepad_released(i32 i, char *button) {
 }
 
 void gamepad_axis_listener(i32 i, i32 axis, f32 value) {
+	if (i < 0 || i >= (i32)gamepad_raws->length) return;
 	gamepad_t       *raw   = gamepad_raws->buffer[i];
 	gamepad_stick_t *stick = axis <= 1 ? raw->left_stick : raw->right_stick;
 
-	if (axis == 0 || axis == 2) { // X
-		stick->last_x     = stick->x;
-		stick->x          = value;
-		stick->movement_x = stick->x - stick->last_x;
+	if (axis == 0 || axis == 2) {
+		stick->x = value;
 	}
-	else if (axis == 1 || axis == 3) { // Y
-		stick->last_y     = stick->y;
-		stick->y          = value;
-		stick->movement_y = stick->y - stick->last_y;
+	else if (axis == 1 || axis == 3) {
+		stick->y = value;
 	}
 	stick->moved = true;
 }
 
-void gamepad_button_listener(i32 i, i32 button, f32 value) {}
+void gamepad_button_listener(i32 i, i32 button, f32 value) {
+	if (i < 0 || i >= (i32)gamepad_raws->length) return;
+	gamepad_t *g = gamepad_raws->buffer[i];
+	if (button < 0 || button >= (i32)g->buttons_down->length) return;
+	f32 prev = g->buttons_down->buffer[button];
+	g->buttons_down->buffer[button] = value;
+	if (prev < 0.5f && value >= 0.5f) {
+		g->buttons_started->buffer[button] = true;
+	}
+	else if (prev >= 0.5f && value < 0.5f) {
+		g->buttons_released->buffer[button] = true;
+	}
+}
+
+f32 gamepad_stick_left_x(i32 i) {
+	if (i < 0 || i >= (i32)gamepad_raws->length) return 0.0f;
+	gamepad_t *g = gamepad_raws->buffer[i];
+	return g->left_stick->x;
+}
+
+f32 gamepad_stick_left_y(i32 i) {
+	if (i < 0 || i >= (i32)gamepad_raws->length) return 0.0f;
+	gamepad_t *g = gamepad_raws->buffer[i];
+	return g->left_stick->y;
+}
+
+f32 gamepad_stick_right_x(i32 i) {
+	if (i < 0 || i >= (i32)gamepad_raws->length) return 0.0f;
+	gamepad_t *g = gamepad_raws->buffer[i];
+	return g->right_stick->x;
+}
+
+f32 gamepad_stick_right_y(i32 i) {
+	if (i < 0 || i >= (i32)gamepad_raws->length) return 0.0f;
+	gamepad_t *g = gamepad_raws->buffer[i];
+	return g->right_stick->y;
+}
+
+f32 gamepad_stick_delta_x(i32 i) {
+	if (i < 0 || i >= (i32)gamepad_raws->length) return 0.0f;
+	gamepad_t *g = gamepad_raws->buffer[i];
+	return g->left_stick->movement_x;
+}
+
+f32 gamepad_stick_delta_y(i32 i) {
+	if (i < 0 || i >= (i32)gamepad_raws->length) return 0.0f;
+	gamepad_t *g = gamepad_raws->buffer[i];
+	return g->left_stick->movement_y;
+}
 
 #endif

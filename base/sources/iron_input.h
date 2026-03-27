@@ -145,5 +145,11 @@ bool             gamepad_started(i32 i, char *button);
 bool             gamepad_released(i32 i, char *button);
 void             gamepad_axis_listener(i32 i, i32 axis, f32 value);
 void             gamepad_button_listener(i32 i, i32 button, f32 value);
+f32              gamepad_stick_left_x(i32 i);
+f32              gamepad_stick_left_y(i32 i);
+f32              gamepad_stick_right_x(i32 i);
+f32              gamepad_stick_right_y(i32 i);
+f32              gamepad_stick_delta_x(i32 i);
+f32              gamepad_stick_delta_y(i32 i);
 
 #endif
