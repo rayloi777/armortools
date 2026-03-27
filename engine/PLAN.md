@@ -137,11 +137,16 @@ armortools/
     │       └── camera.h/c
     │
     ├── assets/
-    │   └── scripts/
-    │       ├── game.minic       # 遊戲入口
-    │       ├── components.minic # 組件定義
-    │       ├── entities.minic   # 實體創建
-    │       └── systems.minic    # 系統定義
+    │   ├── scripts/
+    │   │   ├── game.minic       # 遊戲入口
+    │   │   ├── components.minic # 組件定義
+    │   │   ├── entities.minic   # 實體創建
+    │   │   └── systems.minic    # 系統定義
+    │   └── systems/
+    │       ├── mouse_system.minic    # 滑鼠輸入測試
+    │       ├── gamepad_system.minic  # 手柄輸入測試
+    │       ├── movement_system.minic # 移動系統示例
+    │       └── health_system.minic   # 生命值系統示例
     │
     └── shaders/
 ```
@@ -570,10 +575,71 @@ u64 game_loop_get_frame_count(void);
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.8.1 | 實現 input.c 鍵盤追蹤 | `engine/sources/core/input.h/c` | 待辦 |
-| 1.8.2 | 實現滑鼠追蹤 | `engine/sources/core/input.c` | 待辦 |
-| 1.8.3 | 連接到 Iron 輸入事件 | `engine/sources/core/input.c` | 待辦 |
-| 1.8.4 | 測試：JS 讀取輸入 | - | 待辦 |
+| 1.8.1 | 實現鍵盤追蹤 Minic 包裝 | `engine/sources/core/runtime_api.c` | ✓ 完成 |
+| 1.8.2 | 實現滑鼠追蹤 Minic 包裝 | `engine/sources/core/runtime_api.c` | ✓ 完成 |
+| 1.8.3 | 實現遊戲手柄 Minic 包裝 | `engine/sources/core/runtime_api.c` | ✓ 完成 |
+| 1.8.4 | 連接到 Iron 輸入事件 | `engine/sources/core/runtime_api.c` | ✓ 完成 |
+| 1.8.5 | 測試：Minic 讀取輸入 | `engine/assets/systems/mouse_system.minic` | ✓ 完成 |
+| 1.8.6 | 測試：Gamepad 讀取輸入 | `engine/assets/systems/gamepad_system.minic` | ✓ 完成 |
+
+**API 函數清單**:
+
+```c
+// runtime_api.c - 鍵盤 API
+minic_val_t minic_keyboard_down(minic_val_t *args, int argc);
+minic_val_t minic_keyboard_started(minic_val_t *args, int argc);
+minic_val_t minic_keyboard_released(minic_val_t *args, int argc);
+
+// runtime_api.c - 滑鼠 API
+minic_val_t minic_mouse_down(minic_val_t *args, int argc);
+minic_val_t minic_mouse_started(minic_val_t *args, int argc);
+minic_val_t minic_mouse_released(minic_val_t *args, int argc);
+minic_val_t minic_mouse_x(minic_val_t *args, int argc);
+minic_val_t minic_mouse_y(minic_val_t *args, int argc);
+minic_val_t minic_mouse_dx(minic_val_t *args, int argc);
+minic_val_t minic_mouse_dy(minic_val_t *args, int argc);
+minic_val_t minic_mouse_wheel_delta(minic_val_t *args, int argc);
+
+// runtime_api.c - 遊戲手柄 API
+minic_val_t minic_gamepad_down(minic_val_t *args, int argc);
+minic_val_t minic_gamepad_started(minic_val_t *args, int argc);
+minic_val_t minic_gamepad_released(minic_val_t *args, int argc);
+minic_val_t minic_gamepad_stick_left_x(minic_val_t *args, int argc);
+minic_val_t minic_gamepad_stick_left_y(minic_val_t *args, int argc);
+minic_val_t minic_gamepad_stick_right_x(minic_val_t *args, int argc);
+minic_val_t minic_gamepad_stick_right_y(minic_val_t *args, int argc);
+minic_val_t minic_gamepad_stick_delta_x(minic_val_t *args, int argc);
+minic_val_t minic_gamepad_stick_delta_y(minic_val_t *args, int argc);
+```
+
+**Minic 使用示例**:
+
+```c
+// 鍵盤
+int shift_down = keyboard_down("shift");
+int ctrl_down = keyboard_down("control");
+int a_pressed = keyboard_started("a");
+int space_released = keyboard_released("space");
+
+// 滑鼠
+int left_down = mouse_down("left");
+int left_started = mouse_started("left");
+int mouse_x = mouse_x();
+int mouse_y = mouse_y();
+int wheel = mouse_wheel_delta();
+
+// 遊戲手柄 (Xbox 布局)
+int a_down = gamepad_down("a");
+int b_started = gamepad_started("b");
+float lx = gamepad_stick_left_x(0);
+float ly = gamepad_stick_left_y(0);
+float rx = gamepad_stick_right_x(0);
+float ry = gamepad_stick_right_y(0);
+float dx = gamepad_stick_delta_x(0);
+float dy = gamepad_stick_delta_y(0);
+```
+
+**估算工時**: 3-5 天 ✓ 完成
 
 **API 函數清單**:
 
@@ -656,10 +722,10 @@ vec2_t input_get_axis(const char *axis);   // "Horizontal", "Vertical"
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.10.1 | 實現 runtime_api.c 統一註冊 | `engine/sources/core/runtime_api.c` | 待辦 |
-| 1.10.2 | 創建遊戲入口腳本 | `engine/assets/scripts/game.minic` | 待辦 |
-| 1.10.3 | 整合所有 API | `engine/sources/game_engine.c` | 待辦 |
-| 1.10.4 | 測試：完整運行 | - | 待辦 |
+| 1.10.1 | 實現 runtime_api.c 統一註冊 | `engine/sources/core/runtime_api.c` | ✓ 完成 |
+| 1.10.2 | 創建遊戲入口腳本 | `engine/assets/scripts/game.minic` | ✓ 完成 |
+| 1.10.3 | 整合所有 API | `engine/sources/game_engine.c` | ✓ 完成 |
+| 1.10.4 | 測試：完整運行 | - | ✓ 完成 |
 
 **runtime_api.c 示例**:
 
@@ -734,8 +800,10 @@ printf("Game loaded: %s\n", "Hello World");
 | MeshRenderer 組件 | ✓ |
 | Iron Bridge (Flecs → Iron) | ✓ |
 | 遊戲循環 | ✓ |
-| 輸入系統 | ✓ |
-| Prefab 載入/保存 | ✓ |
+| 鍵盤輸入 (Minic) | ✓ |
+| 滑鼠輸入 (Minic) | ✓ |
+| 遊戲手柄輸入 (Minic) | ✓ |
+| Prefab 載入/保存 | 待辦 |
 
 ### 驗收標準
 
@@ -748,26 +816,74 @@ printf("Game loaded: %s\n", "Hello World");
 ```c
 // assets/scripts/game.minic
 
-function init() {
-    printf("Game init\n");
-}
-
-function update(dt) {
-    // 玩家移動
-    let player = entity_find("Player");
-    if (player != 0) {
-        let pos = entity_get_component(player, "Position");
-        if (input_key_down("W")) {
-            pos.z = pos.z + 5.0 * dt;
-        }
-        if (input_key_down("S")) {
-            pos.z = pos.z - 5.0 * dt;
-        }
+int init(void) {
+    printf("=== Game Initialization ===\n");
+    
+    int pos_comp = component_register("Position", 12);
+    component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
+    
+    int vel_comp = component_register("Velocity", 12);
+    component_add_field(vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(vel_comp, "vy", TYPE_FLOAT, 4);
+    component_add_field(vel_comp, "vz", TYPE_FLOAT, 8);
+    
+    int i = 0;
+    while (i < 5) {
+        int e = entity_create();
+        entity_add(e, pos_comp);
+        entity_add(e, vel_comp);
+        
+        void* pos = entity_get(e, pos_comp);
+        comp_set_float(pos_comp, pos, "x", i * 10.0);
+        comp_set_float(pos_comp, pos, "y", i * 5.0);
+        comp_set_float(pos_comp, pos, "z", 0.0);
+        i = i + 1;
     }
+    
+    printf("=== Game Init Complete ===\n");
+    return 0;
+}
+```
+
+```c
+// assets/systems/mouse_system.minic
+
+int init(void) {
+    g_query = query_new();
+    return 0;
 }
 
-function render() {
-    // 渲染邏輯
+int step() {
+    int left_down = mouse_down("left");
+    int left_started = mouse_started("left");
+    int right_down = mouse_down("right");
+    
+    if (left_down > 0 || left_started > 0 || right_down > 0) {
+        printf("[MouseSystem] left: down=%d started=%d | pos=(%d,%d) delta=(%d,%d) wheel=%d\n",
+               left_down, left_started, mouse_x(), mouse_y(), mouse_dx(), mouse_dy(), mouse_wheel_delta());
+    }
+    return 0;
+}
+```
+
+```c
+// assets/systems/gamepad_system.minic
+
+int step() {
+    int a_started = gamepad_started("a");
+    int b_started = gamepad_started("b");
+    float lx = gamepad_stick_left_x(0);
+    float ly = gamepad_stick_left_y(0);
+    
+    if (a_started || b_started) {
+        printf("[GamepadSystem] buttons: a=%d b=%d\n", a_started, b_started);
+    }
+    if (lx != 0.0 || ly != 0.0) {
+        printf("[GamepadSystem] sticks: left=(%d,%d)\n", lx * 100, ly * 100);
+    }
+    return 0;
 }
 ```
 
