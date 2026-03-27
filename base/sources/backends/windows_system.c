@@ -175,7 +175,7 @@ void iron_windows_restore_display(int display) {
 	}
 }
 
-void iron_windows_restore_displays() {
+void iron_windows_restore_displays(void) {
 	for (int i = 0; i < MAXIMUM_DISPLAYS; ++i) {
 		iron_windows_restore_display(i);
 	}
@@ -1035,27 +1035,27 @@ static DWORD getExStyle(int features) {
 	return exStyle;
 }
 
-int iron_window_x() {
+int iron_window_x(void) {
 	RECT rect;
 	GetWindowRect(windows[0].handle, &rect);
 	windows[0].x = rect.left;
 	return windows[0].x;
 }
 
-int iron_window_y() {
+int iron_window_y(void) {
 	RECT rect;
 	GetWindowRect(windows[0].handle, &rect);
 	windows[0].y = rect.top;
 	return windows[0].y;
 }
 
-int iron_window_width() {
+int iron_window_width(void) {
 	RECT rect;
 	GetClientRect(windows[0].handle, &rect);
 	return rect.right;
 }
 
-int iron_window_height() {
+int iron_window_height(void) {
 	RECT rect;
 	GetClientRect(windows[0].handle, &rect);
 	return rect.bottom;
@@ -1206,11 +1206,11 @@ void iron_window_change_mode(iron_window_mode_t mode) {
 	DragAcceptFiles(win->handle, true);
 }
 
-iron_window_mode_t iron_window_get_mode() {
+iron_window_mode_t iron_window_get_mode(void) {
 	return (iron_window_mode_t)windows[0].mode;
 }
 
-void iron_window_destroy() {
+void iron_window_destroy(void) {
 	WindowData *win = &windows[0];
 	if (win->handle != NULL) {
 		DestroyWindow(win->handle);
@@ -1232,12 +1232,12 @@ void iron_windows_destroy_windows(void) {
 	UnregisterClassW(windowClassName, GetModuleHandleW(NULL));
 }
 
-void iron_window_show() {
+void iron_window_show(void) {
 	ShowWindow(windows[0].handle, SW_SHOWDEFAULT);
 	UpdateWindow(windows[0].handle);
 }
 
-void iron_window_hide() {
+void iron_window_hide(void) {
 	ShowWindow(windows[0].handle, SW_HIDE);
 	UpdateWindow(windows[0].handle);
 }
@@ -1268,11 +1268,11 @@ void iron_window_set_close_callback(bool (*callback)(void *data), void *data) {
 	windows[0].closeCallbackData = data;
 }
 
-int iron_window_display() {
+int iron_window_display(void) {
 	return iron_windows_get_display_for_monitor(MonitorFromWindow(windows[0].handle, MONITOR_DEFAULTTOPRIMARY));
 }
 
-struct HWND__ *iron_windows_window_handle() {
+struct HWND__ *iron_windows_window_handle(void) {
 	return windows[0].handle;
 }
 
@@ -1282,7 +1282,7 @@ void iron_internal_call_resize_callback(int width, int height) {
 	}
 }
 
-bool iron_internal_call_close_callback() {
+bool iron_internal_call_close_callback(void) {
 	if (windows[0].closeCallback != NULL) {
 		return windows[0].closeCallback(windows[0].closeCallbackData);
 	}
@@ -1291,7 +1291,7 @@ bool iron_internal_call_close_callback() {
 
 extern void (*iron_save_and_quit)(bool);
 
-bool _save_and_quit_callback_internal() {
+bool _save_and_quit_callback_internal(void) {
 	bool    save = false;
 	wchar_t title[1024];
 	GetWindowTextW(iron_windows_window_handle(), title, sizeof(title));

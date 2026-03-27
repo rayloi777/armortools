@@ -860,13 +860,13 @@ void iron_init(iron_window_options_t *win) {
 	gpu_init(win->depth_bits, true);
 }
 
-int iron_window_width() {
+int iron_window_width(void) {
 	NSWindow *window = windows[0].handle;
 	float     scale  = [window backingScaleFactor];
 	return [[window contentView] frame].size.width * scale;
 }
 
-int iron_window_height() {
+int iron_window_height(void) {
 	NSWindow *window = windows[0].handle;
 	float     scale  = [window backingScaleFactor];
 	return [[window contentView] frame].size.height * scale;
@@ -970,20 +970,20 @@ void iron_internal_call_resize_callback(int width, int height) {
 
 @end
 
-int iron_window_x() {
+int iron_window_x(void) {
 	return 0;
 }
 
-int iron_window_y() {
+int iron_window_y(void) {
 	return 0;
 }
 
 void iron_window_resize(int width, int height) {}
 void iron_window_move(int x, int y) {}
 void iron_window_change_mode(iron_window_mode_t mode) {}
-void iron_window_destroy() {}
-void iron_window_show() {}
-void iron_window_hide() {}
+void iron_window_destroy(void) {}
+void iron_window_show(void) {}
+void iron_window_hide(void) {}
 void iron_window_create(iron_window_options_t *win) {}
 
 void iron_window_set_title(const char *title) {
@@ -996,11 +996,11 @@ void iron_window_set_resize_callback(void (*callback)(int x, int y, void *data),
 	windows[0].resizeCallbackData = data;
 }
 
-iron_window_mode_t iron_window_get_mode() {
+iron_window_mode_t iron_window_get_mode(void) {
 	return IRON_WINDOW_MODE_WINDOW;
 }
 
-int iron_window_display() {
+int iron_window_display(void) {
 	return 0;
 }
 
@@ -1318,7 +1318,7 @@ void deviceRemoved(void *inContext, IOReturn inResult, void *inSender, IOHIDDevi
 
 extern void (*iron_save_and_quit)(bool);
 
-bool _save_and_quit_callback_internal() {
+bool _save_and_quit_callback_internal(void) {
 	bool save = false;
 	NSString *title = [window title];
 	bool dirty = [title rangeOfString:@"* - ArmorPaint"].location != NSNotFound;

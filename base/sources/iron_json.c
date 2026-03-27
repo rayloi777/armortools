@@ -77,7 +77,7 @@ static bool is_key(char *s, jsmntok_t *t) {
 	return t->type == JSMN_STRING && s[t->end + 1] == ':';
 }
 
-static jsmntok_t get_token() {
+static jsmntok_t get_token(void) {
 	jsmntok_t t = tokens[ti];
 	while (is_key(source, &t)) {
 		ti++;
@@ -123,7 +123,7 @@ static int traverse(uint32_t wi) {
 	return 0;
 }
 
-static int token_size() {
+static int token_size(void) {
 	uint32_t _ti = ti;
 	uint32_t len = traverse(0);
 	ti           = _ti;
@@ -319,12 +319,12 @@ static int   keys;
 static int   array_nest = -1;
 static int   array_length[16];
 
-void json_encode_begin() {
+void json_encode_begin(void) {
 	encoded = "{";
 	keys    = 0;
 }
 
-char *json_encode_end() {
+char *json_encode_end(void) {
 	encoded = string("%s}", encoded);
 	return encoded;
 }
@@ -406,12 +406,12 @@ void json_encode_begin_array(char *k) {
 	encoded = string("%s[", encoded);
 }
 
-void json_encode_end_array() {
+void json_encode_end_array(void) {
 	array_nest--;
 	encoded = string("%s]", encoded);
 }
 
-void json_encode_begin_object() {
+void json_encode_begin_object(void) {
 	if (array_nest > -1) {
 		if (array_length[array_nest] > 0) {
 			encoded = string("%s,", encoded);
@@ -422,7 +422,7 @@ void json_encode_begin_object() {
 	encoded = string("%s{", encoded);
 }
 
-void json_encode_end_object() {
+void json_encode_end_object(void) {
 	encoded = string("%s}", encoded);
 }
 
@@ -504,7 +504,7 @@ static void jenc_write_string(int start, int len) {
 	}
 }
 
-static void jenc_value();
+static void jenc_value(void);
 
 static void jenc_object(int count) {
 	armpack_write_u8(0xdf);
@@ -598,7 +598,7 @@ static void jenc_array(int count) {
 	}
 }
 
-static void jenc_value() {
+static void jenc_value(void) {
 	jsmntok_t t = jenc_tokens[jenc_ti++];
 	if (t.type == JSMN_OBJECT) {
 		jenc_object(t.size);

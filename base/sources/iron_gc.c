@@ -58,15 +58,15 @@ void gc_free(void *ptr) {
 	}
 }
 
-void gc_pause() {
+void gc_pause(void) {
 	_gc_pause();
 }
 
-void gc_resume() {
+void gc_resume(void) {
 	_gc_resume();
 }
 
-void gc_run() {
+void gc_run(void) {
 	_gc_run();
 }
 
@@ -74,7 +74,7 @@ void gc_start(void *bos) {
 	_gc_start(bos);
 }
 
-void gc_stop() {
+void gc_stop(void) {
 	_gc_stop();
 }
 

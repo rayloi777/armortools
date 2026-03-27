@@ -25,7 +25,7 @@ JNIEXPORT jstring JNICALL Java_org_armory3d_IronActivity_getMobileTitle(JNIEnv *
 	return result;
 }
 
-void AndroidFileDialogOpen() {
+void AndroidFileDialogOpen(void) {
 	ANativeActivity *activity = iron_android_get_activity();
 	JNIEnv          *env;
 	JavaVM          *vm = iron_android_get_activity()->vm;
@@ -35,7 +35,7 @@ void AndroidFileDialogOpen() {
 	(*vm)->DetachCurrentThread(vm);
 }
 
-wchar_t *AndroidFileDialogSave() {
+wchar_t *AndroidFileDialogSave(void) {
 	// iron_android_get_activity()->externalDataPath; // /storage/emulated/0/Android/data/org.armorpaint/files
 	mkdir("/storage/emulated/0/Pictures/ArmorPaint", 0777);
 	return L"/storage/emulated/0/Pictures/ArmorPaint/untitled";
@@ -86,7 +86,7 @@ void android_request_file_permissions(struct android_app *app) {
 	(*vm)->DetachCurrentThread(vm);
 }
 
-void android_check_permissions() {
+void android_check_permissions(void) {
 	ANativeActivity    *activity       = iron_android_get_activity();
 	struct android_app *app            = (struct android_app *)activity->instance;
 	bool                hasPermissions = android_has_permission(app, "READ_MEDIA_IMAGES"); // MANAGE_EXTERNAL_STORAGE

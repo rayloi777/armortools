@@ -2,6 +2,6 @@
 
 #include <wchar.h>
 
-void     AndroidFileDialogOpen();
-wchar_t *AndroidFileDialogSave();
-void     android_check_permissions();
+void     AndroidFileDialogOpen(void);
+wchar_t *AndroidFileDialogSave(void);
+void     android_check_permissions(void);

@@ -22,7 +22,7 @@ void            gpu_delete_buffer(gpu_buffer_t *buffer);
 f32             math_floor(f32 x);
 gpu_shader_t   *gpu_create_shader(buffer_t *data, i32 shader_type);
 gpu_shader_t   *gpu_create_shader_from_source(char *source, int source_size, gpu_shader_type_t shader_type);
-gpu_pipeline_t *gpu_create_pipeline();
+gpu_pipeline_t *gpu_create_pipeline(void);
 void            gpu_delete_pipeline(gpu_pipeline_t *pipeline);
 #ifdef arm_embed
 gpu_shader_t *sys_get_shader(char *name);
@@ -331,7 +331,7 @@ world_data_t *world_data_get_raw_by_name(any_array_t *datas, char *name) {
 	return NULL;
 }
 
-f32_array_t *world_data_get_empty_irradiance() {
+f32_array_t *world_data_get_empty_irradiance(void) {
 	if (_world_data_empty_irr == NULL) {
 		_world_data_empty_irr = f32_array_create(28);
 		gc_root(_world_data_empty_irr);
@@ -457,7 +457,7 @@ shader_data_t *shader_data_create(shader_data_t *raw) {
 	return raw;
 }
 
-char *shader_data_ext() {
+char *shader_data_ext(void) {
 #ifdef IRON_VULKAN
 	return ".spirv";
 #elif defined(IRON_METAL)
@@ -1202,7 +1202,7 @@ bool camera_object_sphere_in_frustum(frustum_plane_array_t *frustum_planes, tran
 // ██║     ██║  ██║╚██████╔╝███████║   ██║   ╚██████╔╝██║ ╚═╝ ██║    ██║     ███████╗██║  ██║██║ ╚████║███████╗
 // ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝    ╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝
 
-frustum_plane_t *frustum_plane_create() {
+frustum_plane_t *frustum_plane_create(void) {
 	frustum_plane_t *raw = gc_alloc(sizeof(frustum_plane_t));
 	raw->normal          = vec4_create(1.0, 0.0, 0.0, 0.0);
 	raw->constant        = 0.0;

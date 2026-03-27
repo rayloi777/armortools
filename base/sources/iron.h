@@ -160,7 +160,7 @@ int kickstart(int argc, char **argv) {
 	return 0;
 }
 
-i32 iron_get_arg_count() {
+i32 iron_get_arg_count(void) {
 	return _argc;
 }
 
@@ -213,7 +213,7 @@ void untar_here(const char *path);
 #include <time.h>
 #endif
 
-void _update() {
+void _update(void) {
 #ifdef IRON_WINDOWS
 	if (in_background && ++paused_frames > 3) {
 		Sleep(1);
@@ -502,7 +502,7 @@ f32 math_sqrt(f32 x) {
 f32 math_abs(f32 x) {
 	return fabsf(x);
 }
-f32 math_random() {
+f32 math_random(void) {
 	return rand() / (float)RAND_MAX;
 }
 f32 math_atan2(f32 y, f32 x) {
@@ -511,7 +511,7 @@ f32 math_atan2(f32 y, f32 x) {
 f32 math_asin(f32 x) {
 	return asinf(x);
 }
-f32 math_pi() {
+f32 math_pi(void) {
 	return 3.14159265358979323846;
 }
 f32 math_pow(f32 x, f32 y) {
@@ -822,7 +822,7 @@ gpu_shader_t *gpu_create_shader_from_source(char *source, int source_size, gpu_s
 	return shader;
 }
 
-gpu_pipeline_t *gpu_create_pipeline() {
+gpu_pipeline_t *gpu_create_pipeline(void) {
 	gpu_pipeline_t *pipeline = (gpu_pipeline_t *)malloc(sizeof(gpu_pipeline_t));
 	gpu_pipeline_init(pipeline);
 	return pipeline;
@@ -1020,7 +1020,7 @@ void _gpu_begin(gpu_texture_t *render_target, any_array_t *additional, gpu_textu
 	}
 }
 
-bool _save_and_quit_callback_internal();
+bool _save_and_quit_callback_internal(void);
 
 bool _save_and_quit_callback(void *data) {
 	return _save_and_quit_callback_internal();
@@ -1031,6 +1031,6 @@ void iron_set_save_and_quit_callback(void (*callback)(bool)) {
 	iron_window_set_close_callback(_save_and_quit_callback, NULL);
 }
 
-void iron_delay_idle_sleep() {
+void iron_delay_idle_sleep(void) {
 	paused_frames = 0;
 }

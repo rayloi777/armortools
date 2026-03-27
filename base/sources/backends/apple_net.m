@@ -89,5 +89,5 @@ void iron_net_request(const char *url_base, const char *url_path, const char *da
 	[task resume];
 }
 
-void iron_net_update() {
+void iron_net_update(void) {
 }

@@ -137,19 +137,19 @@ __attribute__((export_name("wasm_drop_files"))) void wasm_drop_files(char *str) 
 	iron_internal_drop_files_callback(str);
 }
 
-int iron_window_x() {
+int iron_window_x(void) {
 	return 0;
 }
 
-int iron_window_y() {
+int iron_window_y(void) {
 	return 0;
 }
 
-int iron_window_width() {
+int iron_window_width(void) {
 	return js_canvas_w();
 }
 
-int iron_window_height() {
+int iron_window_height(void) {
 	return js_canvas_h();
 }
 
@@ -161,9 +161,9 @@ void iron_window_change_mode(iron_window_mode_t mode) {
 	js_window_change_mode(mode);
 }
 
-void iron_window_destroy() {}
-void iron_window_show() {}
-void iron_window_hide() {}
+void iron_window_destroy(void) {}
+void iron_window_show(void) {}
+void iron_window_hide(void) {}
 
 void iron_window_set_title(const char *title) {
 	js_window_set_title(title);
@@ -173,7 +173,7 @@ void iron_window_create(iron_window_options_t *win) {}
 void iron_window_set_resize_callback(void (*callback)(int x, int y, void *data), void *data) {}
 void iron_window_set_close_callback(bool (*callback)(void *), void *data) {}
 
-iron_window_mode_t iron_window_get_mode() {
+iron_window_mode_t iron_window_get_mode(void) {
 	return iron_internal_window_mode;
 }
 
@@ -214,9 +214,9 @@ void iron_net_request(const char *url_base, const char *url_path, const char *da
 	js_net_request(url_base, url_path, data, port, method, callback_id, callbackdata, dst_path);
 }
 
-void iron_net_update() {}
+void iron_net_update(void) {}
 
-bool _save_and_quit_callback_internal() {
+bool _save_and_quit_callback_internal(void) {
 	return false;
 }
 

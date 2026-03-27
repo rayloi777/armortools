@@ -134,7 +134,7 @@ float vec2_dot(vec2_t a, vec2_t b) {
 	return a.x * b.x + a.y * b.y;
 }
 
-vec2_t vec2_nan() {
+vec2_t vec2_nan(void) {
 	vec2_t v;
 	v.x = NAN;
 	return v;
@@ -318,19 +318,19 @@ vec4_t vec4_clamp(vec4_t a, float min, float max) {
 	return a;
 }
 
-vec4_t vec4_x_axis() {
+vec4_t vec4_x_axis(void) {
 	return vec4_create(1.0, 0.0, 0.0, 1.0);
 }
 
-vec4_t vec4_y_axis() {
+vec4_t vec4_y_axis(void) {
 	return vec4_create(0.0, 1.0, 0.0, 1.0);
 }
 
-vec4_t vec4_z_axis() {
+vec4_t vec4_z_axis(void) {
 	return vec4_create(0.0, 0.0, 1.0, 1.0);
 }
 
-vec4_t vec4_nan() {
+vec4_t vec4_nan(void) {
 	vec4_t v;
 	v.x = NAN;
 	return v;
@@ -548,7 +548,7 @@ mat3_t mat3_create(float _00, float _10, float _20, float _01, float _11, float 
 	return m;
 }
 
-mat3_t mat3_identity() {
+mat3_t mat3_identity(void) {
 	return mat3_create(1, 0, 0, 0, 1, 0, 0, 0, 1);
 }
 
@@ -611,7 +611,7 @@ mat3_t mat3_transpose(mat3_t m) {
     return m;
 }
 
-mat3_t mat3_nan() {
+mat3_t mat3_nan(void) {
 	mat3_t m;
 	m.m[0] = NAN;
 	return m;
@@ -650,7 +650,7 @@ mat4_t mat4_create(float _00, float _10, float _20, float _30, float _01, float 
 	return m;
 }
 
-mat4_t mat4_identity() {
+mat4_t mat4_identity(void) {
 	return mat4_create(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0);
 }
 
@@ -1134,7 +1134,7 @@ float mat4_determinant(mat4_t m) {
 	return m.m[0] * c00 - m.m[1] * c01 + m.m[2] * c02 - m.m[3] * c03;
 }
 
-mat4_t mat4_nan() {
+mat4_t mat4_nan(void) {
 	mat4_t m;
 	m.m[0] = NAN;
 	return m;

@@ -164,9 +164,9 @@ static void free_bvh(bvh_node_t *n) {
 	free(n);
 }
 
-void asim_world_create() {}
+void asim_world_create(void) {}
 
-void asim_world_destroy() {
+void asim_world_destroy(void) {
 	free_bvh(mesh.root);
 	mesh.root = NULL;
 }
@@ -185,7 +185,7 @@ void asim_world_update(float time_step) {
 	}
 }
 
-physics_pair_t *asim_world_get_contact() {
+physics_pair_t *asim_world_get_contact(void) {
 	return &ppair;
 }
 

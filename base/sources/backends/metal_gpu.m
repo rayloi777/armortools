@@ -126,7 +126,7 @@ void gpu_resize_internal(int width, int height) {
 	resized = true;
 }
 
-static void next_drawable() {
+static void next_drawable(void) {
 	CAMetalLayer *layer                       = get_metal_layer();
 	drawable                                  = [layer nextDrawable];
 	framebuffers[framebuffer_index].impl._tex = (__bridge void *)drawable.texture;
@@ -231,12 +231,12 @@ void gpu_begin_internal(gpu_clear_t flags, unsigned color, float depth) {
 	current_scissor.height   = current_render_targets[0]->height;
 }
 
-void gpu_end_internal() {
+void gpu_end_internal(void) {
 	[command_encoder endEncoding];
 	current_render_targets_count = 0;
 }
 
-void gpu_execute_and_wait() {
+void gpu_execute_and_wait(void) {
 	if (gpu_in_use) {
 		[command_encoder endEncoding];
 	}
@@ -265,7 +265,7 @@ void gpu_execute_and_wait() {
 	}
 }
 
-void gpu_present_internal() {
+void gpu_present_internal(void) {
 	[command_buffer presentDrawable:drawable];
 	[command_buffer commit];
 	[command_buffer waitUntilCompleted];
@@ -289,7 +289,7 @@ void gpu_present_internal() {
 
 void gpu_barrier(gpu_texture_t *render_target, gpu_texture_state_t state_after) {}
 
-void gpu_draw_internal() {
+void gpu_draw_internal(void) {
 	id<MTLBuffer> index_buffer = (__bridge id<MTLBuffer>)current_ib->impl.metal_buffer;
 	[command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
 	                            indexCount:current_ib->count
@@ -319,7 +319,7 @@ void gpu_scissor(int x, int y, int width, int height) {
 	[command_encoder setScissorRect:current_scissor];
 }
 
-void gpu_disable_scissor() {
+void gpu_disable_scissor(void) {
 	current_scissor.x      = 0;
 	current_scissor.y      = 0;
 	current_scissor.width  = current_render_targets[0]->width;
@@ -651,7 +651,7 @@ void gpu_buffer_destroy_internal(gpu_buffer_t *buffer) {
 	buffer->impl.metal_buffer = NULL;
 }
 
-char *gpu_device_name() {
+char *gpu_device_name(void) {
 	id<MTLDevice> device = get_metal_device();
 	return (char *)[device.name UTF8String];
 }
@@ -707,7 +707,7 @@ void gpu_raytrace_pipeline_init(gpu_raytrace_pipeline_t *pipeline, void *shader,
 
 void gpu_raytrace_pipeline_destroy(gpu_raytrace_pipeline_t *pipeline) {}
 
-bool gpu_raytrace_supported() {
+bool gpu_raytrace_supported(void) {
 	id<MTLDevice> device = get_metal_device();
 	return device.supportsRaytracing;
 }
@@ -866,7 +866,7 @@ void gpu_raytrace_set_target(gpu_texture_t *_output) {
 	output = _output;
 }
 
-void gpu_raytrace_dispatch_rays() {
+void gpu_raytrace_dispatch_rays(void) {
 	id<MTLDevice> device = get_metal_device();
 	if (!device.supportsRaytracing)
 		return;

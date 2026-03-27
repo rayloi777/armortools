@@ -32,7 +32,7 @@ static f32_array_t *nor_first;
 void                console_info(char *s);
 static bool         check_uvmap = true;
 
-static int read_int() {
+static int read_int(void) {
 	int bi = 0;
 	while (part->pos < bytes_length) { // Read into buffer
 		char c = bytes[part->pos];
@@ -56,13 +56,13 @@ static int read_int() {
 	return res;
 }
 
-static inline void skip_whitespace() {
+static inline void skip_whitespace(void) {
 	while (bytes[part->pos] == ' ' || bytes[part->pos] == '\t') {
 		part->pos++;
 	}
 }
 
-static void read_face_fast() {
+static void read_face_fast(void) {
 	while (true) {
 		va[vi++] = read_int() - 1;
 		part->pos++; // '/'
@@ -76,7 +76,7 @@ static void read_face_fast() {
 	}
 }
 
-static void read_face() {
+static void read_face(void) {
 	while (true) {
 		va[vi++] = read_int() - 1;
 		if (uv_temp.length > 0 || nor_temp.length > 0) {
@@ -109,7 +109,7 @@ static void read_face() {
 	}
 }
 
-static float read_float() {
+static float read_float(void) {
 	int bi = 0;
 	while (true) { // Read into buffer
 		char c = bytes[part->pos];
@@ -153,7 +153,7 @@ static float read_float() {
 	return res;
 }
 
-static char *read_string() {
+static char *read_string(void) {
 	size_t begin = part->pos;
 	while (true) {
 		char c = bytes[part->pos];
@@ -169,7 +169,7 @@ static char *read_string() {
 	return str;
 }
 
-static void next_line() {
+static void next_line(void) {
 	while (part->pos < bytes_length) {
 		char c = bytes[part->pos++];
 		if (c == '\n') {

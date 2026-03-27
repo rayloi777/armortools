@@ -362,7 +362,7 @@ static void create_descriptors(void) {
 	vkCreateSampler(device, &sampler_info, NULL, &point_sampler);
 }
 
-VkSwapchainKHR cleanup_swapchain() {
+VkSwapchainKHR cleanup_swapchain(void) {
 	// for (int i = 0; i < GPU_FRAMEBUFFER_COUNT; ++i) {
 	// 	gpu_texture_destroy_internal(&framebuffers[i]);
 	// }

@@ -154,14 +154,14 @@ any_array_t *map_keys(any_map_t *m) {
 	return keys;
 }
 
-i32_map_t *i32_map_create() {
+i32_map_t *i32_map_create(void) {
 	i32_map_t *r = gc_alloc(sizeof(i32_map_t));
 	r->keys      = gc_alloc(sizeof(string_array_t));
 	r->values    = gc_alloc(sizeof(i32_array_t));
 	return r;
 }
 
-any_map_t *any_map_create() {
+any_map_t *any_map_create(void) {
 	any_map_t *r = gc_alloc(sizeof(any_map_t));
 	r->keys      = gc_alloc(sizeof(string_array_t));
 	r->values    = gc_alloc(sizeof(any_array_t));
@@ -222,14 +222,14 @@ i32_array_t *imap_keys(any_imap_t *m) {
 	return m->keys;
 }
 
-i32_imap_t *i32_imap_create() {
+i32_imap_t *i32_imap_create(void) {
 	i32_imap_t *r = gc_alloc(sizeof(i32_imap_t));
 	r->keys       = gc_alloc(sizeof(i32_array_t));
 	r->values     = gc_alloc(sizeof(i32_array_t));
 	return r;
 }
 
-any_imap_t *any_imap_create() {
+any_imap_t *any_imap_create(void) {
 	any_imap_t *r = gc_alloc(sizeof(any_imap_t));
 	r->keys       = gc_alloc(sizeof(i32_array_t));
 	r->values     = gc_alloc(sizeof(any_array_t));

@@ -64,7 +64,7 @@ int iron_x11_error_handler(Display *display, XErrorEvent *error_event) {
 	return 0;
 }
 
-void iron_x11_init() {
+void iron_x11_init(void) {
 	XInitThreads(); // Fixes random ubuntu22 crash
 	x11_ctx.display = XOpenDisplay(NULL);
 	if (!x11_ctx.display) {
@@ -138,7 +138,7 @@ void iron_x11_init() {
 	XIFreeDeviceInfo(devices);
 }
 
-void iron_display_init() {
+void iron_display_init(void) {
 	static bool display_initialized = false;
 	if (display_initialized) {
 		return;
@@ -246,19 +246,19 @@ int iron_count_displays(void) {
 	return x11_ctx.num_displays;
 }
 
-int iron_window_x() {
+int iron_window_x(void) {
 	return 0;
 }
 
-int iron_window_y() {
+int iron_window_y(void) {
 	return 0;
 }
 
-int iron_window_width() {
+int iron_window_width(void) {
 	return x11_ctx.windows[0].width;
 }
 
-int iron_window_height() {
+int iron_window_height(void) {
 	return x11_ctx.windows[0].height;
 }
 
@@ -292,12 +292,12 @@ void iron_window_change_mode(iron_window_mode_t mode) {
 	XFlush(x11_ctx.display);
 }
 
-int iron_window_display() {
+int iron_window_display(void) {
 	struct iron_x11_window *window = &x11_ctx.windows[0];
 	return window->display_index;
 }
 
-void iron_window_destroy() {
+void iron_window_destroy(void) {
 	XFlush(x11_ctx.display);
 	struct iron_x11_window *window = &x11_ctx.windows[0];
 	XDestroyIC(window->xInputContext);
@@ -307,12 +307,12 @@ void iron_window_destroy() {
 	*window = (struct iron_x11_window){0};
 }
 
-void iron_window_show() {
+void iron_window_show(void) {
 	struct iron_x11_window *window = &x11_ctx.windows[0];
 	XMapWindow(x11_ctx.display, window->window);
 }
 
-void iron_window_hide() {
+void iron_window_hide(void) {
 	struct iron_x11_window *window = &x11_ctx.windows[0];
 	XUnmapWindow(x11_ctx.display, window->window);
 }
@@ -407,14 +407,14 @@ void iron_window_set_close_callback(bool (*callback)(void *data), void *data) {
 	iron_internal_window_callbacks[0].close_data     = data;
 }
 
-bool iron_internal_call_close_callback() {
+bool iron_internal_call_close_callback(void) {
 	if (iron_internal_window_callbacks[0].close_callback != NULL) {
 		return iron_internal_window_callbacks[0].close_callback(iron_internal_window_callbacks[0].close_data);
 	}
 	return true;
 }
 
-iron_window_mode_t iron_window_get_mode() {
+iron_window_mode_t iron_window_get_mode(void) {
 	return x11_ctx.windows[0].mode;
 }
 
@@ -784,7 +784,7 @@ static char *uri_decode(const char *src) {
 	return res;
 }
 
-static bool _handle_messages() {
+static bool _handle_messages(void) {
 	static bool controlDown             = false;
 	static int  ignoreKeycode           = 0;
 	static bool preventNextKeyDownEvent = false;
@@ -1087,7 +1087,7 @@ static bool _handle_messages() {
 	return true;
 }
 
-bool iron_internal_handle_messages() {
+bool iron_internal_handle_messages(void) {
 	if (!_handle_messages()) {
 		return false;
 	}
@@ -1097,15 +1097,15 @@ bool iron_internal_handle_messages() {
 	return true;
 }
 
-const char *iron_system_id() {
+const char *iron_system_id(void) {
 	return "Linux";
 }
 
 void iron_set_keep_screen_on(bool on) {}
-void iron_keyboard_show() {}
-void iron_keyboard_hide() {}
+void iron_keyboard_show(void) {}
+void iron_keyboard_hide(void) {}
 
-bool iron_keyboard_active() {
+bool iron_keyboard_active(void) {
 	return true;
 }
 
@@ -1117,11 +1117,11 @@ void iron_load_url(const char *url) {
 	}
 }
 
-const char *iron_language() {
+const char *iron_language(void) {
 	return "en";
 }
 
-const char *iron_internal_save_path() {
+const char *iron_internal_save_path(void) {
 	// first check for an existing directory in $HOME
 	// if one exists, use it, else create one in $XDG_DATA_HOME
 	// See: https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
@@ -1166,7 +1166,7 @@ const char *iron_internal_save_path() {
 	return save;
 }
 
-const char **iron_video_formats() {
+const char **iron_video_formats(void) {
 	return videoFormats;
 }
 
@@ -1193,7 +1193,7 @@ void iron_init(iron_window_options_t *ops) {
 	iron_window_create(ops);
 }
 
-void iron_internal_shutdown() {
+void iron_internal_shutdown(void) {
 	gpu_destroy();
 
 #ifdef WITH_GAMEPAD
@@ -1229,7 +1229,7 @@ bool iron_mouse_can_lock(void) {
 	return true;
 }
 
-void iron_mouse_show() {
+void iron_mouse_show(void) {
 	struct iron_x11_window *window = &x11_ctx.windows[0];
 	if (mouse_hidden) {
 		XUndefineCursor(x11_ctx.display, window->window);
@@ -1237,7 +1237,7 @@ void iron_mouse_show() {
 	}
 }
 
-void iron_mouse_hide() {
+void iron_mouse_hide(void) {
 	struct iron_x11_window *window = &x11_ctx.windows[0];
 	if (!mouse_hidden) {
 		XColor col;
@@ -1458,21 +1458,21 @@ static void HIDGamepadUdevHelper_close(struct HIDGamepadUdevHelper *helper) {
 	udev_unref(helper->udevPtr);
 }
 
-void iron_linux_initHIDGamepads() {
+void iron_linux_initHIDGamepads(void) {
 	for (int i = 0; i < IRON_GAMEPAD_MAX_COUNT; ++i) {
 		HIDGamepad_init(&gamepads[i], i);
 	}
 	HIDGamepadUdevHelper_init(&udev_helper);
 }
 
-void iron_linux_updateHIDGamepads() {
+void iron_linux_updateHIDGamepads(void) {
 	HIDGamepadUdevHelper_update(&udev_helper);
 	for (int i = 0; i < IRON_GAMEPAD_MAX_COUNT; ++i) {
 		HIDGamepad_update(&gamepads[i]);
 	}
 }
 
-void iron_linux_closeHIDGamepads() {
+void iron_linux_closeHIDGamepads(void) {
 	HIDGamepadUdevHelper_close(&udev_helper);
 }
 
@@ -1496,7 +1496,7 @@ void iron_gamepad_rumble(int gamepad, float left, float right) {}
 #include <gtk/gtk.h>
 extern void (*iron_save_and_quit)(bool);
 static bool iron_gtk_setlocale_disabled = false;
-void iron_gtk_disable_setlocale() {
+void iron_gtk_disable_setlocale(void) {
 	if (iron_gtk_setlocale_disabled) {
 		return;
 	}
@@ -1505,7 +1505,7 @@ void iron_gtk_disable_setlocale() {
 }
 #endif
 
-bool _save_and_quit_callback_internal() {
+bool _save_and_quit_callback_internal(void) {
 #ifdef WITH_NFD // Has gtk
 	bool          save = false;
 	XTextProperty text_prop;

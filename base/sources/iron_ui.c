@@ -104,7 +104,7 @@ float UI_TOOLTIP_DELAY(void) {
 	return 0.7;
 }
 
-ui_t *ui_get_current() {
+ui_t *ui_get_current(void) {
 	return current;
 }
 
@@ -113,7 +113,7 @@ void ui_set_current(ui_t *_current) {
 	theme   = current->ops->theme;
 }
 
-ui_handle_t *ui_handle_create() {
+ui_handle_t *ui_handle_create(void) {
 	ui_handle_t *h = (ui_handle_t *)gc_alloc(sizeof(ui_handle_t));
 	memset(h, 0, sizeof(ui_handle_t));
 	h->redraws = 2;
@@ -450,36 +450,36 @@ void ui_row(f32_array_t *ratios) {
 	current->_w             = ui_get_ratio(ratios, current->current_ratio, current->_w);
 }
 
-void ui_row2() {
+void ui_row2(void) {
 	ui_row(_ui_row2);
 }
 
-void ui_row3() {
+void ui_row3(void) {
 	ui_row(_ui_row3);
 }
 
-void ui_row4() {
+void ui_row4(void) {
 	ui_row(_ui_row4);
 }
 
-void ui_row5() {
+void ui_row5(void) {
 	ui_row(_ui_row5);
 }
 
-void ui_row6() {
+void ui_row6(void) {
 	ui_row(_ui_row6);
 }
 
-void ui_row7() {
+void ui_row7(void) {
 	ui_row(_ui_row7);
 }
 
-void ui_indent() {
+void ui_indent(void) {
 	current->_x += UI_TAB_W();
 	current->_w -= UI_TAB_W();
 }
 
-void ui_unindent() {
+void ui_unindent(void) {
 	current->_x -= UI_TAB_W();
 	current->_w += UI_TAB_W();
 }
@@ -530,12 +530,12 @@ bool ui_input_in_rect(float x, float y, float w, float h) {
 	       current->input_y < (y + h);
 }
 
-bool ui_input_changed() {
+bool ui_input_changed(void) {
 	return current->input_dx != 0 || current->input_dy != 0 || current->input_wheel_delta != 0 || current->input_started || current->input_started_r ||
 	       current->input_released || current->input_released_r || current->input_down || current->input_down_r || current->is_key_pressed;
 }
 
-void ui_end_input() {
+void ui_end_input(void) {
 	if (ui_on_tab_drop != NULL && current->drag_tab_handle != NULL) {
 		if (current->input_dx != 0 || current->input_dy != 0) {
 			iron_mouse_set_cursor(IRON_CURSOR_HAND);
@@ -641,7 +641,7 @@ char *ui_lower_case(char *dest, char *src) {
 	return dest;
 }
 
-void ui_draw_tooltip_text() {
+void ui_draw_tooltip_text(void) {
 	int   line_count = ui_line_count(current->tooltip_text);
 	float tooltip_w  = 0.0;
 	for (int i = 0; i < line_count; ++i) {
@@ -678,7 +678,7 @@ void ui_draw_tooltip_text() {
 	draw_end();
 }
 
-void ui_draw_tooltip_image() {
+void ui_draw_tooltip_image(void) {
 	float w = current->tooltip_img->width;
 	if (current->tooltip_img_max_width != 0 && w > current->tooltip_img_max_width) {
 		w = current->tooltip_img_max_width;
@@ -694,7 +694,7 @@ void ui_draw_tooltip_image() {
 	draw_end();
 }
 
-void ui_draw_tooltip() {
+void ui_draw_tooltip(void) {
 	static char temp[1024];
 	if (current->slider_tooltip) {
 		draw_begin(NULL, false, 0);
@@ -748,7 +748,7 @@ void ui_draw_tooltip() {
 		current->tooltip_shown = false;
 }
 
-void ui_draw_combo() {
+void ui_draw_combo(void) {
 	if (current->combo_selected_handle == NULL) {
 		return;
 	}
@@ -938,13 +938,13 @@ void ui_draw_combo() {
 	draw_end();
 }
 
-void ui_end_frame() {
+void ui_end_frame(void) {
 	ui_draw_combo(); // Handle active combo
 	ui_draw_tooltip();
 	ui_end_input();
 }
 
-void ui_bake_elements() {
+void ui_bake_elements(void) {
 	if (current->check_select_image.width != 0) {
 		gpu_texture_destroy(&current->check_select_image);
 	}
@@ -1024,7 +1024,7 @@ void ui_begin_region(ui_t *ui, int x, int y, int w) {
 	current->_h              = 0;
 }
 
-void ui_end_region() {
+void ui_end_region(void) {
 	current->tab_pressed_handle = NULL;
 }
 
@@ -1372,7 +1372,7 @@ void ui_set_hovered_tab_name(char *name) {
 	}
 }
 
-void ui_draw_tabs() {
+void ui_draw_tabs(void) {
 	current->input_x = current->restore_x;
 	current->input_y = current->restore_y;
 	if (current->current_window == NULL) {
@@ -1681,7 +1681,7 @@ void ui_begin(ui_t *ui) {
 }
 
 // Sticky region ignores window scrolling
-void ui_begin_sticky() {
+void ui_begin_sticky(void) {
 	current->sticky = true;
 	current->_y -= current->current_window->scroll_offset;
 	if (current->current_window->scroll_enabled) {
@@ -1689,7 +1689,7 @@ void ui_begin_sticky() {
 	}
 }
 
-void ui_end_sticky() {
+void ui_end_sticky(void) {
 	current->sticky  = false;
 	current->scissor = true;
 	gpu_scissor(0, current->_y, current->_window_w, current->_window_h - current->_y);
@@ -1701,7 +1701,7 @@ void ui_end_sticky() {
 	}
 }
 
-void ui_end_window() {
+void ui_end_window(void) {
 	ui_handle_t *handle = current->current_window;
 	if (handle == NULL)
 		return;
@@ -2422,7 +2422,7 @@ void ui_tooltip_image(gpu_texture_t *image, int max_width) {
 	current->tooltip_y             = current->_y + current->_window_y;
 }
 
-void ui_end() {
+void ui_end(void) {
 	if (!current->window_ended) {
 		ui_end_window();
 	}
@@ -2437,7 +2437,7 @@ void ui_set_input_position(ui_t *ui, int x, int y) {
 }
 
 // Useful for drag and drop operations
-char *ui_hovered_tab_name() {
+char *ui_hovered_tab_name(void) {
 	return ui_input_in_rect(current->hovered_tab_x, current->hovered_tab_y, current->hovered_tab_w, current->hovered_tab_h) ? current->hovered_tab_name : "";
 }
 
@@ -2713,12 +2713,12 @@ void ui_touch_move(ui_t *ui, int index, int x, int y) {
 }
 #endif
 
-char *ui_copy() {
+char *ui_copy(void) {
 	ui_is_copy = true;
 	return &ui_text_to_copy[0];
 }
 
-char *ui_cut() {
+char *ui_cut(void) {
 	ui_is_cut = true;
 	return ui_copy();
 }

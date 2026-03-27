@@ -21,7 +21,7 @@ static uint8_t *encoded;
 static uint32_t capacity;
 static uint32_t array_count;
 static uint32_t str_len;
-static void     read_store();
+static void     read_store(void);
 
 static inline uint64_t pad(int di, int n) {
 	return (n - (di % n)) % n;
@@ -85,37 +85,37 @@ static void store_string(char *str) {
 	di     = _di;
 }
 
-static uint8_t read_u8() {
+static uint8_t read_u8(void) {
 	uint8_t u8 = *(uint8_t *)(encoded + ei);
 	ei += 1;
 	return u8;
 }
 
-static int16_t read_i16() {
+static int16_t read_i16(void) {
 	int16_t i16 = *(int16_t *)(encoded + ei);
 	ei += 2;
 	return i16;
 }
 
-static int32_t read_i32() {
+static int32_t read_i32(void) {
 	int32_t i32 = *(int32_t *)(encoded + ei);
 	ei += 4;
 	return i32;
 }
 
-static uint32_t read_u32() {
+static uint32_t read_u32(void) {
 	uint32_t u32 = *(uint32_t *)(encoded + ei);
 	ei += 4;
 	return u32;
 }
 
-static float read_f32() {
+static float read_f32(void) {
 	float f32 = *(float *)(encoded + ei);
 	ei += 4;
 	return f32;
 }
 
-static char *read_string() {
+static char *read_string(void) {
 	str_len   = read_u32();
 	char *str = (char *)(encoded + ei);
 	ei += str_len;
@@ -216,7 +216,7 @@ static uint32_t traverse(int di, bool count_arrays) {
 	}
 }
 
-static uint32_t get_struct_length() {
+static uint32_t get_struct_length(void) {
 	uint32_t _ei = ei;
 	uint32_t len = traverse(0, false);
 	ei           = _ei;
@@ -393,7 +393,7 @@ static void read_store_array(uint32_t count) { // Store in any/i32/../_array_t f
 	di = _di;
 }
 
-static void read_store() {
+static void read_store(void) {
 	uint8_t flag = read_u8();
 	switch (flag) {
 	case 0xc0:
@@ -425,7 +425,7 @@ static void read_store() {
 	}
 }
 
-static void reset() {
+static void reset(void) {
 	di     = 0;
 	ei     = 0;
 	bottom = 0;
@@ -446,7 +446,7 @@ void armpack_encode_start(void *_encoded) {
 	ei      = 0;
 }
 
-int armpack_encode_end() {
+int armpack_encode_end(void) {
 	return ei;
 }
 
@@ -584,15 +584,15 @@ void armpack_encode_bool(bool b) {
 	armpack_write_u8(b ? 0xc3 : 0xc2);
 }
 
-void armpack_encode_null() {
+void armpack_encode_null(void) {
 	armpack_write_u8(0xc0);
 }
 
-uint32_t armpack_size_map() {
+uint32_t armpack_size_map(void) {
 	return 1 + 4; // u8 tag + u32 count
 }
 
-uint32_t armpack_size_array() {
+uint32_t armpack_size_array(void) {
 	return 1 + 4; // u8 tag + u32 count
 }
 
@@ -608,19 +608,19 @@ uint32_t armpack_size_string(char *str) {
 	return 1 + 4 + strlen(str); // u8 tag + u32 length + contents
 }
 
-uint32_t armpack_size_i32() {
+uint32_t armpack_size_i32(void) {
 	return 1 + 4; // u8 tag + i32
 }
 
-uint32_t armpack_size_f32() {
+uint32_t armpack_size_f32(void) {
 	return 1 + 4; // u8 tag + f32
 }
 
-uint32_t armpack_size_bool() {
+uint32_t armpack_size_bool(void) {
 	return 1; // u8 tag
 }
 
-static char *read_string_alloc() {
+static char *read_string_alloc(void) {
 	char *s         = read_string();
 	char *allocated = gc_alloc(str_len + 1);
 	memcpy(allocated, s, str_len);
@@ -637,7 +637,7 @@ typedef union ptr_storage {
 	int i;
 } ptr_storage_t;
 
-any_map_t *_armpack_decode_to_map() {
+any_map_t *_armpack_decode_to_map(void) {
 	any_map_t *result = any_map_create();
 	uint32_t   count  = read_u32();
 
@@ -774,9 +774,9 @@ any_map_t *armpack_decode_to_map(buffer_t *b) {
 	return _armpack_decode_to_map();
 }
 
-static char *armpack_to_json_value();
+static char *armpack_to_json_value(void);
 
-static const char *peek_typed_array_suffix() {
+static const char *peek_typed_array_suffix(void) {
 	if (encoded[ei] != 0xdd)
 		return "";
 	uint32_t saved_ei = ei;
@@ -813,7 +813,7 @@ static char *armpack_to_json_map(uint32_t count) {
 	return string("%s}", result);
 }
 
-static char *armpack_to_json_value() {
+static char *armpack_to_json_value(void) {
 	uint8_t flag = read_u8();
 	switch (flag) {
 	case 0xc0:

@@ -71,7 +71,7 @@ void gpu_begin(gpu_texture_t **targets, int count, gpu_texture_t *depth_buffer, 
 	gpu_begin_internal(flags, color, depth);
 }
 
-void gpu_draw() {
+void gpu_draw(void) {
 	if (current_pipeline == NULL || current_pipeline->impl.pipeline == NULL) {
 		return;
 	}
@@ -93,7 +93,7 @@ void gpu_draw() {
 	gpu_constant_buffer_lock(&constant_buffer, constant_buffer_index * GPU_CONSTANT_BUFFER_SIZE, GPU_CONSTANT_BUFFER_SIZE);
 }
 
-void gpu_end() {
+void gpu_end(void) {
 	if (!gpu_in_use && !gpu_thrown) {
 		gpu_thrown = true;
 		iron_log("Begin before you end");
@@ -102,7 +102,7 @@ void gpu_end() {
 	gpu_end_internal();
 }
 
-void gpu_cleanup() {
+void gpu_cleanup(void) {
 	while (textures_to_destroy_count > 0) {
 		textures_to_destroy_count--;
 		gpu_texture_destroy_internal(&textures_to_destroy[textures_to_destroy_count]);
@@ -117,11 +117,11 @@ void gpu_cleanup() {
 	}
 }
 
-bool gpu_cleanup_pending() {
+bool gpu_cleanup_pending(void) {
 	return textures_to_destroy_count > 0 || buffers_to_destroy_count > 0 || pipelines_to_destroy_count > 0;
 }
 
-void gpu_present() {
+void gpu_present(void) {
 	gpu_present_internal();
 	draw_calls_last = draw_calls;
 	draw_calls      = 0;
@@ -391,7 +391,7 @@ void _gpu_raytrace_init(buffer_t *shader) {
 	gpu_raytrace_pipeline_init(&rt_pipeline, shader->buffer, (int)shader->length, &rt_constant_buffer);
 }
 
-void _gpu_raytrace_as_init() {
+void _gpu_raytrace_as_init(void) {
 	if (rt_accel_created) {
 		gpu_raytrace_acceleration_structure_destroy(&rt_accel);
 	}

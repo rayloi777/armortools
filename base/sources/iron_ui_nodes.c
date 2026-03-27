@@ -69,21 +69,21 @@ void ui_nodes_init(ui_nodes_t *nodes) {
 	nodes->handle            = ui_handle_create();
 }
 
-float UI_NODES_SCALE() {
+float UI_NODES_SCALE(void) {
 	return current_nodes->scale_factor * current_nodes->zoom;
 }
 
-float UI_NODES_PAN_X() {
+float UI_NODES_PAN_X(void) {
 	float zoom_pan = (1.0 - current_nodes->zoom) * current_nodes->uiw / 2.5;
 	return current_nodes->pan_x * UI_NODES_SCALE() + zoom_pan;
 }
 
-float UI_NODES_PAN_Y() {
+float UI_NODES_PAN_Y(void) {
 	float zoom_pan = (1.0 - current_nodes->zoom) * current_nodes->uih / 2.5;
 	return current_nodes->pan_y * UI_NODES_SCALE() + zoom_pan;
 }
 
-float UI_LINE_H() {
+float UI_LINE_H(void) {
 	return current_nodes->ELEMENT_H * UI_NODES_SCALE();
 }
 
@@ -252,7 +252,7 @@ int ui_get_socket_id(ui_node_array_t *nodes) {
 	return id;
 }
 
-void ui_nodes_bake_elements() {
+void ui_nodes_bake_elements(void) {
 	if (ui_socket_image.width != 0) {
 		gpu_texture_destroy(&ui_socket_image);
 	}
@@ -266,7 +266,7 @@ void ui_nodes_bake_elements() {
 	ui_nodes_elements_baked = true;
 }
 
-ui_canvas_control_t *ui_on_default_canvas_control() {
+ui_canvas_control_t *ui_on_default_canvas_control(void) {
 	ui_t                      *current = ui_get_current();
 	static ui_canvas_control_t c;
 	c.pan_x = current->input_down_r ? current->input_dx : 0.0;
@@ -1752,7 +1752,7 @@ void nodes_on_custom_button(i32 node_id, char *button_name) {
 	f(node_id);
 }
 
-ui_nodes_t *ui_nodes_create() {
+ui_nodes_t *ui_nodes_create(void) {
 	ui_nodes_t *raw = GC_ALLOC_INIT(ui_nodes_t, {0});
 	ui_nodes_init(raw);
 	gc_unroot(ui_nodes_exclude_remove);

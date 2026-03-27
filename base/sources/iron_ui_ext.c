@@ -874,12 +874,12 @@ char *ui_text_area(ui_handle_t *handle, int align, bool editable, char *label, b
 	return handle->text;
 }
 
-float UI_MENUBAR_H() {
+float UI_MENUBAR_H(void) {
 	ui_t *current = ui_get_current();
 	return UI_BUTTON_H() * 1.1 + 2.0 + current->button_offset_y;
 }
 
-void ui_begin_menu() {
+void ui_begin_menu(void) {
 	ui_t       *current   = ui_get_current();
 	ui_theme_t *theme     = current->ops->theme;
 	_ELEMENT_OFFSET       = theme->ELEMENT_OFFSET;
@@ -892,7 +892,7 @@ void ui_begin_menu() {
 	draw_filled_rect(0, 0, current->_window_w, UI_MENUBAR_H());
 }
 
-void ui_end_menu() {
+void ui_end_menu(void) {
 	ui_theme_t *theme     = ui_get_current()->ops->theme;
 	theme->ELEMENT_OFFSET = _ELEMENT_OFFSET;
 	theme->BUTTON_COL     = _BUTTON_COL;
@@ -938,7 +938,7 @@ ui_t *ui_create(ui_options_t *ops) {
 	return raw;
 }
 
-ui_theme_t *ui_theme_create() {
+ui_theme_t *ui_theme_create(void) {
 	ui_theme_t *raw = GC_ALLOC_INIT(ui_theme_t, {0});
 	ui_theme_default(raw);
 	return raw;

@@ -9,8 +9,8 @@ typedef struct physics_pair {
 	float pos_a_z;
 } physics_pair_t;
 
-void            asim_world_create();
-void            asim_world_destroy();
+void            asim_world_create(void);
+void            asim_world_destroy(void);
 void            asim_world_update(float time_step);
 physics_pair_t *asim_world_get_contact();
 

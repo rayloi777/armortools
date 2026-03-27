@@ -7,10 +7,10 @@
 #include <stdint.h>
 
 void   _gc_start(void *bos);
-size_t _gc_stop();
-void   _gc_pause();
-void   _gc_resume();
-size_t _gc_run();
+size_t _gc_stop(void);
+void   _gc_pause(void);
+void   _gc_resume(void);
+size_t _gc_run(void);
 void  *_gc_calloc(size_t count, size_t size);
 void   _gc_leaf(void *ptr);
 void   _gc_root(void *ptr);

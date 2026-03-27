@@ -71,7 +71,7 @@ int iron_primary_display(void) {
 	return 0;
 }
 
-static int width() {
+static int width(void) {
 	JNIEnv *env;
 	JavaVM *vm = iron_android_get_activity()->vm;
 	(*vm)->AttachCurrentThread(vm, &env, NULL);
@@ -82,7 +82,7 @@ static int width() {
 	return width;
 }
 
-static int height() {
+static int height(void) {
 	JNIEnv *env;
 	JavaVM *vm = iron_android_get_activity()->vm;
 	(*vm)->AttachCurrentThread(vm, &env, NULL);
@@ -93,7 +93,7 @@ static int height() {
 	return height;
 }
 
-static int pixelsPerInch() {
+static int pixelsPerInch(void) {
 	JNIEnv *env;
 	JavaVM *vm = iron_android_get_activity()->vm;
 	(*vm)->AttachCurrentThread(vm, &env, NULL);
@@ -104,7 +104,7 @@ static int pixelsPerInch() {
 	return dpi;
 }
 
-static int refreshRate() {
+static int refreshRate(void) {
 	JNIEnv *env;
 	JavaVM *vm = iron_android_get_activity()->vm;
 	(*vm)->AttachCurrentThread(vm, &env, NULL);
@@ -115,7 +115,7 @@ static int refreshRate() {
 	return dpi;
 }
 
-void iron_display_init() {}
+void iron_display_init(void) {}
 
 iron_display_mode_t iron_display_current_mode(int display) {
 	iron_display_mode_t mode;
@@ -884,7 +884,7 @@ JNIEXPORT void JNICALL Java_org_armory3d_IronActivity_nativeIronKeyPress(JNIEnv 
 	(*env)->ReleaseStringChars(env, chars, text);
 }
 
-void IronAndroidKeyboardInit() {
+void IronAndroidKeyboardInit(void) {
 	JNIEnv *env;
 	(*activity->vm)->AttachCurrentThread(activity->vm, &env, NULL);
 	jclass          clazz           = iron_android_find_class(env, "org.armory3d.IronActivity");
@@ -897,7 +897,7 @@ void IronAndroidKeyboardInit() {
 	(*activity->vm)->DetachCurrentThread(activity->vm);
 }
 
-void iron_keyboard_show() {
+void iron_keyboard_show(void) {
 	keyboard_active = true;
 	JNIEnv *env;
 	(*activity->vm)->AttachCurrentThread(activity->vm, &env, NULL);
@@ -906,7 +906,7 @@ void iron_keyboard_show() {
 	(*activity->vm)->DetachCurrentThread(activity->vm);
 }
 
-void iron_keyboard_hide() {
+void iron_keyboard_hide(void) {
 	keyboard_active = false;
 	JNIEnv *env;
 	(*activity->vm)->AttachCurrentThread(activity->vm, &env, NULL);
@@ -915,7 +915,7 @@ void iron_keyboard_hide() {
 	(*activity->vm)->DetachCurrentThread(activity->vm);
 }
 
-bool iron_keyboard_active() {
+bool iron_keyboard_active(void) {
 	return keyboard_active;
 }
 
@@ -928,7 +928,7 @@ void iron_load_url(const char *url) {
 	(*activity->vm)->DetachCurrentThread(activity->vm);
 }
 
-const char *iron_language() {
+const char *iron_language(void) {
 	JNIEnv *env;
 	(*activity->vm)->AttachCurrentThread(activity->vm, &env, NULL);
 	jclass      ironActivityClass = iron_android_find_class(env, "org.armory3d.IronActivity");
@@ -939,7 +939,7 @@ const char *iron_language() {
 	return str;
 }
 
-int iron_android_width() {
+int iron_android_width(void) {
 	int width, height;
 	if (iron_vulkan_get_size(&width, &height)) {
 		return width;
@@ -947,7 +947,7 @@ int iron_android_width() {
 	return ANativeWindow_getWidth(app->window);
 }
 
-int iron_android_height() {
+int iron_android_height(void) {
 	int width, height;
 	if (iron_vulkan_get_size(&width, &height)) {
 		return height;
@@ -955,15 +955,15 @@ int iron_android_height() {
 	return ANativeWindow_getHeight(app->window);
 }
 
-const char *iron_internal_save_path() {
+const char *iron_internal_save_path(void) {
 	return iron_android_get_activity()->internalDataPath;
 }
 
-const char *iron_system_id() {
+const char *iron_system_id(void) {
 	return "Android";
 }
 
-const char **iron_video_formats() {
+const char **iron_video_formats(void) {
 	return videoFormats;
 }
 
@@ -976,17 +976,17 @@ void iron_set_keep_screen_on(bool on) {
 	}
 }
 
-double iron_frequency() {
+double iron_frequency(void) {
 	return 1000000.0;
 }
 
-uint64_t iron_timestamp() {
+uint64_t iron_timestamp(void) {
 	struct timeval now;
 	gettimeofday(&now, NULL);
 	return (uint64_t)(now.tv_sec - start_sec) * 1000000 + (uint64_t)(now.tv_usec);
 }
 
-double iron_time() {
+double iron_time(void) {
 	struct timeval now;
 	gettimeofday(&now, NULL);
 	return (double)(now.tv_sec - start_sec) + (now.tv_usec / 1000000.0);
@@ -1045,8 +1045,8 @@ bool iron_mouse_can_lock(void) {
 	return false;
 }
 
-void iron_mouse_show() {}
-void iron_mouse_hide() {}
+void iron_mouse_show(void) {}
+void iron_mouse_hide(void) {}
 void iron_mouse_set_position(int x, int y) {}
 
 void iron_mouse_get_position(int *x, int *y) {
@@ -1182,30 +1182,30 @@ int iron_hardware_threads(void) {
 	return sysconf(_SC_NPROCESSORS_ONLN);
 }
 
-int iron_window_x() {
+int iron_window_x(void) {
 	return 0;
 }
 
-int iron_window_y() {
+int iron_window_y(void) {
 	return 0;
 }
 
 int iron_android_width();
-int iron_window_width() {
+int iron_window_width(void) {
 	return iron_android_width();
 }
 
 int iron_android_height();
-int iron_window_height() {
+int iron_window_height(void) {
 	return iron_android_height();
 }
 
 void iron_window_resize(int width, int height) {}
 void iron_window_move(int x, int y) {}
 void iron_window_change_mode(iron_window_mode_t mode) {}
-void iron_window_destroy() {}
-void iron_window_show() {}
-void iron_window_hide() {}
+void iron_window_destroy(void) {}
+void iron_window_show(void) {}
+void iron_window_hide(void) {}
 void iron_window_create(iron_window_options_t *win) {}
 
 void iron_window_set_title(const char *title) {
@@ -1225,11 +1225,11 @@ void iron_internal_call_resize_callback(int width, int height) {
 
 void iron_window_set_close_callback(bool (*callback)(void *), void *data) {}
 
-iron_window_mode_t iron_window_get_mode() {
+iron_window_mode_t iron_window_get_mode(void) {
 	return IRON_WINDOW_MODE_FULLSCREEN;
 }
 
-int iron_window_display() {
+int iron_window_display(void) {
 	return 0;
 }
 
@@ -1257,7 +1257,7 @@ void iron_gamepad_rumble(int gamepad, float left, float right) {}
 
 #endif
 
-bool _save_and_quit_callback_internal() {
+bool _save_and_quit_callback_internal(void) {
 	return false;
 }
 

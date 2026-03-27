@@ -73,11 +73,11 @@ static uint32_t _draw_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
 	return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
-static float vw() {
+static float vw(void) {
 	return _draw_current != NULL ? _draw_current->width : iron_window_width();
 }
 
-static float vh() {
+static float vh(void) {
 	return _draw_current != NULL ? _draw_current->height : iron_window_height();
 }
 
@@ -630,7 +630,7 @@ bool draw_font_has_glyph(int glyph) {
 	return i32_array_index_of(draw_font_glyphs, glyph) > -1;
 }
 
-void draw_font_build_glyphs() {
+void draw_font_build_glyphs(void) {
 	i32_array_sort(draw_font_glyphs, NULL);
 
 	int blocks    = 1;
@@ -766,7 +766,7 @@ void draw_set_color(uint32_t color) {
 	draw_color = color;
 }
 
-uint32_t draw_get_color() {
+uint32_t draw_get_color(void) {
 	return draw_color;
 }
 

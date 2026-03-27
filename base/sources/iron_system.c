@@ -449,12 +449,12 @@ void iron_internal_mouse_trigger_scroll(float delta) {
 	}
 }
 
-void iron_internal_mouse_window_activated() {
+void iron_internal_mouse_window_activated(void) {
 	if (iron_mouse_is_locked()) {
 		iron_mouse_hide();
 	}
 }
-void iron_internal_mouse_window_deactivated() {
+void iron_internal_mouse_window_deactivated(void) {
 	if (iron_mouse_is_locked()) {
 		iron_mouse_show();
 	}
@@ -504,7 +504,7 @@ bool iron_mouse_is_locked(void) {
 	return locked;
 }
 
-void iron_mouse_lock() {
+void iron_mouse_lock(void) {
 	if (iron_mouse_is_locked() || !iron_mouse_can_lock()) {
 		return;
 	}
