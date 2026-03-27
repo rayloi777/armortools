@@ -2380,7 +2380,9 @@ void minic_ctx_run(minic_ctx_t *ctx) {
 	minic_env_t *e = &ctx->e;
 	minic_active_env = e;
 
-	minic_parse_block(e);
+	if (e->lex.cur.type != TOK_EOF) {
+		minic_parse_block(e);
+	}
 
 	minic_active_env      = prev_env;
 	minic_active_mem      = prev_mem;

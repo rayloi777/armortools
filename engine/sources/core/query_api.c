@@ -64,6 +64,8 @@ int query_create(const char *filter_expr) {
     q->iter_started = false;
     q->last_count = 0;
     memset(q->last_entities, 0, sizeof(q->last_entities));
+    memset(q->components, 0, sizeof(q->components));
+    q->component_count = 0;
     q->cached_it = malloc(ECS_ITER_SIZE);
     if (!q->cached_it) {
         printf("ERROR: Failed to allocate query iterator\n");
@@ -73,6 +75,129 @@ int query_create(const char *filter_expr) {
     
     printf("Query created: id=%d, filter=%s\n", (int)(q - g_queries), filter_expr);
     return (int)(q - g_queries);
+}
+
+int query_new(void) {
+    if (!g_query_world || !g_query_world->world) return -1;
+    
+    runtime_query_t *q = find_free_query();
+    if (!q) {
+        printf("ERROR: Max queries reached\n");
+        return -1;
+    }
+    
+    memset(q, 0, sizeof(runtime_query_t));
+    q->valid = true;
+    q->cached_it = malloc(ECS_ITER_SIZE);
+    if (!q->cached_it) {
+        printf("ERROR: Failed to allocate query iterator\n");
+        return -1;
+    }
+    
+    printf("Query created: id=%d (empty)\n", (int)(q - g_queries));
+    return (int)(q - g_queries);
+}
+
+int query_with(int query_id, uint64_t component_id) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q || q->component_count >= MAX_QUERY_COMPONENTS) return -1;
+    
+    q->components[q->component_count++] = component_id;
+    return 0;
+}
+
+static bool build_filter_and_run(runtime_query_t *q) {
+    if (!g_query_world || !g_query_world->world) return false;
+    if (q->component_count == 0) return false;
+    
+    if (q->flecs_query) {
+        ecs_query_fini((ecs_query_t *)q->flecs_query);
+        q->flecs_query = 0;
+    }
+    
+    char filter[256] = {0};
+    for (int i = 0; i < q->component_count; i++) {
+        if (i > 0) {
+            strcat(filter, ", ");
+        }
+        dynamic_component_t *dc = ecs_dynamic_component_get(q->components[i]);
+        if (dc) {
+            strcat(filter, dc->name);
+        } else {
+            char tmp[32];
+            snprintf(tmp, sizeof(tmp), "%llu", (unsigned long long)q->components[i]);
+            strcat(filter, tmp);
+        }
+    }
+    
+    printf("[query] build_filter: '%s' for components [%llu, %llu]\n", filter, (unsigned long long)q->components[0], (unsigned long long)q->components[1]);
+    
+    ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
+    ecs_query_desc_t desc = {0};
+    desc.expr = filter;
+    
+    ecs_query_t *query = ecs_query_init(ecs, &desc);
+    if (!query) {
+        printf("ERROR: Failed to create query: %s\n", filter);
+        return false;
+    }
+    
+    printf("[query] query created successfully\n");
+    
+    q->flecs_query = (uint64_t)query;
+    strncpy(q->filter, filter, sizeof(q->filter) - 1);
+    
+    *(ecs_iter_t*)q->cached_it = ecs_query_iter(ecs, query);
+    q->iter_started = true;
+    
+    if (!ecs_query_next((ecs_iter_t*)q->cached_it)) {
+        q->last_count = 0;
+        memset(q->last_entities, 0, sizeof(q->last_entities));
+        q->iter_started = false;
+        return false;
+    }
+    
+    ecs_iter_t *it = (ecs_iter_t*)q->cached_it;
+    q->last_count = it->count;
+    for (int i = 0; i < it->count && i < 256; i++) {
+        q->last_entities[i] = (uint64_t)it->entities[i];
+    }
+    
+    return true;
+}
+
+int query_find(int query_id) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q) return 0;
+    
+    if (build_filter_and_run(q)) {
+        return q->last_count;
+    }
+    return 0;
+}
+
+int query_entities(int query_id, uint64_t *entities, int max) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q || !entities || max <= 0) return 0;
+    
+    int count = q->last_count < max ? q->last_count : max;
+    for (int i = 0; i < count; i++) {
+        entities[i] = q->last_entities[i];
+    }
+    return count;
+}
+
+static minic_val_t minic_query_entities_native(minic_val_t *args, int argc) {
+    if (argc < 3) return minic_val_int(0);
+    int query_id = (int)minic_val_to_d(args[0]);
+    uint64_t *entities = (uint64_t *)args[1].p;
+    int max = (int)minic_val_to_d(args[2]);
+    int result = query_entities(query_id, entities, max);
+    return minic_val_int(result);
+}
+
+void query_free(int query_id) {
+    query_destroy(query_id);
 }
 
 void query_destroy(int query_id) {
@@ -143,6 +268,12 @@ void query_api_register(void) {
     minic_register("query_next", "i(i)", (minic_ext_fn_raw_t)query_next);
     minic_register("query_count", "i(i)", (minic_ext_fn_raw_t)query_count);
     minic_register("query_get", "i(i,i)", (minic_ext_fn_raw_t)query_get);
+    
+    minic_register("query_new", "i()", (minic_ext_fn_raw_t)query_new);
+    minic_register("query_with", "i(i,I)", (minic_ext_fn_raw_t)query_with);
+    minic_register("query_find", "i(i)", (minic_ext_fn_raw_t)query_find);
+    minic_register_native("query_entities", minic_query_entities_native);
+    minic_register("query_free", "v(i)", (minic_ext_fn_raw_t)query_free);
     
     printf("Query API registered\n");
 }

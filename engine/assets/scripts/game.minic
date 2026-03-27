@@ -38,9 +38,9 @@ float main() {
         void* pos = entity_get(e, pos_comp);
         void* vel = entity_get(e, vel_comp);
         
-        comp_set_float(pos_comp, pos, "x", (float)(i * 10));
-        comp_set_float(pos_comp, pos, "y", (float)(i * 5));
-        comp_set_float(pos_comp, pos, "z", 0.0f);
+        comp_set_float(pos_comp, pos, "x", i * 10.0);
+        comp_set_float(pos_comp, pos, "y", i * 5.0);
+        comp_set_float(pos_comp, pos, "z", 0.0);
         
         printf("  Created entity %d: pos=(%f, %f, %f)\n", 
                e,

@@ -22,11 +22,13 @@
 | **Game Loop** | ✅ 完成 | sys_delta/time/frame 正常 |
 | **Iron Input in Minic** | ✅ 完成 | keyboard_down/started/released 已有 |
 | **Minic 2階段初始化** | ✅ 完成 | minic_ctx_create/run/get_fn |
-| **Minic System 框架** | ❌ 待實現 | 分離 system 文件 |
-| **game.minic update()** | ❌ 待實現 | 主腳本協調 |
+| **Minic System 框架** | ✅ 完成 | 分離 system 文件正常運作 |
+| **game.minic update()** | ✅ 完成 | 主腳本協調正常 |
+| **Query 擴展函數** | ✅ 完成 | query_new/with/find/entities/free |
+| **Minic EOF 解析** | ✅ 完成 | 修復 EOF 解析錯誤 |
 | **Prefab 系統** | ❌ 未實現 | 可延後 |
 
-**完成度: 90%**
+**完成度: 95%**
 
 ---
 
@@ -47,6 +49,7 @@
 - `component_register()` - 註冊動態組件
 - `component_add_field()` - 添加字段
 - `component_get_id()` / `component_get_name()` / `component_get_size()` - 獲取值件信息
+- `component_lookup(name)` - 根據名稱查找已註冊的組件
 - `component_get_field_count()` / `component_get_field_info()` - 獲取字段信息
 - `component_get_alignment()` - 獲取對齊
 - `component_set_hooks()` - 設置生命週期回調
@@ -59,11 +62,16 @@
 - `system_get_entity_count()` - 獲取匹配的實體數量
 
 ### Query API
-- `query_create(filter_expr)` - 創建查詢
+- `query_create(filter_expr)` - 創建查詢（基於表達式）
 - `query_destroy(query_id)` - 銷毀查詢
 - `query_next(query_id)` - 迭代下一批
 - `query_count(query_id)` - 獲取實體數量
 - `query_get(query_id, index)` - 獲取實體 ID
+- `query_new()` - 創建空查詢（無表達式）
+- `query_with(query_id, component_id)` - 添加組件到查詢
+- `query_find(query_id)` - 執行查詢並返回實體數量
+- `query_entities(query_id, buffer, max)` - 獲取實體 ID 列表
+- `query_free(query_id)` - 銷毀查詢
 
 ### Lifecycle Callbacks (生命週期回調)
 - `component_set_hooks("ComponentName", "CtorName", "DtorName")` - 設置回調函數
@@ -95,10 +103,24 @@ void Position_dtor(void* data, void* comp_id) {
 - `mouse_view_x()` - 鼠標 X 位置
 - `mouse_view_y()` - 鼠標 Y 位置
 
+### Minic System 框架
+- `minic_system_load(name, path)` - 加載 .minic 系統文件
+- `minic_system_unload_all()` - 卸載所有系統
+- `minic_system_call_init()` - 調用所有系統的 init()
+- `minic_system_call_update()` - 調用所有系統的 update()
+
+**系統文件結構:**
+```
+engine/assets/systems/
+└── movement_system.minic    → 有 init() 和 update()
+```
+
 ### Minic 2階段初始化
 - `minic_ctx_create()` - 創建 Minic 上下文（立即返回 ctx）
 - `minic_ctx_run()` - 運行腳本
 - `minic_ctx_get_fn()` - 從 C 調用 Minic 函數
+
+**已修復:** Minic EOF 解析錯誤 - 在 `minic_ctx_run()` 中添加 EOF 檢查，避免在詞彙分析器已達 EOF 時調用 `minic_parse_block()`
 
 ---
 
@@ -302,10 +324,106 @@ float main() {
 
 ---
 
+## 運行示例
+
+### MovementSystem (已實現)
+
+**文件:** `engine/assets/systems/movement_system.minic`
+
+```minic
+int pos_comp = -1;
+int vel_comp = -1;
+
+void init() {
+    pos_comp = component_lookup("Position");
+    vel_comp = component_lookup("Velocity");
+    printf("[MovementSystem] Components: Position=%d, Velocity=%d\n", pos_comp, vel_comp);
+}
+
+float update() {
+    float dt = sys_delta();
+    
+    int query = query_new();
+    query_with(query, pos_comp);
+    query_with(query, vel_comp);
+    
+    int count = query_find(query);
+    
+    int i = 0;
+    while (i < count) {
+        int e = query_get(query, i);
+        void* pos = entity_get(e, pos_comp);
+        void* vel = entity_get(e, vel_comp);
+        
+        if (pos != 0) {
+            if (vel != 0) {
+                float px = comp_get_float(pos_comp, pos, "x");
+                float py = comp_get_float(pos_comp, pos, "y");
+                float pz = comp_get_float(pos_comp, pos, "z");
+                
+                float vx = comp_get_float(vel_comp, vel, "vx");
+                float vy = comp_get_float(vel_comp, vel, "vy");
+                float vz = comp_get_float(vel_comp, vel, "vz");
+                
+                px = px + vx * dt;
+                py = py + vy * dt;
+                pz = pz + vz * dt;
+                
+                comp_set_float(pos_comp, pos, "x", px);
+                comp_set_float(pos_comp, pos, "y", py);
+                comp_set_float(pos_comp, pos, "z", pz);
+            }
+        }
+        i = i + 1;
+    }
+    
+    query_free(query);
+    return 0.0;
+}
+```
+
+### Game.minic (已實現)
+
+**文件:** `engine/assets/scripts/game.minic`
+
+```minic
+float main() {
+    pos_comp = component_register("Position", 12);
+    component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
+    
+    vel_comp = component_register("Velocity", 12);
+    component_add_field(vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(vel_comp, "vy", TYPE_FLOAT, 4);
+    component_add_field(vel_comp, "vz", TYPE_FLOAT, 8);
+    
+    int i = 0;
+    while (i < 5) {
+        int e = entity_create();
+        entity_add(e, pos_comp);
+        entity_add(e, vel_comp);
+        
+        void* pos = entity_get(e, pos_comp);
+        void* vel = entity_get(e, vel_comp);
+        
+        comp_set_float(pos_comp, pos, "x", i * 10.0);
+        comp_set_float(pos_comp, pos, "y", i * 5.0);
+        
+        i = i + 1;
+    }
+    
+    return 0.0;
+}
+```
+
+---
+
 ## Git 提交記錄
 
 | Commit | 描述 |
 |--------|------|
+| `xxxx` | Fix Minic EOF parsing error, add query_new/with/find/entities/free |
 | `5ae01f55` | Update ECS_PLAN.md with lifecycle callbacks documentation |
 | `c3de5dc1` | Complete ECS lifecycle callbacks and Query API thread safety |
 | `ef4ccc8c` | Fix minic FFI for ECS component access |
@@ -319,58 +437,74 @@ float main() {
 
 ### Minic System 加載機制
 
+**已實現於:** `engine/sources/core/minic_system.c`
+
 ```c
 // minic_system.c
 typedef struct {
     char name[64];
     minic_ctx_t *ctx;
     void *update_fn;  // "update" 函數指針
+    void *init_fn;    // "init" 函數指針
 } minic_system_t;
 
-static minic_system_t g_systems[16];
-static int g_system_count = 0;
+#define MAX_MINIC_SYSTEMS 16
+static minic_system_t g_minic_systems[MAX_MINIC_SYSTEMS];
+static int g_minic_system_count = 0;
 
-int load_system(const char *name, const char *path) {
+int minic_system_load(const char *name, const char *path) {
     // 1. 讀取 .minic 文件
-    char *source = read_file(path);
-    
-    // 2. 創建 Minic 上下文
-    minic_ctx_t *ctx = minic_ctx_create(source);
-    
-    // 3. 運行腳本（只初始化，不執行遊戲循環）
-    minic_ctx_run(ctx);
-    
-    // 4. 查找 "update" 函數
-    void *fn = minic_ctx_get_fn(ctx, "update");
-    
-    // 5. 註冊包裝函數
-    char wrapper_name[128];
-    snprintf(wrapper_name, sizeof(wrapper_name), "%s_update", name);
-    minic_register(wrapper_name, "v()", wrapper_fn);
-    
-    // 6. 保存
-    strcpy(g_systems[g_system_count].name, name);
-    g_systems[g_system_count].ctx = ctx;
-    g_systems[g_system_count].update_fn = fn;
-    g_system_count++;
-    
-    return 0;
+    // 2. minic_ctx_create() + minic_ctx_run()
+    // 3. 查找 "update" 和 "init" 函數
+    // 4. 保存到 g_systems[]
+}
+
+void minic_system_call_init() {
+    // 遍歷所有系統，調用 init_fn
+}
+
+void minic_system_call_update() {
+    // 遍歷所有系統，調用 update_fn
 }
 ```
 
-### 調用流程
+**遊戲循環調用流程:**
 
 ```c
-// game_loop_update() 中
-void game_loop_update() {
-    // ... input_update, ecs_progress ...
-    
-    // 調用所有已加載的 Minic System
-    for (int i = 0; i < g_system_count; i++) {
-        if (g_systems[i].update_fn) {
-            minic_call_fn(g_systems[i].update_fn, NULL, 0);
-        }
-    }
+// game_engine.c::_kickstart()
+minic_system_load("MovementSystem", "data/systems/movement_system.minic");
+minic_system_call_init();
+
+// game_loop.c::game_loop_update()
+minic_system_call_update();
+```
+
+### Query API 實現
+
+**已實現於:** `engine/sources/core/query_api.c`
+
+```c
+int query_new() {
+    // 創建空查詢，返回 query_id
+}
+
+int query_with(int query_id, uint64_t component_id) {
+    // 將組件添加到查詢的組件列表
+}
+
+int query_find(int query_id) {
+    // 根據組件列表構建過濾表達式
+    // 執行 ecs_query_init() + ecs_query_iter()
+    // 調用 ecs_query_next() 獲取第一批實體
+    // 返回實體數量
+}
+
+int query_entities(int query_id, uint64_t *buffer, int max) {
+    // 將 last_entities[] 複製到用戶緩衝區
+}
+
+void query_free(int query_id) {
+    // 銷毀查詢，釋放資源
 }
 ```
 

@@ -6,6 +6,7 @@
 struct game_world_t;
 
 #define MAX_QUERIES 64
+#define MAX_QUERY_COMPONENTS 16
 
 typedef struct {
     uint64_t flecs_query;
@@ -15,6 +16,8 @@ typedef struct {
     int last_count;
     uint64_t last_entities[256];
     void *cached_it;
+    uint64_t components[MAX_QUERY_COMPONENTS];
+    int component_count;
 } runtime_query_t;
 
 void query_api_register(void);
@@ -25,3 +28,9 @@ void query_destroy(int query_id);
 bool query_next(int query_id);
 int query_count(int query_id);
 uint64_t query_get(int query_id, int index);
+
+int query_new(void);
+int query_with(int query_id, uint64_t component_id);
+int query_find(int query_id);
+int query_entities(int query_id, uint64_t *entities, int max);
+void query_free(int query_id);

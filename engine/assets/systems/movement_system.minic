@@ -26,7 +26,7 @@ void init() {
     printf("[MovementSystem] Components: Position=%d, Velocity=%d\n", pos_comp, vel_comp);
 }
 
-void update() {
+float update() {
     float dt = sys_delta();
     
     int query = query_new();
@@ -34,40 +34,39 @@ void update() {
     query_with(query, vel_comp);
     
     int count = query_find(query);
-    printf("[MovementSystem] update() - Found %d entities with Position+Velocity\n", count);
-    
-    int entities[128];
-    query_entities(query, entities, 128);
     
     int i = 0;
     while (i < count) {
-        int e = entities[i];
+        int e = query_get(query, i);
         void* pos = entity_get(e, pos_comp);
         void* vel = entity_get(e, vel_comp);
         
-        if (pos != 0 && vel != 0) {
-            float px = comp_get_float(pos_comp, pos, "x");
-            float py = comp_get_float(pos_comp, pos, "y");
-            float pz = comp_get_float(pos_comp, pos, "z");
-            
-            float vx = comp_get_float(vel_comp, vel, "vx");
-            float vy = comp_get_float(vel_comp, vel, "vy");
-            float vz = comp_get_float(vel_comp, vel, "vz");
-            
-            px = px + vx * dt;
-            py = py + vy * dt;
-            pz = pz + vz * dt;
-            
-            comp_set_float(pos_comp, pos, "x", px);
-            comp_set_float(pos_comp, pos, "y", py);
-            comp_set_float(pos_comp, pos, "z", pz);
-            
-            if ((i % 10) == 0) {
-                printf("[MovementSystem] Entity %d: pos=(%.2f, %.2f, %.2f)\n", e, px, py, pz);
+        if (pos != 0) {
+            if (vel != 0) {
+                float px = comp_get_float(pos_comp, pos, "x");
+                float py = comp_get_float(pos_comp, pos, "y");
+                float pz = comp_get_float(pos_comp, pos, "z");
+                
+                float vx = comp_get_float(vel_comp, vel, "vx");
+                float vy = comp_get_float(vel_comp, vel, "vy");
+                float vz = comp_get_float(vel_comp, vel, "vz");
+                
+                px = px + vx * dt;
+                py = py + vy * dt;
+                pz = pz + vz * dt;
+                
+                comp_set_float(pos_comp, pos, "x", px);
+                comp_set_float(pos_comp, pos, "y", py);
+                comp_set_float(pos_comp, pos, "z", pz);
             }
         }
         i = i + 1;
     }
     
     query_free(query);
+    return 0.0;
+}
+
+int dummy() {
+    return 0;
 }

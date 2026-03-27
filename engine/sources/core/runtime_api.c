@@ -259,6 +259,14 @@ static minic_val_t minic_entity_set_data_native(minic_val_t *args, int argc) {
     entity_set_component_data(g_runtime_world, entity, component_id, data);
     return minic_val_void();
 }
+static minic_val_t minic_dbg_entity_has_comp(minic_val_t *args, int argc) {
+    if (argc < 2) return minic_val_int(0);
+    uint64_t entity = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[1]);
+    int result = entity_has_component(g_runtime_world, entity, comp_id) ? 1 : 0;
+    printf("[dbg] entity_has_comp(%llu, %llu) = %d\n", (unsigned long long)entity, (unsigned long long)comp_id, result);
+    return minic_val_int(result);
+}
 static float minic_sys_delta(void) {
     return game_loop_get_delta_time();
 }
@@ -281,6 +289,7 @@ void runtime_api_register(void) {
     minic_register("component_register", "i(p,i)", (minic_ext_fn_raw_t)minic_component_register);
     minic_register_native("component_add_field", minic_component_add_field_native);
     minic_register("component_get_id", "i(p)", (minic_ext_fn_raw_t)minic_component_get_id);
+    minic_register("component_lookup", "i(p)", (minic_ext_fn_raw_t)minic_component_get_id);
     minic_register("component_get_name", "p(i)", (minic_ext_fn_raw_t)component_get_name);
     minic_register("component_get_size", "i(i)", (minic_ext_fn_raw_t)component_get_size);
     minic_register("component_get_alignment", "i(i)", (minic_ext_fn_raw_t)minic_component_get_alignment);
@@ -313,6 +322,8 @@ void runtime_api_register(void) {
     minic_register("sys_delta", "f()", (minic_ext_fn_raw_t)minic_sys_delta);
     minic_register("sys_time", "f()", (minic_ext_fn_raw_t)minic_sys_time);
     minic_register("sys_frame", "i()", (minic_ext_fn_raw_t)minic_sys_frame);
+    
+    minic_register_native("dbg_entity_has_comp", minic_dbg_entity_has_comp);
     
     minic_register("TYPE_INT", "i", NULL);
     minic_register("TYPE_FLOAT", "i", NULL);
