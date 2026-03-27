@@ -2,7 +2,7 @@
 
 ## 概述
 
-將 engine/ 的 ECS 功能從當前 60% 完成度提升至 95%，專注於核心 ECS 功能，暫不包含渲染、Prefab 系統。
+將 engine/ 的 ECS 功能完成至 95%，專注於核心 ECS 功能，暫不包含渲染、Prefab 系統。
 
 **核心原則：不修改 base/ 目錄，所有新代碼放在 engine/ 目錄。**
 
@@ -19,9 +19,11 @@
 | **System API** | ✅ 完成 | minic_system_get_entity() 正常工作 |
 | **Query API** | ✅ 完成 | 支持 AND, OR, NOT 查詢，線程安全 |
 | **Lifecycle Callbacks** | ✅ 完成 | ctor/dtor 回調完整實現 |
-| **Game Loop** | ✅ 完成 | delta/time/frame 正常 |
-| **Minic 綁定** | ✅ 完成 | 全部 ~25 個函數已完成 |
-| **Input 系統** | ❌ 未實現 | 完全缺失 |
+| **Game Loop** | ✅ 完成 | sys_delta/time/frame 正常 |
+| **Iron Input in Minic** | ✅ 完成 | keyboard_down/started/released 已有 |
+| **Minic 2階段初始化** | ✅ 完成 | minic_ctx_create/run/get_fn |
+| **Minic System 框架** | ❌ 待實現 | 分離 system 文件 |
+| **game.minic update()** | ❌ 待實現 | 主腳本協調 |
 | **Prefab 系統** | ❌ 未實現 | 可延後 |
 
 **完成度: 90%**
@@ -44,7 +46,7 @@
 ### Component API
 - `component_register()` - 註冊動態組件
 - `component_add_field()` - 添加字段
-- `component_get_id()` / `component_get_name()` / `component_get_size()` - 獲取組件信息
+- `component_get_id()` / `component_get_name()` / `component_get_size()` - 獲取值件信息
 - `component_get_field_count()` / `component_get_field_info()` - 獲取字段信息
 - `component_get_alignment()` - 獲取對齊
 - `component_set_hooks()` - 設置生命週期回調
@@ -71,7 +73,7 @@
 **回調函數簽名:**
 ```c
 void Position_ctor(void* data, void* comp_id) {
-    comp_set_float(comp_id, data, "x", 1.0f);  // 設置初始值
+    comp_set_float(comp_id, data, "x", 1.0f);
     comp_set_float(comp_id, data, "y", 2.0f);
     comp_set_float(comp_id, data, "z", 3.0f);
 }
@@ -81,235 +83,194 @@ void Position_dtor(void* data, void* comp_id) {
 }
 ```
 
-**使用方式:**
-```c
-int pos_comp = component_register("Position", 12);
-component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
-component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
-component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
-component_set_hooks("Position", "Position_ctor", "Position_dtor");
-
-int e1 = entity_create();
-entity_add(e1, pos_comp);  // 自動調用 Position_ctor
-entity_remove(e1, pos_comp);  // 自動調用 Position_dtor
-```
-
 ### Game Loop
 - `sys_delta()` - 獲取時間增量
 - `sys_time()` - 獲取總時間
 - `sys_frame()` - 獲取幀計數
 
-### Minic API 新增功能
-- `minic_ctx_create()` - 創建 Minic 上下文（2階段初始化）
+### Iron Input API (Minic 中已有)
+- `keyboard_down(key)` - 按住返回 1
+- `keyboard_started(key)` - 剛按下返回 1
+- `keyboard_released(key)` - 剛釋放返回 1
+- `mouse_view_x()` - 鼠標 X 位置
+- `mouse_view_y()` - 鼠標 Y 位置
+
+### Minic 2階段初始化
+- `minic_ctx_create()` - 創建 Minic 上下文（立即返回 ctx）
 - `minic_ctx_run()` - 運行腳本
 - `minic_ctx_get_fn()` - 從 C 調用 Minic 函數
 
 ---
 
-## Phase 1: Input 系統 (待實現)
+## 實現計劃
 
-### 目標
-實現鍵盤和鼠標輸入追蹤，與 Iron 的輸入系統整合。
+### Phase 1: Minic System 框架 (核心)
 
-### 當前狀態
-- `input.c/h` 存在但完全是 stub
-- 沒有任何輸入處理
+**目標:** 實現分離的 System 文件和 update() 協調機制
 
-### 需要實現
-
-**input.h:**
-```c
-void input_init(void);
-void input_shutdown(void);
-
-bool input_key_down(const char *key);
-bool input_key_pressed(const char *key);
-bool input_key_released(const char *key);
-
-float input_mouse_x(void);
-float input_mouse_y(void);
-float input_mouse_delta_x(void);
-float input_mouse_delta_y(void);
-bool input_mouse_button_down(int button);
-bool input_mouse_button_pressed(int button);
-bool input_mouse_button_released(int button);
-
-float input_get_axis(const char *axis);
-
-// 快捷方式
-bool input_left(void);
-bool input_right(void);
-bool input_up(void);
-bool input_down(void);
+**文件結構:**
+```
+engine/assets/scripts/
+├── systems/
+│   ├── movement_system.minic   → 有 update()
+│   └── health_system.minic    → 有 update()
+└── game.minic                 → 有 update() 協調調用
 ```
 
-### 實現策略
+**實現內容:**
 
-Iron 的 base 已經有鍵盤追蹤，使用 `keyboard_down()` 從 minic_api.c。我們需要包裝這些並添加狀態追蹤（pressed/released）。
+| 步驟 | 檔案 | 內容 |
+|------|------|------|
+| 1.1 | `minic_system.h` | System 加載/卸載 API 聲明 |
+| 1.2 | `minic_system.c` | `load_system()`, `call_system_update()` |
+| 1.3 | `runtime_api.c` | 註冊 System 包裝函數 |
 
+**System 加載流程:**
 ```c
-// input.c
-static bool g_key_states[256];
-static bool g_key_prev_states[256];
-static float g_mouse_x, g_mouse_y;
-static float g_mouse_delta_x, g_mouse_delta_y;
+// 1. 載入 system 文件
+load_system("movement", "systems/movement_system.minic");
+//   - 讀取文件
+//   - minic_ctx_create() + minic_ctx_run()
+//   - 找到 "update" 函數指針
+//   - 註冊為 "movement_update" 包裝函數
 
-void input_update(void) {
-    // 每幀調用，保存上一幀狀態
-    memcpy(g_key_prev_states, g_key_states, sizeof(g_key_states));
-}
+// 2. 主腳本調用
+// game.minic::update() {
+//     movement_update();
+//     health_update();
+// }
+```
 
-bool input_key_pressed(const char *key) {
-    int code = key_to_code(key);
-    return g_key_states[code] && !g_key_prev_states[code];
-}
+**遊戲循環:**
+```
+game_loop_update()
+├── input_update()              ← Iron 自動每幀更新
+├── ecs_progress()           ← C Systems
+└── game.minic::update()     ← Minic update
+    ├── movement_update()      ← 調用 movement_system.minic::update()
+    └── health_update()       ← 調用 health_system.minic::update()
+```
 
-bool input_key_released(const char *key) {
-    int code = key_to_code(key);
-    return !g_key_states[code] && g_key_prev_states[code];
+**Minic System 格式:**
+```minic
+// systems/movement_system.minic
+void update() {
+    float dt = sys_delta();
+    
+    if (keyboard_down("W")) {
+        // 移動邏輯
+    }
 }
 ```
 
-### 整合遊戲循環
-
-在 `game_loop_update()` 中調用 `input_update()`:
-
-```c
-void game_loop_update(void) {
-    input_update();  // 新增：更新輸入狀態
-    g_delta_time = sys_delta();
-    g_time += g_delta_time;
-    g_frame_count++;
-    game_world_progress(g_loop_world, g_delta_time);
-}
-```
-
-### Minic 綁定
-
-```c
-minic_register("input_key_down", "i(p)", (minic_ext_fn_raw_t)input_key_down);
-minic_register("input_key_pressed", "i(p)", (minic_ext_fn_raw_t)input_key_pressed);
-minic_register("input_key_released", "i(p)", (minic_ext_fn_raw_t)input_key_released);
-minic_register("input_mouse_x", "f()", (minic_ext_fn_raw_t)input_mouse_x);
-minic_register("input_mouse_y", "f()", (minic_ext_fn_raw_t)input_mouse_y);
-minic_register("input_mouse_delta_x", "f()", (minic_ext_fn_raw_t)input_mouse_delta_x);
-minic_register("input_mouse_delta_y", "f()", (minic_ext_fn_raw_t)input_mouse_delta_y);
-```
-
-### 預計工時
-2-3 天
+**預計工時:** 1-2 天
 
 ---
 
-## Phase 2: Prefab 系統 (可延後)
+### Phase 2: Thread-Local Context (可選)
 
-### 目標
-實現 JSON 格式的 Prefab 載入/保存/實例化。
+**目標:** 確保多線程安全
 
-### JSON 格式
+**當前狀態:** `sys_delta()`, `sys_time()`, `sys_frame()` 已有
 
-```json
-{
-    "version": "1.0",
-    "type": "entity",
-    "name": "Player",
-    "active": true,
-    "transform": {
-        "position": [0, 1, 0],
-        "rotation": [0, 0, 0, 1],
-        "scale": [1, 1, 1]
-    },
-    "components": [
-        {
-            "type": "Health",
-            "current": 100.0,
-            "max": 100.0
-        }
-    ],
-    "children": []
-}
-```
-
-### 需要實現
-
+**如需 TLS:**
 ```c
-// prefab.h
-uint64_t prefab_load(const char *path);
-int prefab_save(uint64_t entity, const char *path);
-uint64_t prefab_instantiate(uint64_t prefab_entity);
+#if defined(_MSC_VER)
+    #define TLS __declspec(thread)
+#else
+    #define TLS _Thread_local
+#endif
 
-// Minic 綁定
-minic_register("prefab_load", "i(p)", (minic_ext_fn_raw_t)prefab_load);
-minic_register("prefab_save", "i(i,p)", (minic_ext_fn_raw_t)prefab_save);
-minic_register("prefab_instantiate", "i(i)", (minic_ext_fn_raw_t)prefab_instantiate);
+static TLS float g_tls_delta_time = 0.0f;
+float sys_delta(void) { return g_tls_delta_time; }
 ```
 
-### 預計工時
-3-5 天
+**預計工時:** 0.5 天（可跳過，如不需多線程）
 
 ---
 
-## 實施順序
+### Phase 3: 重構遊戲腳本 (驗證)
 
+**目標:** 使用新框架重構示例遊戲
+
+**game.minic:**
+```minic
+void update() {
+    movement_update();
+    health_update();
+}
+
+float main() {
+    return 0.0;
+}
 ```
-Phase 1: Input 系統 (2-3天)
-Phase 2: Prefab 系統 (3-5天，可延後)
+
+**systems/movement_system.minic:**
+```minic
+void update() {
+    float dt = sys_delta();
+    
+    if (keyboard_down("W")) {
+        // 移動
+    }
+}
 ```
+
+**預計工時:** 0.5 天
+
+---
+
+### Phase 4: 多線程 ECS (可延後)
+
+**目標:** 啟用 Flecs 多線程 System
+
+```c
+// system_api.c
+desc.multi_threaded = true;  // 啟用 worker threads
+```
+
+**預計工時:** 0.5 天
+
+---
+
+## 完整實現順序
+
+| Phase | 內容 | 工時 | 優先 |
+|-------|------|------|------|
+| **1** | Minic System 框架 | 1-2 天 | **核心** |
+| 2 | Thread-Local Context | 0.5 天 | 可選 |
+| 3 | 重構遊戲腳本 | 0.5 天 | 驗證 |
+| 4 | 多線程 ECS | 0.5 天 | 可延後 |
+
+**總計核心工作:** 1-2 天
 
 ---
 
 ## 驗收標準
 
-完成後，應該能夠編寫完整的遊戲腳本:
+完成後，應該能夠編寫分離的 Minic System:
 
-```c
-// 組件回調示例
-void Position_ctor(void* data, void* comp_id) {
-    comp_set_float(comp_id, data, "x", 0.0f);
-    comp_set_float(comp_id, data, "y", 0.0f);
-    comp_set_float(comp_id, data, "z", 0.0f);
+```minic
+// systems/movement_system.minic
+void update() {
+    float dt = sys_delta();
+    
+    if (keyboard_down("W")) {
+        // 移動邏輯
+    }
 }
+```
 
-void Health_ctor(void* data, void* comp_id) {
-    comp_set_float(comp_id, data, "current", 100.0f);
-    comp_set_float(comp_id, data, "max", 100.0f);
+```minic
+// game.minic
+void update() {
+    movement_update();
+    health_update();
 }
 
 float main() {
-    // 創建組件
-    int pos_comp = component_register("Position", 12);
-    component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
-    component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
-    component_set_hooks("Position", "Position_ctor", NULL);
-    
-    int health_comp = component_register("Health", 8);
-    component_add_field(health_comp, "current", TYPE_FLOAT, 0);
-    component_add_field(health_comp, "max", TYPE_FLOAT, 4);
-    component_set_hooks("Health", "Health_ctor", NULL);
-    
-    // 創建實體
-    int player = entity_create();
-    entity_add(player, pos_comp);
-    entity_add(player, health_comp);
-    
-    // 遊戲循環
-    while (entity_is_valid(player)) {
-        // 移動系統
-        int move_q = query_create("Position");
-        while (query_next(move_q)) {
-            int count = query_count(move_q);
-            for (int i = 0; i < count; i++) {
-                int e = query_get(move_q, i);
-                void *pos = entity_get(e, pos_comp);
-                
-                float x = comp_get_float(pos_comp, pos, "x");
-                comp_set_float(pos_comp, pos, "x", x + 1.0 * sys_delta());
-            }
-        }
-        query_destroy(move_q);
-    }
-    
+    load_system("movement", "systems/movement_system.minic");
+    load_system("health", "systems/health_system.minic");
     return 0.0;
 }
 ```
@@ -322,16 +283,14 @@ float main() {
 
 | 文件 | 修改內容 |
 |------|----------|
-| `engine/sources/core/runtime_api.c` | 已添加 Input 綁定 |
-| `engine/sources/core/game_loop.c` | 添加 input_update 調用 |
-| `base/sources/libs/minic.c` | 添加 2階段初始化 API |
-| `base/sources/libs/minic.h` | 添加 minic_ctx_create/run/get_fn |
+| `engine/sources/core/runtime_api.c` | 添加 System 包裝函數註冊 |
 
 ### 需要實現的新文件
 
 | 文件 | 內容 |
 |------|------|
-| `engine/sources/core/input.c` | Input 系統實現 |
+| `engine/sources/core/minic_system.h` | System 加載 API 聲明 |
+| `engine/sources/core/minic_system.c` | System 加載實現 |
 
 ---
 
@@ -347,6 +306,7 @@ float main() {
 
 | Commit | 描述 |
 |--------|------|
+| `5ae01f55` | Update ECS_PLAN.md with lifecycle callbacks documentation |
 | `c3de5dc1` | Complete ECS lifecycle callbacks and Query API thread safety |
 | `ef4ccc8c` | Fix minic FFI for ECS component access |
 | `b03311c1` | Complete Entity and Component API |
@@ -357,46 +317,69 @@ float main() {
 
 ## 實現細節
 
-### Minic 2階段初始化
-
-為了解決生命週期回調需要在腳本運行時訪問 Minic 函數的問題，引入了 2 階段初始化:
+### Minic System 加載機制
 
 ```c
-// 舊方式（一次性）
-minic_ctx_t *ctx = minic_eval(script);  // ctx 在腳本運行完後才返回
-// 問題：回調在腳本運行期間觸發，但 ctx 尚未返回
-
-// 新方式（2階段）
-minic_ctx_t *ctx = minic_ctx_create(script);  // 立即返回 ctx
-minic_ctx_run(ctx);  // 運行腳本，回調可以訪問 ctx
-```
-
-### Query API 線程安全
-
-每個查詢有自己的 `cached_it` 迭代器，避免多線程環境下的狀態競爭:
-
-```c
+// minic_system.c
 typedef struct {
-    uint64_t flecs_query;
-    char filter[256];
-    bool valid;
-    bool iter_started;
-    int last_count;
-    uint64_t last_entities[256];
-    void *cached_it;  // 每個查詢獨立存儲
-} runtime_query_t;
-```
+    char name[64];
+    minic_ctx_t *ctx;
+    void *update_fn;  // "update" 函數指針
+} minic_system_t;
 
-### 回調函數查找
+static minic_system_t g_systems[16];
+static int g_system_count = 0;
 
-通過 `minic_ctx_get_fn()` 在運行時查找 Minic 函數:
-
-```c
-void *fn = minic_ctx_get_fn(ctx, "Position_ctor");
-if (fn) {
-    minic_val_t args[2];
-    args[0].p = data;
-    args[1].p = (void*)comp_id;
-    minic_call_fn(fn, args, 2);
+int load_system(const char *name, const char *path) {
+    // 1. 讀取 .minic 文件
+    char *source = read_file(path);
+    
+    // 2. 創建 Minic 上下文
+    minic_ctx_t *ctx = minic_ctx_create(source);
+    
+    // 3. 運行腳本（只初始化，不執行遊戲循環）
+    minic_ctx_run(ctx);
+    
+    // 4. 查找 "update" 函數
+    void *fn = minic_ctx_get_fn(ctx, "update");
+    
+    // 5. 註冊包裝函數
+    char wrapper_name[128];
+    snprintf(wrapper_name, sizeof(wrapper_name), "%s_update", name);
+    minic_register(wrapper_name, "v()", wrapper_fn);
+    
+    // 6. 保存
+    strcpy(g_systems[g_system_count].name, name);
+    g_systems[g_system_count].ctx = ctx;
+    g_systems[g_system_count].update_fn = fn;
+    g_system_count++;
+    
+    return 0;
 }
 ```
+
+### 調用流程
+
+```c
+// game_loop_update() 中
+void game_loop_update() {
+    // ... input_update, ecs_progress ...
+    
+    // 調用所有已加載的 Minic System
+    for (int i = 0; i < g_system_count; i++) {
+        if (g_systems[i].update_fn) {
+            minic_call_fn(g_systems[i].update_fn, NULL, 0);
+        }
+    }
+}
+```
+
+### Iron Input 機制
+
+Iron 在每幀結尾自動調用 `input_end_frame()`:
+```c
+// iron_sys.c:470
+input_end_frame();
+```
+
+`keyboard_started()` 只在按下那一幀返回 true，下一幀自動變回 false。

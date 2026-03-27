@@ -1,5 +1,6 @@
 #include "game_loop.h"
 #include "ecs/ecs_world.h"
+#include "minic_system.h"
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -29,6 +30,8 @@ void game_loop_update(void) {
     g_frame_count++;
     
     game_world_progress(g_loop_world, g_delta_time);
+    
+    minic_system_call_update();
 }
 
 float game_loop_get_delta_time(void) {

@@ -2,6 +2,7 @@
 #include "core/game_loop.h"
 #include "core/runtime_api.h"
 #include "core/system_api.h"
+#include "core/minic_system.h"
 #include "ecs/ecs_world.h"
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
@@ -102,6 +103,7 @@ void game_engine_shutdown(void) {
     if (!g_initialized) return;
     printf("Game Engine Shutting Down...\n");
     
+    minic_system_unload_all();
     game_loop_shutdown();
     ecs_dynamic_shutdown();
     game_world_destroy(g_world);
@@ -155,6 +157,11 @@ void _kickstart(void) {
     sys_start(ops);
     game_engine_init();
     load_and_run_script("data/game.minic");
+    
+    printf("Loading Minic systems...\n");
+    minic_system_load("MovementSystem", "data/systems/movement_system.minic");
+    minic_system_call_init();
+    
     _iron_set_update_callback(game_loop_update);
     game_engine_start();
 }

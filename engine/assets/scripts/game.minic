@@ -1,54 +1,56 @@
+int pos_comp = -1;
+int vel_comp = -1;
+
 void Position_ctor(void* data, void* comp_id) {
-    comp_set_float(comp_id, data, "x", 1.0f);
-    comp_set_float(comp_id, data, "y", 2.0f);
-    comp_set_float(comp_id, data, "z", 3.0f);
-    
-    float x = comp_get_float(comp_id, data, "x");
-    float y = comp_get_float(comp_id, data, "y");
-    float z = comp_get_float(comp_id, data, "z");
-    printf("  [ctor] Position initialized to (%f, %f, %f)\n", x, y, z);
+    comp_set_float(comp_id, data, "x", 0.0f);
+    comp_set_float(comp_id, data, "y", 0.0f);
+    comp_set_float(comp_id, data, "z", 0.0f);
 }
 
-void Position_dtor(void* data, void* comp_id) {
-    printf("  [dtor] Position cleanup\n");
+void Velocity_ctor(void* data, void* comp_id) {
+    comp_set_float(comp_id, data, "vx", 1.0f);
+    comp_set_float(comp_id, data, "vy", 2.0f);
+    comp_set_float(comp_id, data, "vz", 3.0f);
 }
 
 float main() {
-    printf("=== Callback Data Access Test ===\n");
+    printf("=== Game Initialization ===\n");
     
-    int pos_comp = component_register("Position", 12);
+    pos_comp = component_register("Position", 12);
     component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
     component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
     component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
-    component_set_hooks("Position", "Position_ctor", "Position_dtor");
+    component_set_hooks("Position", "Position_ctor", "");
     
-    printf("Creating entity...\n");
-    int e1 = entity_create();
-    entity_add(e1, pos_comp);
+    vel_comp = component_register("Velocity", 12);
+    component_add_field(vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(vel_comp, "vy", TYPE_FLOAT, 4);
+    component_add_field(vel_comp, "vz", TYPE_FLOAT, 8);
+    component_set_hooks("Velocity", "Velocity_ctor", "");
     
-    printf("Getting component data after ctor...\n");
-    void* e1_pos = entity_get(e1, pos_comp);
-    float x = comp_get_float(pos_comp, e1_pos, "x");
-    float y = comp_get_float(pos_comp, e1_pos, "y");
-    float z = comp_get_float(pos_comp, e1_pos, "z");
-    printf("  Verified values: x=%f, y=%f, z=%f\n", x, y, z);
+    printf("Creating 5 test entities...\n");
+    int i = 0;
+    while (i < 5) {
+        int e = entity_create();
+        entity_add(e, pos_comp);
+        entity_add(e, vel_comp);
+        
+        void* pos = entity_get(e, pos_comp);
+        void* vel = entity_get(e, vel_comp);
+        
+        comp_set_float(pos_comp, pos, "x", (float)(i * 10));
+        comp_set_float(pos_comp, pos, "y", (float)(i * 5));
+        comp_set_float(pos_comp, pos, "z", 0.0f);
+        
+        printf("  Created entity %d: pos=(%f, %f, %f)\n", 
+               e,
+               comp_get_float(pos_comp, pos, "x"),
+               comp_get_float(pos_comp, pos, "y"),
+               comp_get_float(pos_comp, pos, "z"));
+        
+        i = i + 1;
+    }
     
-    printf("Removing component...\n");
-    entity_remove(e1, pos_comp);
-    
-    printf("Re-adding component...\n");
-    entity_add(e1, pos_comp);
-    
-    printf("Getting new component data...\n");
-    e1_pos = entity_get(e1, pos_comp);
-    x = comp_get_float(pos_comp, e1_pos, "x");
-    y = comp_get_float(pos_comp, e1_pos, "y");
-    z = comp_get_float(pos_comp, e1_pos, "z");
-    printf("  New values after re-add: x=%f, y=%f, z=%f\n", x, y, z);
-    
-    printf("Destroying entity...\n");
-    entity_destroy(e1);
-    
-    printf("=== Test Complete ===\n");
+    printf("=== Game Init Complete ===\n");
     return 0.0;
 }

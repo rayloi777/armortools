@@ -8,6 +8,7 @@
 #include "core/system_api.c"
 #include "core/query_api.c"
 #include "core/game_loop.c"
+#include "core/minic_system.c"
 #include "core/input.c"
 #include "core/prefab.c"
 #include "core/prefab_load.c"
