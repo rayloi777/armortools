@@ -28,3 +28,4 @@ bool sprite_renderer_is_visible(sprite_renderer_t *sr);
 void sprite_renderer_sort_by_layer(void);
 bool sprite_renderer_is_valid(sprite_renderer_t *sr);
 void sprite_renderer_shutdown(void);
+gpu_texture_t *sprite_get_texture(const char *path);

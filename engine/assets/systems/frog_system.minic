@@ -79,11 +79,14 @@ int init(void) {
 
     int count = query_find(g_query);
     printf("FrogSystem: Created %d entities\n", count);
+    
+    draw_set_font("font.ttf", 16);
 
     return 0;
 }
 
 int draw(void) {
+    // UI overlay - sprites are rendered by sprite_render_callback
     draw_begin(NULL, 0, 0);
     draw_set_color(0xffffffff);
     draw_string("FrogSystem Active", 10.0, 10.0);

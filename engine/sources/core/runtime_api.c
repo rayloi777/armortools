@@ -320,12 +320,15 @@ static minic_val_t minic_sprite_load(minic_val_t *args, int argc) {
 
 static minic_val_t minic_sprite_draw(minic_val_t *args, int argc) {
     if (argc < 5) return minic_val_void();
-    void *tex = (void*)args[0].p;
+    const char *path = (const char*)args[0].p;
     float x = (float)minic_val_to_d(args[1]);
     float y = (float)minic_val_to_d(args[2]);
     float w = (float)minic_val_to_d(args[3]);
     float h = (float)minic_val_to_d(args[4]);
-    draw_scaled_image(tex, x, y, w, h);
+    gpu_texture_t *tex = sprite_get_texture(path);
+    if (tex) {
+        draw_scaled_image(tex, x, y, w, h);
+    }
     return minic_val_void();
 }
 
@@ -363,6 +366,20 @@ static minic_val_t minic_draw_string(minic_val_t *args, int argc) {
     float x = (float)minic_val_to_d(args[1]);
     float y = (argc > 2) ? (float)minic_val_to_d(args[2]) : 0.0f;
     draw_string(text, x, y);
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_set_font(minic_val_t *args, int argc) {
+    if (argc < 2) {
+        return minic_val_void();
+    }
+    const char *font_name = (const char *)args[0].p;
+    int size = (int)minic_val_to_d(args[1]);
+    draw_font_t *font = data_get_font((char*)font_name);
+    if (font) {
+        draw_font_init(font);
+        draw_set_font(font, size);
+    }
     return minic_val_void();
 }
 
@@ -653,6 +670,7 @@ void runtime_api_register(void) {
     minic_register_native("draw_end", minic_draw_end);
     minic_register_native("draw_set_color", minic_draw_set_color);
     minic_register_native("draw_string", minic_draw_string);
+    minic_register_native("draw_set_font", minic_draw_set_font);
     minic_register_native("draw_line", minic_draw_line);
     minic_register_native("draw_filled_rect", minic_draw_filled_rect);
     minic_register_native("draw_rect", minic_draw_rect);

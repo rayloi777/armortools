@@ -7,6 +7,15 @@ sprite_renderer_t **sprite_renderers = NULL;
 int sprite_renderer_count = 0;
 static int sprite_renderer_capacity = 0;
 
+typedef struct {
+    char path[256];
+    gpu_texture_t *texture;
+} texture_cache_entry_t;
+
+static texture_cache_entry_t *g_texture_cache = NULL;
+static int g_texture_cache_count = 0;
+static int g_texture_cache_capacity = 0;
+
 typedef struct sprite_renderer {
     gpu_texture_t *texture;
     float x, y;
@@ -183,6 +192,31 @@ bool sprite_renderer_is_valid(sprite_renderer_t *sr) {
         }
     }
     return false;
+}
+
+gpu_texture_t *sprite_get_texture(const char *path) {
+    if (!path) return NULL;
+    
+    for (int i = 0; i < g_texture_cache_count; i++) {
+        if (strcmp(g_texture_cache[i].path, path) == 0) {
+            return g_texture_cache[i].texture;
+        }
+    }
+    
+    gpu_texture_t *tex = data_get_image((char*)path);
+    if (!tex) return NULL;
+    
+    if (g_texture_cache_count >= g_texture_cache_capacity) {
+        g_texture_cache_capacity = g_texture_cache_capacity == 0 ? 16 : g_texture_cache_capacity * 2;
+        g_texture_cache = realloc(g_texture_cache, sizeof(texture_cache_entry_t) * g_texture_cache_capacity);
+    }
+    
+    strncpy(g_texture_cache[g_texture_cache_count].path, path, 255);
+    g_texture_cache[g_texture_cache_count].path[255] = '\0';
+    g_texture_cache[g_texture_cache_count].texture = tex;
+    g_texture_cache_count++;
+    
+    return tex;
 }
 
 void sprite_renderer_shutdown(void) {
