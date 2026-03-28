@@ -1,6 +1,7 @@
 #include "game_loop.h"
 #include "ecs/ecs_world.h"
 #include "minic_system.h"
+#include <iron.h>
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -23,15 +24,18 @@ void game_loop_shutdown(void) {
 }
 
 void game_loop_update(void) {
-    if (!g_loop_world) return;
+    if (!g_loop_world) {
+        return;
+    }
     
     g_delta_time = sys_delta();
     g_time += g_delta_time;
     g_frame_count++;
     
     game_world_progress(g_loop_world, g_delta_time);
-    
     minic_system_call_step();
+    sys_render();
+    minic_system_call_draw();
 }
 
 float game_loop_get_delta_time(void) {

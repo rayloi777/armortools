@@ -65,6 +65,7 @@ int minic_system_load(const char *name, const char *path) {
     
     void *step_fn = minic_ctx_get_fn(ctx, "step");
     void *init_fn = minic_ctx_get_fn(ctx, "init");
+    void *draw_fn = minic_ctx_get_fn(ctx, "draw");
     
     minic_system_t *sys = &g_minic_systems[g_minic_system_count];
     strncpy(sys->name, name, sizeof(sys->name) - 1);
@@ -72,11 +73,12 @@ int minic_system_load(const char *name, const char *path) {
     sys->ctx = ctx;
     sys->step_fn = step_fn;
     sys->init_fn = init_fn;
+    sys->draw_fn = draw_fn;
     
     g_minic_system_count++;
     
-    printf("[minic_system] Loaded '%s' from '%s' (step=%p, init=%p)\n", 
-           name, path, step_fn, init_fn);
+    printf("[minic_system] Loaded '%s' from '%s' (step=%p, init=%p, draw=%p)\n", 
+           name, path, step_fn, init_fn, draw_fn);
     
     return 0;
 }
@@ -89,6 +91,7 @@ void minic_system_unload_all(void) {
         }
         g_minic_systems[i].step_fn = NULL;
         g_minic_systems[i].init_fn = NULL;
+        g_minic_systems[i].draw_fn = NULL;
     }
     g_minic_system_count = 0;
 }
@@ -105,6 +108,14 @@ void minic_system_call_init(void) {
     for (int i = 0; i < g_minic_system_count; i++) {
         if (g_minic_systems[i].init_fn) {
             minic_call_fn(g_minic_systems[i].init_fn, NULL, 0);
+        }
+    }
+}
+
+void minic_system_call_draw(void) {
+    for (int i = 0; i < g_minic_system_count; i++) {
+        if (g_minic_systems[i].draw_fn) {
+            minic_call_fn(g_minic_systems[i].draw_fn, NULL, 0);
         }
     }
 }

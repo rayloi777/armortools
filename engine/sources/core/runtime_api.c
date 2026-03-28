@@ -135,6 +135,24 @@ static minic_val_t minic_comp_get_ptr_native(minic_val_t *args, int argc) {
     return minic_val_ptr(result);
 }
 
+static minic_val_t minic_comp_set_bool_native(minic_val_t *args, int argc) {
+    if (argc < 4) return minic_val_void();
+    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    void *data = args[1].p;
+    const char *field = (const char *)args[2].p;
+    bool value = (bool)(int)minic_val_to_d(args[3]);
+    component_set_field_bool(comp_id, data, field, value);
+    return minic_val_void();
+}
+
+static minic_val_t minic_comp_get_bool_native(minic_val_t *args, int argc) {
+    if (argc < 3) return minic_val_int(0);
+    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    void *data = args[1].p;
+    const char *field = (const char *)args[2].p;
+    return minic_val_int(component_get_field_bool(comp_id, data, field) ? 1 : 0);
+}
+
 static minic_val_t minic_component_add_field_native(minic_val_t *args, int argc) {
     if (argc < 4) return minic_val_int(0);
     uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
@@ -165,8 +183,8 @@ static minic_val_t minic_component_get_field_info_native(minic_val_t *args, int 
 }
 
 void minic_register_builtins(void) {
-    minic_register_native("printf", minic_printf);
 }
+
 void runtime_api_set_world(game_world_t *world) {
     g_runtime_world = world;
 }
@@ -239,6 +257,10 @@ static minic_val_t minic_entity_set_name_native(minic_val_t *args, int argc) {
     entity_set_name(g_runtime_world, entity, name);
     return minic_val_void();
 }
+static uint64_t minic_entity_find_by_name(const char *name) {
+    if (!g_runtime_world || !name) return 0;
+    return entity_find_by_name(g_runtime_world, name);
+}
 static uint64_t minic_entity_get_parent(uint64_t entity) {
     if (!g_runtime_world || entity == 0) return 0;
     return entity_get_parent(g_runtime_world, entity);
@@ -308,7 +330,10 @@ static minic_val_t minic_sprite_draw(minic_val_t *args, int argc) {
 }
 
 static minic_val_t minic_draw_begin(minic_val_t *args, int argc) {
-    void *target = (argc > 0 && args[0].p) ? args[0].p : NULL;
+    void *target = NULL;
+    if (argc > 0 && args[0].type == MINIC_T_PTR) {
+        target = args[0].p;
+    }
     bool clear = (argc < 2) ? true : (bool)(int)minic_val_to_d(args[1]);
     int color = (argc < 3) ? 0 : (int)minic_val_to_d(args[2]);
     draw_begin(target, clear, color);
@@ -318,6 +343,64 @@ static minic_val_t minic_draw_begin(minic_val_t *args, int argc) {
 static minic_val_t minic_draw_end(minic_val_t *args, int argc) {
     (void)argc; (void)args;
     draw_end();
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_set_color(minic_val_t *args, int argc) {
+    if (argc < 1) {
+        return minic_val_void();
+    }
+    int color = (int)minic_val_to_d(args[0]);
+    draw_set_color((uint32_t)color);
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_string(minic_val_t *args, int argc) {
+    if (argc < 2 || draw_font == NULL) {
+        return minic_val_void();
+    }
+    const char *text = (const char *)args[0].p;
+    float x = (float)minic_val_to_d(args[1]);
+    float y = (argc > 2) ? (float)minic_val_to_d(args[2]) : 0.0f;
+    draw_string(text, x, y);
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_line(minic_val_t *args, int argc) {
+    if (argc < 4) {
+        return minic_val_void();
+    }
+    float x0 = (float)minic_val_to_d(args[0]);
+    float y0 = (float)minic_val_to_d(args[1]);
+    float x1 = (float)minic_val_to_d(args[2]);
+    float y1 = (float)minic_val_to_d(args[3]);
+    float strength = (argc > 4) ? (float)minic_val_to_d(args[4]) : 1.0f;
+    draw_line(x0, y0, x1, y1, strength);
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_filled_rect(minic_val_t *args, int argc) {
+    if (argc < 4) {
+        return minic_val_void();
+    }
+    float x = (float)minic_val_to_d(args[0]);
+    float y = (float)minic_val_to_d(args[1]);
+    float w = (float)minic_val_to_d(args[2]);
+    float h = (float)minic_val_to_d(args[3]);
+    draw_filled_rect(x, y, w, h);
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_rect(minic_val_t *args, int argc) {
+    if (argc < 5) {
+        return minic_val_void();
+    }
+    float x = (float)minic_val_to_d(args[0]);
+    float y = (float)minic_val_to_d(args[1]);
+    float w = (float)minic_val_to_d(args[2]);
+    float h = (float)minic_val_to_d(args[3]);
+    float strength = (float)minic_val_to_d(args[4]);
+    draw_rect(x, y, w, h, strength);
     return minic_val_void();
 }
 
@@ -513,6 +596,8 @@ static minic_val_t minic_gamepad_stick_delta_y(minic_val_t *args, int argc) {
 void runtime_api_register(void) {
     printf("Registering runtime APIs...\n");
     
+    minic_register_native("printf", minic_printf);
+    
     component_api_register();
     entity_api_register();
     system_api_set_world(g_runtime_world);
@@ -541,6 +626,7 @@ void runtime_api_register(void) {
     minic_register("entity_is_valid", "i(i)", (minic_ext_fn_raw_t)minic_entity_is_valid);
     minic_register("entity_get_name", "p(i)", (minic_ext_fn_raw_t)minic_entity_get_name);
     minic_register_native("entity_set_name", minic_entity_set_name_native);
+    minic_register("entity_find_by_name", "i(p)", (minic_ext_fn_raw_t)minic_entity_find_by_name);
     minic_register("entity_get_parent", "i(i)", (minic_ext_fn_raw_t)minic_entity_get_parent);
     minic_register("entity_set_parent", "v(i,i)", (minic_ext_fn_raw_t)minic_entity_set_parent);
     minic_register("entity_get", "p(i,i)", (minic_ext_fn_raw_t)minic_entity_get);
@@ -549,9 +635,11 @@ void runtime_api_register(void) {
     minic_register_native("comp_set_int", minic_comp_set_int_native);
     minic_register_native("comp_set_float", minic_comp_set_float_native);
     minic_register_native("comp_set_ptr", minic_comp_set_ptr_native);
+    minic_register_native("comp_set_bool", minic_comp_set_bool_native);
     minic_register_native("comp_get_int", minic_comp_get_int_native);
     minic_register_native("comp_get_float", minic_comp_get_float_native);
     minic_register_native("comp_get_ptr", minic_comp_get_ptr_native);
+    minic_register_native("comp_get_bool", minic_comp_get_bool_native);
     
     minic_register("sys_delta", "f()", (minic_ext_fn_raw_t)minic_sys_delta);
     minic_register("sys_time", "f()", (minic_ext_fn_raw_t)minic_sys_time);
@@ -563,6 +651,11 @@ void runtime_api_register(void) {
     minic_register_native("sprite_draw", minic_sprite_draw);
     minic_register_native("draw_begin", minic_draw_begin);
     minic_register_native("draw_end", minic_draw_end);
+    minic_register_native("draw_set_color", minic_draw_set_color);
+    minic_register_native("draw_string", minic_draw_string);
+    minic_register_native("draw_line", minic_draw_line);
+    minic_register_native("draw_filled_rect", minic_draw_filled_rect);
+    minic_register_native("draw_rect", minic_draw_rect);
     
     minic_register_native("dbg_entity_has_comp", minic_dbg_entity_has_comp);
     
