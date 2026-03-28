@@ -5,7 +5,7 @@ void args_parse() {
 	if (iron_get_arg_count() > 1) {
 		args_use = true;
 
-		i32 i = 0;
+		i32 i = 1;
 		while (i < iron_get_arg_count()) {
 			// Process each arg
 			char *current_arg = iron_get_arg(i);
@@ -15,8 +15,11 @@ void args_parse() {
 				project_filepath = string_copy(current_arg);
 				gc_root(project_filepath);
 			}
-			else if (string_equals(current_arg, "--b") || string_equals(current_arg, "--background")) {
+			else if (string_equals(current_arg, "--background")) {
 				args_background = true;
+			}
+			else if (string_equals(current_arg, "--player")) {
+				args_player = true;
 			}
 			else if (path_is_texture(current_arg)) {
 				gc_unroot(args_asset_path);
@@ -48,7 +51,7 @@ void args_parse() {
 				args_export_mesh_path = string_copy(iron_get_arg(i));
 				gc_root(args_export_mesh_path);
 			}
-			else if (path_is_mesh(current_arg) || (i > 1 && !starts_with(current_arg, "-") && path_is_folder(current_arg))) {
+			else if (path_is_mesh(current_arg) || iron_is_directory(current_arg)) {
 				gc_unroot(args_asset_path);
 				args_asset_path = string_copy(current_arg);
 				gc_root(args_asset_path);
@@ -59,6 +62,20 @@ void args_parse() {
 				gc_unroot(args_export_material_path);
 				args_export_material_path = string_copy(iron_get_arg(i));
 				gc_root(args_export_material_path);
+			}
+			else if (string_equals(current_arg, "--help")) {
+				printf("Usage: armorpaint [options] [file]\n");
+				printf("Options:\n");
+				printf("  --background                      Run without displaying the window\n");
+				printf("  --export-textures <type> <preset> <path>\n");
+				printf("                                    Export textures to path\n");
+				printf("                                    type: png, jpg, exr16, exr32\n");
+				printf("  --export-mesh <path>              Export mesh to path\n");
+				printf("  --export-material <path>          Export material to path\n");
+				printf("  --reload-mesh                     Reimport mesh on startup\n");
+				printf("  --player                          Run in player mode\n");
+				printf("  --help                            Show this help message\n");
+				exit(1);
 			}
 			++i;
 		}

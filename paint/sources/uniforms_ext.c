@@ -149,10 +149,13 @@ f32 uniforms_ext_f32_link(object_t *object, material_data_t *mat, char *link) {
 			char *key    = keys->buffer[i];
 			char *script = any_map_get(parser_material_script_links, key);
 			f32   result = NAN;
+			if (script != NULL) {
+				result = 0.0;
+			}
 			if (!string_equals(script, "")) {
 				minic_ctx_t *_ctx = minic_eval(string("float main() { return %s; }", script));
-			result            = minic_ctx_result(_ctx);
-			minic_ctx_free(_ctx);
+				result            = minic_ctx_result(_ctx);
+				minic_ctx_free(_ctx);
 			}
 			return result;
 		}

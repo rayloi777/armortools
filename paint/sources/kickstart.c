@@ -62,6 +62,9 @@ void _kickstart() {
 	    2);
 	gc_root(box_export_color_spaces);
 
+	box_export_h_export_player_target = ui_handle_create();
+	gc_root(box_export_h_export_player_target);
+
 	import_texture_importers = any_map_create();
 	gc_root(import_texture_importers);
 
@@ -3045,8 +3048,17 @@ void _kickstart() {
 	                                                                                     .max           = 1.0,
 	                                                                                     .precision     = 100,
 	                                                                                     .height        = 0}),
+	                                                    GC_ALLOC_INIT(ui_node_button_t, {.name          = "script_node_button",
+	                                                                                     .type          = "CUSTOM",
+	                                                                                     .output        = -1,
+	                                                                                     .default_value = f32_array_create_x(0),
+	                                                                                     .data          = NULL,
+	                                                                                     .min           = 0.0,
+	                                                                                     .max           = 1.0,
+	                                                                                     .precision     = 100,
+	                                                                                     .height        = 1}),
 	                                                },
-	                                                1),
+	                                                2),
 	                                            .width = 0,
 	                                            .flags = 0});
 	gc_root(script_node_def);

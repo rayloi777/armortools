@@ -34,41 +34,19 @@ void base_init_on_start_arm(void *_) {
 	// Auto-run script
 	if (project_raw->script_datas != NULL && project_raw->script_datas->length > 0) {
 		minic_ctx_t *ctx = minic_eval(project_raw->script_datas->buffer[0]);
+		}
 	}
 }
 
-void base_init() {
-	base_last_window_width  = iron_window_width();
-	base_last_window_height = iron_window_height();
-
-	sys_notify_on_drop_files(&base_on_drop_files);
-	sys_notify_on_app_state(&base_on_foreground, &base_on_resume, &base_on_pause, &base_on_background, &base_on_shutdown);
-	iron_set_save_and_quit_callback(base_save_and_quit_callback);
-
-	base_font = data_get_font("font.ttf");
-	gc_root(base_font);
-
-	base_color_wheel = data_get_image("color_wheel.k");
-	gc_root(base_color_wheel);
-
-	base_color_wheel_gradient = data_get_image("color_wheel_gradient.k");
-	gc_root(base_color_wheel_gradient);
-	config_load_theme(config_raw->theme, false);
-	base_default_element_w = base_theme->ELEMENT_W;
-	base_default_element_h = base_theme->ELEMENT_H;
-	base_default_font_size = base_theme->FONT_SIZE;
-	translator_load_translations(config_raw->locale);
-
-	ui_files_filename = string_copy(tr("untitled"));
-	gc_root(ui_files_filename);
-#if defined(IRON_ANDROID) || defined(IRON_IOS)
-	sys_title_set(tr("untitled"));
-#endif
-
-	// Baked font for fast startup
-	if (string_equals(config_raw->locale, "en")) {
-		draw_font_13(base_font);
+void base_run_in_player() {
+	if (string_equals(project_filepath, "")) {
+		console_error(tr("Save project first"));
+		return;
 	}
+	export_arm_run_project();
+	char *bin = iron_get_arg(0);
+	iron_sys_command(string("%s %s --player", bin, project_filepath));
+}
 	else {
 		draw_font_init(base_font);
 	}
@@ -125,16 +103,19 @@ void base_init() {
 
 	// Startup project
 	char *start_arm = string("%s/start.arm", iron_internal_files_location());
-	if (iron_file_exists(start_arm)) {
+	if (string_equals(project_filepath, "")) {
+		args_player = true;
+	}
+
+	if (args_player) {
 		gc_unroot(project_filepath);
 		project_filepath = start_arm;
 		gc_root(project_filepath);
 		sys_notify_on_next_frame(&base_init_on_start_arm, NULL);
-		context_raw->tool     = TOOL_TYPE_GIZMO;
+		context_raw->tool = TOOL_TYPE_GIZMO;
 		make_material_parse_paint_material(true);
 		config_raw->workspace = WORKSPACE_PLAYER;
 		base_update_workspace();
-		base_player_lock = true;
 	}
 }
 
@@ -449,6 +430,23 @@ void base_update(void *_) {
 		}
 		if (keyboard_started("delete")) {
 			sim_delete();
+		}
+	}
+
+	// Live material when using sys_time() script node
+	if (context_raw->tool == TOOL_TYPE_MATERIAL) {
+		bool              has_script_node = false;
+		ui_node_canvas_t *canvas          = context_raw->material->canvas;
+		for (i32 i = 0; i < canvas->nodes->length; ++i) {
+			ui_node_t *n = canvas->nodes->buffer[i];
+			if (string_equals(n->type, "SCRIPT_CPU")) {
+				has_script_node = true;
+				break;
+			}
+		}
+		if (has_script_node) {
+			layers_update_fill_layers();
+			iron_delay_idle_sleep();
 		}
 	}
 
@@ -845,6 +843,8 @@ void ui_base_init() {
 		ui_base_set_icon_scale();
 	}
 
+	ui_picker_button = ui_base_picker_button;
+
 	context_raw->gizmo             = scene_get_child(".Gizmo");
 	context_raw->gizmo_translate_x = object_get_child(context_raw->gizmo, ".TranslateX");
 	context_raw->gizmo_translate_y = object_get_child(context_raw->gizmo, ".TranslateY");
@@ -1012,6 +1012,13 @@ void ui_base_update(void *_) {
 	if (keyboard_started("f5") && config_raw->workspace != WORKSPACE_PLAYER) {
 		config_raw->workspace = WORKSPACE_PLAYER;
 		base_update_workspace();
+	}
+	// if (config_raw->experimental && keyboard_started("f5") && config_raw->workspace != WORKSPACE_PLAYER) {
+	// 	config_raw->workspace = WORKSPACE_PLAYER;
+	// 	base_update_workspace();
+	// }
+	if (config_raw->experimental && keyboard_started("f5")) {
+		base_run_in_player();
 	}
 
 #ifdef IRON_LINUX
@@ -2105,6 +2112,10 @@ void ui_base_on_tab_drop(ui_handle_t *to, i32 to_position, ui_handle_t *from, i3
 	}
 }
 
+bool ui_base_picker_button() {
+	return ui_icon_button("", ICON_PICKER, UI_ALIGN_CENTER);
+}
+
 void base_redraw_ui() {
 	ui_header_handle->redraws                       = 2;
 	ui_base_hwnds->buffer[TAB_AREA_STATUS]->redraws = 2;
@@ -2200,4 +2211,14 @@ void base_update_workflow() {
 			}
 		}
 	}
+}
+
+void base_run_in_player() {
+	if (string_equals(project_filepath, "")) {
+		console_error(tr("Save project first"));
+		return;
+	}
+	export_arm_run_project();
+	char *bin = iron_get_arg(0);
+	iron_sys_command(string("%s %s --player", bin, project_filepath));
 }
