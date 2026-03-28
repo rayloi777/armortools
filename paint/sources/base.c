@@ -34,19 +34,41 @@ void base_init_on_start_arm(void *_) {
 	// Auto-run script
 	if (project_raw->script_datas != NULL && project_raw->script_datas->length > 0) {
 		minic_ctx_t *ctx = minic_eval(project_raw->script_datas->buffer[0]);
-		}
 	}
 }
 
-void base_run_in_player() {
-	if (string_equals(project_filepath, "")) {
-		console_error(tr("Save project first"));
-		return;
+void base_init() {
+	base_last_window_width  = iron_window_width();
+	base_last_window_height = iron_window_height();
+
+	sys_notify_on_drop_files(&base_on_drop_files);
+	sys_notify_on_app_state(&base_on_foreground, &base_on_resume, &base_on_pause, &base_on_background, &base_on_shutdown);
+	iron_set_save_and_quit_callback(base_save_and_quit_callback);
+
+	base_font = data_get_font("font.ttf");
+	gc_root(base_font);
+
+	base_color_wheel = data_get_image("color_wheel.k");
+	gc_root(base_color_wheel);
+
+	base_color_wheel_gradient = data_get_image("color_wheel_gradient.k");
+	gc_root(base_color_wheel_gradient);
+	config_load_theme(config_raw->theme, false);
+	base_default_element_w = base_theme->ELEMENT_W;
+	base_default_element_h = base_theme->ELEMENT_H;
+	base_default_font_size = base_theme->FONT_SIZE;
+	translator_load_translations(config_raw->locale);
+
+	ui_files_filename = string_copy(tr("untitled"));
+	gc_root(ui_files_filename);
+#if defined(IRON_ANDROID) || defined(IRON_IOS)
+	sys_title_set(tr("untitled"));
+#endif
+
+	// Baked font for fast startup
+	if (string_equals(config_raw->locale, "en")) {
+		draw_font_13(base_font);
 	}
-	export_arm_run_project();
-	char *bin = iron_get_arg(0);
-	iron_sys_command(string("%s %s --player", bin, project_filepath));
-}
 	else {
 		draw_font_init(base_font);
 	}
@@ -103,19 +125,20 @@ void base_run_in_player() {
 
 	// Startup project
 	char *start_arm = string("%s/start.arm", iron_internal_files_location());
-	if (string_equals(project_filepath, "")) {
+	if (iron_file_exists(start_arm)) {
+		gc_unroot(project_filepath);
+		project_filepath = start_arm;
+		gc_root(project_filepath);
 		args_player = true;
 	}
 
 	if (args_player) {
-		gc_unroot(project_filepath);
-		project_filepath = start_arm;
-		gc_root(project_filepath);
 		sys_notify_on_next_frame(&base_init_on_start_arm, NULL);
 		context_raw->tool = TOOL_TYPE_GIZMO;
 		make_material_parse_paint_material(true);
 		config_raw->workspace = WORKSPACE_PLAYER;
 		base_update_workspace();
+		base_player_lock = true;
 	}
 }
 
