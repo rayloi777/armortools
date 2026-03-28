@@ -13,8 +13,11 @@ typedef struct {
     char filter[256];
     bool valid;
     bool iter_started;
+    bool truncated;
     int last_count;
-    uint64_t last_entities[256];
+    int total_count;
+    uint64_t last_entities[1024];
+    uint64_t *all_entities;
     void *cached_it;
     uint64_t components[MAX_QUERY_COMPONENTS];
     int component_count;
@@ -34,3 +37,7 @@ int query_with(int query_id, uint64_t component_id);
 int query_find(int query_id);
 int query_entities(int query_id, uint64_t *entities, int max);
 void query_free(int query_id);
+
+int query_total_count(int query_id);
+bool query_was_truncated(int query_id);
+int query_get_all(int query_id, uint64_t *entities, int max);

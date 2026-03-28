@@ -142,15 +142,34 @@ static bool build_filter_and_run(runtime_query_t *q) {
     
     if (!ecs_query_next((ecs_iter_t*)q->cached_it)) {
         q->last_count = 0;
+        q->total_count = 0;
+        q->truncated = false;
         memset(q->last_entities, 0, sizeof(q->last_entities));
         q->iter_started = false;
         return false;
     }
     
     ecs_iter_t *it = (ecs_iter_t*)q->cached_it;
-    q->last_count = it->count;
-    for (int i = 0; i < it->count && i < 256; i++) {
+    q->total_count = it->count;
+    q->last_count = it->count < 1024 ? it->count : 1024;
+    q->truncated = it->count > 1024;
+    
+    for (int i = 0; i < q->last_count; i++) {
         q->last_entities[i] = (uint64_t)it->entities[i];
+    }
+    
+    if (q->truncated) {
+        if (q->all_entities) {
+            free(q->all_entities);
+        }
+        q->all_entities = malloc(sizeof(uint64_t) * it->count);
+        if (q->all_entities) {
+            for (int i = 0; i < it->count; i++) {
+                q->all_entities[i] = (uint64_t)it->entities[i];
+            }
+        } else {
+            printf("[query_api] Warning: failed to allocate memory for %d entities\n", it->count);
+        }
     }
     
     return true;
@@ -161,7 +180,7 @@ int query_find(int query_id) {
     if (!q) return 0;
     
     if (build_filter_and_run(q)) {
-        return q->last_count;
+        return q->total_count;
     }
     return 0;
 }
@@ -209,10 +228,17 @@ void query_destroy(int query_id) {
         ecs_query_fini((ecs_query_t *)q->flecs_query);
     }
     
+    if (q->all_entities) {
+        free(q->all_entities);
+        q->all_entities = NULL;
+    }
+    
     q->valid = false;
     q->flecs_query = 0;
     q->iter_started = false;
+    q->truncated = false;
     q->last_count = 0;
+    q->total_count = 0;
     memset(q->last_entities, 0, sizeof(q->last_entities));
 }
 
@@ -230,15 +256,32 @@ bool query_next(int query_id) {
     
     if (!ecs_query_next((ecs_iter_t*)q->cached_it)) {
         q->last_count = 0;
+        q->total_count = 0;
+        q->truncated = false;
         memset(q->last_entities, 0, sizeof(q->last_entities));
         q->iter_started = false;
         return false;
     }
     
     ecs_iter_t *it = (ecs_iter_t*)q->cached_it;
-    q->last_count = it->count;
-    for (int i = 0; i < it->count && i < 256; i++) {
+    q->total_count = it->count;
+    q->last_count = it->count < 1024 ? it->count : 1024;
+    q->truncated = it->count > 1024;
+    
+    for (int i = 0; i < q->last_count; i++) {
         q->last_entities[i] = (uint64_t)it->entities[i];
+    }
+    
+    if (q->truncated) {
+        if (q->all_entities) {
+            free(q->all_entities);
+        }
+        q->all_entities = malloc(sizeof(uint64_t) * it->count);
+        if (q->all_entities) {
+            for (int i = 0; i < it->count; i++) {
+                q->all_entities[i] = (uint64_t)it->entities[i];
+            }
+        }
     }
     
     return true;
@@ -252,9 +295,17 @@ int query_count(int query_id) {
 
 uint64_t query_get(int query_id, int index) {
     runtime_query_t *q = get_query_by_id(query_id);
-    if (!q || index < 0 || index >= q->last_count) return 0;
+    if (!q || index < 0) return 0;
     
-    uint64_t entity = q->last_entities[index];
+    uint64_t entity;
+    
+    if (index < 1024) {
+        entity = q->last_entities[index];
+    } else if (q->all_entities && index < q->total_count) {
+        entity = q->all_entities[index];
+    } else {
+        return 0;
+    }
     
     if (g_query_world && g_query_world->world) {
         ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
@@ -266,6 +317,37 @@ uint64_t query_get(int query_id, int index) {
     }
     
     return entity;
+}
+
+int query_total_count(int query_id) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q) return 0;
+    return q->total_count;
+}
+
+bool query_was_truncated(int query_id) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q) return false;
+    return q->truncated;
+}
+
+int query_get_all(int query_id, uint64_t *entities, int max) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q || !entities || max <= 0) return 0;
+    
+    int count = q->total_count < max ? q->total_count : max;
+    
+    if (q->all_entities) {
+        for (int i = 0; i < count; i++) {
+            entities[i] = q->all_entities[i];
+        }
+    } else {
+        for (int i = 0; i < count; i++) {
+            entities[i] = q->last_entities[i];
+        }
+    }
+    
+    return count;
 }
 
 void query_api_register(void) {
@@ -283,6 +365,9 @@ void query_api_register(void) {
     minic_register_native("query_entities", minic_query_entities_native);
     minic_register("query_count_cached", "i(i)", (minic_ext_fn_raw_t)query_count_cached);
     minic_register("query_free", "v(i)", (minic_ext_fn_raw_t)query_free);
+    
+    minic_register("query_total_count", "i(i)", (minic_ext_fn_raw_t)query_total_count);
+    minic_register("query_was_truncated", "i(i)", (minic_ext_fn_raw_t)query_was_truncated);
     
     printf("Query API registered\n");
 }

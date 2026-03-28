@@ -78,7 +78,7 @@ static void system_trampoline(ecs_iter_t *it) {
     if (!sys || !sys->enabled) return;
     
     sys->last_count = it->count;
-    for (int i = 0; i < it->count && i < 256; i++) {
+    for (int i = 0; i < it->count && i < 1024; i++) {
         sys->last_entities[i] = it->entities[i];
     }
     

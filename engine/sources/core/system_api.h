@@ -26,7 +26,7 @@ typedef struct {
     void *minic_callback;
     void *user_context;
     bool enabled;
-    ecs_entity_t last_entities[256];
+    ecs_entity_t last_entities[1024];
     int last_count;
 } registered_system_t;
 

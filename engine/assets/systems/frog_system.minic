@@ -3,6 +3,8 @@
 int g_pos_comp = -1;
 int g_vel_comp = -1;
 int g_query = -1;
+int g_frame = 0;
+int g_vel_flips = 0;
 
 int init(void) {
     printf("FrogSystem: Init\n");
@@ -20,7 +22,6 @@ int init(void) {
     g_query = query_new();
     query_with(g_query, g_pos_comp);
     query_with(g_query, g_vel_comp);
-    query_find(g_query);
     
     int i = 0;
     while (i < 1000) {
@@ -44,10 +45,57 @@ int init(void) {
         i = i + 1;
     }
     
-    printf("FrogSystem: Created 1000 frogs\n");
+    int count = query_find(g_query);
+    int total = query_total_count(g_query);
+    int trunc = query_was_truncated(g_query);
+    printf("FrogSystem: Created %d entities (total=%d, truncated=%d)\n", count, total, trunc);
+    
     return 0;
 }
 
 int step(void) {
+    g_frame = g_frame + 1;
+    int count = query_find(g_query);
+    
+    int bounces = 0;
+    int i = 0;
+    while (i < count) {
+        int e = query_get(g_query, i);
+        
+        if (e <= 0) {
+            i = i + 1;
+            continue;
+        }
+        
+        void* pos = entity_get(e, g_pos_comp);
+        void* vel = entity_get(e, g_vel_comp);
+        
+        if (pos != 0 && vel != 0) {
+            float vx = comp_get_float(g_vel_comp, vel, "vx");
+            float vy = comp_get_float(g_vel_comp, vel, "vy");
+            
+            float px = comp_get_float(g_pos_comp, pos, "x") + vx * 0.016;
+            float py = comp_get_float(g_pos_comp, pos, "y") + vy * 0.016;
+            
+            int flipped = 0;
+            if (px < 0.0) { px = 0.0; vx = -vx; flipped = 1; }
+            if (px > 1280.0) { px = 1280.0; vx = -vx; flipped = 1; }
+            if (py < 0.0) { py = 0.0; vy = -vy; flipped = 1; }
+            if (py > 720.0) { py = 720.0; vy = -vy; flipped = 1; }
+            
+            if (flipped == 1) {
+                bounces = bounces + 1;
+            }
+            
+            comp_set_float(g_pos_comp, pos, "x", px);
+            comp_set_float(g_pos_comp, pos, "y", py);
+            comp_set_float(g_vel_comp, vel, "vx", vx);
+            comp_set_float(g_vel_comp, vel, "vy", vy);
+        }
+        i = i + 1;
+    }
+    
+    g_vel_flips = g_vel_flips + bounces;
+    
     return 0;
 }
