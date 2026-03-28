@@ -170,7 +170,7 @@ uint64_t game_engine_get_frame_count(void) {
 
 void _kickstart(void) {
     iron_window_options_t *ops = GC_ALLOC_INIT(iron_window_options_t, {
-        .title = "Iron Game Engine",
+        .title = "Game Engine",
         .x = -1,
         .y = -1,
         .width = 1280,
