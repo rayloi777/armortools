@@ -8,6 +8,7 @@
 #include <string.h>
 
 static ecs_entity_t g_sprite_bridge_system = 0;
+static ecs_query_t *g_sprite_query = NULL;
 
 static void sprite_bridge_system(ecs_iter_t *it) {
     TransformPosition *pos = ecs_field(it, TransformPosition, 0);
@@ -90,6 +91,11 @@ void sprite_bridge_init(void) {
     
     ecs_add_pair(ecs, g_sprite_bridge_system, EcsDependsOn, EcsPreUpdate);
     
+    ecs_query_desc_t qdesc = {0};
+    qdesc.terms[0].id = ecs_component_TransformPosition();
+    qdesc.terms[1].id = ecs_component_RenderSprite();
+    g_sprite_query = ecs_query_init(ecs, &qdesc);
+    
     printf("Sprite Bridge: system entity=%llu\n", (unsigned long long)g_sprite_bridge_system);
     fflush(stdout);
     
@@ -101,6 +107,10 @@ void sprite_bridge_init(void) {
 }
 
 void sprite_bridge_shutdown(void) {
+    if (g_sprite_query) {
+        ecs_query_fini(g_sprite_query);
+        g_sprite_query = NULL;
+    }
     g_sprite_bridge_system = 0;
     printf("Sprite Bridge shutdown\n");
 }
@@ -154,13 +164,9 @@ void sprite_bridge_render_all(void) {
     
     ecs_world_t *ecs = (ecs_world_t *)world->world;
     
-    ecs_query_desc_t qdesc = {0};
-    qdesc.terms[0].id = ecs_component_TransformPosition();
-    qdesc.terms[1].id = ecs_component_RenderSprite();
-    ecs_query_t *q = ecs_query_init(ecs, &qdesc);
-    if (!q) return;
+    if (!g_sprite_query) return;
     
-    ecs_iter_t it = ecs_query_iter(ecs, q);
+    ecs_iter_t it = ecs_query_iter(ecs, g_sprite_query);
     
     while (ecs_query_next(&it)) {
         TransformPosition *pos = ecs_field(&it, TransformPosition, 0);
@@ -193,7 +199,6 @@ void sprite_bridge_render_all(void) {
             }
         }
     }
-    ecs_query_fini(q);
     
     sprite_renderer_sort_by_layer();
     

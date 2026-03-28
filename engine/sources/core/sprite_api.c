@@ -64,14 +64,11 @@ void sprite_renderer_destroy(sprite_renderer_t *sr) {
     
     for (int i = 0; i < sprite_renderer_count; i++) {
         if (sprite_renderers[i] == sr) {
-            for (int j = i; j < sprite_renderer_count - 1; j++) {
-                sprite_renderers[j] = sprite_renderers[j + 1];
-            }
-            sprite_renderer_count--;
-            break;
+            sprite_renderers[i] = sprite_renderers[--sprite_renderer_count];
+            free(sr);
+            return;
         }
     }
-    free(sr);
 }
 
 void sprite_renderer_set_texture(sprite_renderer_t *sr, const char *texture_name) {
@@ -186,4 +183,16 @@ bool sprite_renderer_is_valid(sprite_renderer_t *sr) {
         }
     }
     return false;
+}
+
+void sprite_renderer_shutdown(void) {
+    if (!sprite_renderers) return;
+    for (int i = 0; i < sprite_renderer_count; i++) {
+        free(sprite_renderers[i]);
+        sprite_renderers[i] = NULL;
+    }
+    free(sprite_renderers);
+    sprite_renderers = NULL;
+    sprite_renderer_count = 0;
+    sprite_renderer_capacity = 0;
 }
