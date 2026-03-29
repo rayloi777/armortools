@@ -1,197 +1,128 @@
-// FrogSystem - 1000 frogs bouncing with ECS + 2D rendering
-// Uses TransformPosition + RenderSprite components
+// FrogSystem - 2D ECS component test via render2d_bridge
+// Tests RenderRect, RenderCircle, RenderLine, RenderText components
 
-int g_pos_comp = -1;
-int g_sprite_comp = -1;
-int g_cam_comp = -1;
-int g_query = -1;
-int g_camera_entity = 0;
+int g_rect_comp = -1;
+int g_circle_comp = -1;
+int g_line_comp = -1;
+int g_text_comp = -1;
+int g_entities[8];
 int g_frame = 0;
-int g_debug_counter = 0;
-int g_target_entity = 0;
-
-// Velocity storage
-int g_entities[1000];
-float g_vel_x[1000];
-float g_vel_y[1000];
 
 int init(void) {
-    printf("FrogSystem: Init\n");
+    printf("FrogSystem: Init - 2D ECS component test\n");
 
-    
+    g_rect_comp = component_lookup("comp_2d_rect");
+    g_circle_comp = component_lookup("comp_2d_circle");
+    g_line_comp = component_lookup("comp_2d_line");
+    g_text_comp = component_lookup("comp_2d_text");
 
-    int frog_pos_comp = component_register("Position2D", 8);
-    component_add_field(frog_pos_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(frog_pos_comp, "y", TYPE_FLOAT, 4);
-    
-    int frog_vel_comp = component_register("Velocity2D", 8);
-    component_add_field(frog_vel_comp, "vx", TYPE_FLOAT, 0);
-    component_add_field(frog_vel_comp, "vy", TYPE_FLOAT, 4);
-    
+    printf("Components: rect=%d circle=%d line=%d text=%d\n",
+           g_rect_comp, g_circle_comp, g_line_comp, g_text_comp);
 
-    //g_pos_comp = component_lookup("TransformPosition");
-    //g_sprite_comp = component_lookup("RenderSprite");
-    //g_cam_comp = component_lookup("Camera2D");
-/*
-    printf("FrogSystem: pos_comp=%d sprite_comp=%d cam_comp=%d\n",
-           frog_pos_comp, frog_vel_comp, g_cam_comp);
-
-    if (frog_pos_comp < 0 || g_sprite_comp < 0) {
-        printf("FrogSystem: Components not found\n");
+    if (g_rect_comp < 0 || g_circle_comp < 0) {
+        printf("FrogSystem: Components not found - check ecs_register_builtin_fields\n");
         return 0;
     }
 
-    g_query = query_new();
-    query_with(g_query, g_pos_comp);
-    query_with(g_query, g_sprite_comp);
-
+    // Create test entities with RenderRect
     int i = 0;
-    while (i < 1000) {
+    while (i < 4) {
         int e = entity_create();
-        entity_add(e, g_pos_comp);
-        entity_add(e, g_sprite_comp);
+        entity_add(e, g_rect_comp);
 
-        void *pos = entity_get(e, g_pos_comp);
-        void *sprite = entity_get(e, g_sprite_comp);
+        void *rect = entity_get(e, g_rect_comp);
+        comp_set_float(g_rect_comp, rect, "x", 100.0 + i * 200.0);
+        comp_set_float(g_rect_comp, rect, "y", 100.0 + i * 50.0);
+        comp_set_float(g_rect_comp, rect, "width", 80.0);
+        comp_set_float(g_rect_comp, rect, "height", 60.0);
+        comp_set_int(g_rect_comp, rect, "color", 0xff3366ff);
+        comp_set_int(g_rect_comp, rect, "layer", i);
+        comp_set_bool(g_rect_comp, rect, "filled", 1);
+        comp_set_float(g_rect_comp, rect, "strength", 1.0);
+        comp_set_bool(g_rect_comp, rect, "visible", 1);
 
-        float rx = 64.0 + rand_float() * (1280.0 - 128.0);
-        float ry = 64.0 + rand_float() * (720.0 - 128.0);
-        comp_set_float(g_pos_comp, pos, "x", rx);
-        comp_set_float(g_pos_comp, pos, "y", ry);
-        comp_set_float(g_pos_comp, pos, "z", 0.0);
-
-        comp_set_ptr(g_sprite_comp, sprite, "texture_path", "frog_idle.k");
-        comp_set_float(g_sprite_comp, sprite, "src_width", 64.0);
-        comp_set_float(g_sprite_comp, sprite, "src_height", 64.0);
-        comp_set_float(g_sprite_comp, sprite, "scale_x", 1.0);
-        comp_set_float(g_sprite_comp, sprite, "scale_y", 1.0);
-        comp_set_float(g_sprite_comp, sprite, "pivot_x", 0.5);
-        comp_set_float(g_sprite_comp, sprite, "pivot_y", 0.5);
-        comp_set_bool(g_sprite_comp, sprite, "flip_x", 0);
-        comp_set_bool(g_sprite_comp, sprite, "flip_y", 0);
-        comp_set_bool(g_sprite_comp, sprite, "visible", 1);
-        comp_set_int(g_sprite_comp, sprite, "layer", 0);
-
-        // Initialize random velocity
-        float speed = 50.0 + rand_float() * 150.0;
-        int negx = 1;
-        int negy = 1;
-        if (rand_float() > 0.5) negx = -1;
-        if (rand_float() > 0.5) negy = -1;
-        g_vel_x[i] = negx * speed;
-        g_vel_y[i] = negy * speed;
-        
         g_entities[i] = e;
-
-        if (i == 0) {
-            g_target_entity = e;
-        }
-
         i = i + 1;
     }
 
-    g_camera_entity = entity_create();
-    entity_set_name(g_camera_entity, "MainCamera");
-    entity_add(g_camera_entity, g_cam_comp);
+    // Create test entities with RenderCircle
+    i = 0;
+    while (i < 3) {
+        int e = entity_create();
+        entity_add(e, g_circle_comp);
 
-    void *cam = entity_get(g_camera_entity, g_cam_comp);
-    comp_set_float(g_cam_comp, cam, "x", 640.0);
-    comp_set_float(g_cam_comp, cam, "y", 360.0);
-    comp_set_float(g_cam_comp, cam, "zoom", 1.0);
-    comp_set_float(g_cam_comp, cam, "rotation", 0.0);
-    comp_set_float(g_cam_comp, cam, "smoothing", 0.1);
-    comp_set_bool(g_cam_comp, cam, "has_target", 1);
-    comp_set_float(g_cam_comp, cam, "target_x", 640.0);
-    comp_set_float(g_cam_comp, cam, "target_y", 360.0);
-    comp_set_bool(g_cam_comp, cam, "has_bounds", 0);
+        void *circle = entity_get(e, g_circle_comp);
+        comp_set_float(g_circle_comp, circle, "cx", 200.0 + i * 300.0);
+        comp_set_float(g_circle_comp, circle, "cy", 400.0);
+        comp_set_float(g_circle_comp, circle, "radius", 40.0 + i * 10.0);
+        comp_set_int(g_circle_comp, circle, "segments", 32);
+        comp_set_int(g_circle_comp, circle, "color", 0xff66ff33);
+        comp_set_int(g_circle_comp, circle, "layer", 4 + i);
+        comp_set_bool(g_circle_comp, circle, "filled", 1);
+        comp_set_float(g_circle_comp, circle, "strength", 1.0);
+        comp_set_bool(g_circle_comp, circle, "visible", 1);
 
-    int count = query_find(g_query);
-    printf("FrogSystem: Created %d entities\n", count);
-    
-    
-*/
+        g_entities[4 + i] = e;
+        i = i + 1;
+    }
+
+    // Create test entity with RenderLine
+    int line_e = entity_create();
+    entity_add(line_e, g_line_comp);
+    void *line = entity_get(line_e, g_line_comp);
+    comp_set_float(g_line_comp, line, "x0", 50.0);
+    comp_set_float(g_line_comp, line, "y0", 300.0);
+    comp_set_float(g_line_comp, line, "x1", 1230.0);
+    comp_set_float(g_line_comp, line, "y1", 300.0);
+    comp_set_float(g_line_comp, line, "strength", 2.0);
+    comp_set_int(g_line_comp, line, "color", 0xffffffff);
+    comp_set_int(g_line_comp, line, "layer", 10);
+    comp_set_bool(g_line_comp, line, "visible", 1);
+
+    printf("FrogSystem: Created %d test entities\n", 8);
     return 0;
 }
 
-int draw(void)
-{
-    //printf("FrogSystem: Draw\n");
-    draw_begin(NULL, 0, 0);
+int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("FrogSystem - 1000 frogs bouncing with ECS + 2D rendering", 10, 10);
+    draw_string("FrogSystem - 2D ECS Test (RenderRect/Circle/Line)", 10, 10);
     draw_fps(10, 32);
-    draw_end();
     return 0;
 }
 
-//void on_ui(void)
-//{
-//    printf("on_ui called\n");
-//    draw_set_font("font.ttf", 16);
-//    // 设置颜色
-//    draw_set_color(0xffffffff);  // 白色
-//    
-//    // 绘制字符串
-//    draw_string("Hello World!", 50, 100);
-//}
-
 int step(void) {
-    /*
     g_frame = g_frame + 1;
-    
     float delta = sys_delta();
     if (delta <= 0.0) delta = 0.016;
 
-    // Debug: print first frog's position every 60 frames
-    // g_debug_counter = g_debug_counter + 1;
-    // if (g_debug_counter >= 60) {
-    //     g_debug_counter = 0;
-    //     int entity = g_entities[0];
-    //     void *pos = entity_get(entity, g_pos_comp);
-    //     float x = comp_get_float(g_pos_comp, pos, "x");
-    //     float y = comp_get_float(g_pos_comp, pos, "y");
-    //     printf("step: frame=%d entity=%d pos=(%.1f, %.1f) vel=(%.1f, %.1f)\n", 
-    //            g_frame, entity, x, y, g_vel_x[0], g_vel_y[0]);
-    // }
-
-    // Move frogs
+    // Animate: move rectangles in a wave pattern using frame-based oscillation
     int i = 0;
-    while (i < 1000) {
-        int entity = g_entities[i];
-        void *pos = entity_get(entity, g_pos_comp);
-        
-        float x = comp_get_float(g_pos_comp, pos, "x");
-        float y = comp_get_float(g_pos_comp, pos, "y");
-        
-        // Update position
-        x = x + g_vel_x[i] * delta;
-        y = y + g_vel_y[i] * delta;
-        
-        // Bounce off edges
-        float margin = 32.0;
-        if (x < margin) {
-            x = margin;
-            g_vel_x[i] = -g_vel_x[i];
-        }
-        if (x > 1280.0 - margin) {
-            x = 1280.0 - margin;
-            g_vel_x[i] = -g_vel_x[i];
-        }
-        if (y < margin) {
-            y = margin;
-            g_vel_y[i] = -g_vel_y[i];
-        }
-        if (y > 720.0 - margin) {
-            y = 720.0 - margin;
-            g_vel_y[i] = -g_vel_y[i];
-        }
-        
-        comp_set_float(g_pos_comp, pos, "x", x);
-        comp_set_float(g_pos_comp, pos, "y", y);
-        
+    while (i < 4) {
+        int e = g_entities[i];
+        void *rect = entity_get(e, g_rect_comp);
+        float fx = g_frame * 3 + i * 40;
+        float fy = g_frame * 2 + i * 30;
+        float x = 100.0 + i * 200.0 + fx - (fx / 100.0) * 100.0 - 50.0;
+        float y = 100.0 + i * 50.0 + fy - (fy / 80.0) * 80.0 - 40.0;
+        comp_set_float(g_rect_comp, rect, "x", x);
+        comp_set_float(g_rect_comp, rect, "y", y);
         i = i + 1;
     }
-    */
+
+    // Animate circles
+    i = 0;
+    while (i < 3) {
+        int e = g_entities[4 + i];
+        void *circle = entity_get(e, g_circle_comp);
+        float fx = g_frame * 6 + i * 40;
+        float fy = g_frame * 3 + i * 25;
+        float cx = 200.0 + i * 300.0 + fx - (fx / 120.0) * 120.0 - 60.0;
+        float cy = 400.0 + fy - (fy / 70.0) * 70.0 - 35.0;
+        comp_set_float(g_circle_comp, circle, "cx", cx);
+        comp_set_float(g_circle_comp, circle, "cy", cy);
+        i = i + 1;
+    }
+
     return 0;
 }

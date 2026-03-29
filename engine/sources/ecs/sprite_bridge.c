@@ -26,7 +26,7 @@ void sprite_bridge_create_sprite(uint64_t entity) {
     if (!world || !entity) return;
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(world);
     if (!ecs) return;
-    RenderSprite *sprite = (RenderSprite *)ecs_get_id(ecs, (ecs_entity_t)entity, ecs_component_RenderSprite());
+    comp_2d_sprite *sprite = (comp_2d_sprite *)ecs_get_id(ecs, (ecs_entity_t)entity, ecs_component_comp_2d_sprite());
     if (!sprite || sprite->render_object != NULL) return;
     if (sprite->texture_path != NULL) {
         sprite_renderer_t *sr = sprite_renderer_create();
@@ -45,7 +45,7 @@ void sprite_bridge_destroy_sprite(uint64_t entity) {
     if (!world || !entity) return;
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(world);
     if (!ecs) return;
-    RenderSprite *sprite = (RenderSprite *)ecs_get_id(ecs, (ecs_entity_t)entity, ecs_component_RenderSprite());
+    comp_2d_sprite *sprite = (comp_2d_sprite *)ecs_get_id(ecs, (ecs_entity_t)entity, ecs_component_comp_2d_sprite());
     if (sprite && sprite->render_object != NULL) {
         sprite_renderer_destroy((sprite_renderer_t *)sprite->render_object);
         sprite->render_object = NULL;

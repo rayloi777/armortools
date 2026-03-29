@@ -40,7 +40,7 @@ void game_loop_update(void) {
     
     draw_begin(NULL, true, 0xff1a1a2e);
     camera2d_apply(camera_bridge_get_camera());
-    render2d_bridge_draw();
+    sys_2d_draw();
     minic_system_call_draw();
     draw_end();
 }

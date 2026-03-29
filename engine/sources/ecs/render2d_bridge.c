@@ -11,11 +11,11 @@
 
 static game_world_t *g_render2d_world = NULL;
 
-static ecs_query_t *g_rect_query = NULL;
-static ecs_query_t *g_circle_query = NULL;
-static ecs_query_t *g_line_query = NULL;
-static ecs_query_t *g_text_query = NULL;
-static ecs_query_t *g_sprite_query = NULL;
+static ecs_query_t *g_sys_2d_rect_query = NULL;
+static ecs_query_t *g_sys_2d_circle_query = NULL;
+static ecs_query_t *g_sys_2d_line_query = NULL;
+static ecs_query_t *g_sys_2d_text_query = NULL;
+static ecs_query_t *g_sys_2d_sprite_query = NULL;
 
 typedef enum {
     R2D_SPRITE,
@@ -43,11 +43,11 @@ static int r2d_item_compare(const void *a, const void *b) {
     return ia->layer - ib->layer;
 }
 
-void render2d_bridge_set_world(game_world_t *world) {
+void sys_2d_set_world(game_world_t *world) {
     g_render2d_world = world;
 }
 
-void render2d_bridge_init(void) {
+void sys_2d_init(void) {
     if (!g_render2d_world) {
         fprintf(stderr, "Render2d Bridge: world not set\n");
         return;
@@ -59,32 +59,32 @@ void render2d_bridge_init(void) {
     }
 
     ecs_query_desc_t qdesc = {0};
-    qdesc.terms[0].id = ecs_component_RenderRect();
-    g_rect_query = ecs_query_init(ecs, &qdesc);
+    qdesc.terms[0].id = ecs_component_comp_2d_rect();
+    g_sys_2d_rect_query = ecs_query_init(ecs, &qdesc);
 
-    qdesc.terms[0].id = ecs_component_RenderCircle();
-    g_circle_query = ecs_query_init(ecs, &qdesc);
+    qdesc.terms[0].id = ecs_component_comp_2d_circle();
+    g_sys_2d_circle_query = ecs_query_init(ecs, &qdesc);
 
-    qdesc.terms[0].id = ecs_component_RenderLine();
-    g_line_query = ecs_query_init(ecs, &qdesc);
+    qdesc.terms[0].id = ecs_component_comp_2d_line();
+    g_sys_2d_line_query = ecs_query_init(ecs, &qdesc);
 
-    qdesc.terms[0].id = ecs_component_RenderText();
-    g_text_query = ecs_query_init(ecs, &qdesc);
+    qdesc.terms[0].id = ecs_component_comp_2d_text();
+    g_sys_2d_text_query = ecs_query_init(ecs, &qdesc);
 
     memset(&qdesc, 0, sizeof(qdesc));
-    qdesc.terms[0].id = ecs_component_TransformPosition();
-    qdesc.terms[1].id = ecs_component_RenderSprite();
-    g_sprite_query = ecs_query_init(ecs, &qdesc);
+    qdesc.terms[0].id = ecs_component_comp_2d_position();
+    qdesc.terms[1].id = ecs_component_comp_2d_sprite();
+    g_sys_2d_sprite_query = ecs_query_init(ecs, &qdesc);
 
     printf("Render2d Bridge initialized\n");
 }
 
-void render2d_bridge_shutdown(void) {
-    if (g_rect_query) { ecs_query_fini(g_rect_query); g_rect_query = NULL; }
-    if (g_circle_query) { ecs_query_fini(g_circle_query); g_circle_query = NULL; }
-    if (g_line_query) { ecs_query_fini(g_line_query); g_line_query = NULL; }
-    if (g_text_query) { ecs_query_fini(g_text_query); g_text_query = NULL; }
-    if (g_sprite_query) { ecs_query_fini(g_sprite_query); g_sprite_query = NULL; }
+void sys_2d_shutdown(void) {
+    if (g_sys_2d_rect_query) { ecs_query_fini(g_sys_2d_rect_query); g_sys_2d_rect_query = NULL; }
+    if (g_sys_2d_circle_query) { ecs_query_fini(g_sys_2d_circle_query); g_sys_2d_circle_query = NULL; }
+    if (g_sys_2d_line_query) { ecs_query_fini(g_sys_2d_line_query); g_sys_2d_line_query = NULL; }
+    if (g_sys_2d_text_query) { ecs_query_fini(g_sys_2d_text_query); g_sys_2d_text_query = NULL; }
+    if (g_sys_2d_sprite_query) { ecs_query_fini(g_sys_2d_sprite_query); g_sys_2d_sprite_query = NULL; }
     g_render2d_world = NULL;
     printf("Render2d Bridge shutdown\n");
 }
@@ -96,7 +96,7 @@ static void ensure_capacity(r2d_item_t **items, int count, int *capacity) {
     }
 }
 
-void render2d_bridge_draw(void) {
+void sys_2d_draw(void) {
     if (!g_render2d_world) return;
 
     int capacity = 64;
@@ -107,11 +107,11 @@ void render2d_bridge_draw(void) {
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_render2d_world);
     if (!ecs) { free(items); return; }
 
-    if (g_sprite_query) {
-        ecs_iter_t it = ecs_query_iter(ecs, g_sprite_query);
+    if (g_sys_2d_sprite_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_sys_2d_sprite_query);
         while (ecs_query_next(&it)) {
-            TransformPosition *pos = ecs_field(&it, TransformPosition, 0);
-            RenderSprite *sprite = ecs_field(&it, RenderSprite, 1);
+            comp_2d_position *pos = ecs_field(&it, comp_2d_position, 0);
+            comp_2d_sprite *sprite = ecs_field(&it, comp_2d_sprite, 1);
             for (int i = 0; i < it.count; i++) {
                 if (!sprite[i].visible || !sprite[i].render_object) continue;
                 ensure_capacity(&items, count, &capacity);
@@ -123,10 +123,10 @@ void render2d_bridge_draw(void) {
         }
     }
 
-    if (g_rect_query) {
-        ecs_iter_t it = ecs_query_iter(ecs, g_rect_query);
+    if (g_sys_2d_rect_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_sys_2d_rect_query);
         while (ecs_query_next(&it)) {
-            RenderRect *r = ecs_field(&it, RenderRect, 0);
+            comp_2d_rect *r = ecs_field(&it, comp_2d_rect, 0);
             for (int i = 0; i < it.count; i++) {
                 if (!r[i].visible) continue;
                 ensure_capacity(&items, count, &capacity);
@@ -144,10 +144,10 @@ void render2d_bridge_draw(void) {
         }
     }
 
-    if (g_circle_query) {
-        ecs_iter_t it = ecs_query_iter(ecs, g_circle_query);
+    if (g_sys_2d_circle_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_sys_2d_circle_query);
         while (ecs_query_next(&it)) {
-            RenderCircle *c = ecs_field(&it, RenderCircle, 0);
+            comp_2d_circle *c = ecs_field(&it, comp_2d_circle, 0);
             for (int i = 0; i < it.count; i++) {
                 if (!c[i].visible) continue;
                 ensure_capacity(&items, count, &capacity);
@@ -165,10 +165,10 @@ void render2d_bridge_draw(void) {
         }
     }
 
-    if (g_line_query) {
-        ecs_iter_t it = ecs_query_iter(ecs, g_line_query);
+    if (g_sys_2d_line_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_sys_2d_line_query);
         while (ecs_query_next(&it)) {
-            RenderLine *l = ecs_field(&it, RenderLine, 0);
+            comp_2d_line *l = ecs_field(&it, comp_2d_line, 0);
             for (int i = 0; i < it.count; i++) {
                 if (!l[i].visible) continue;
                 ensure_capacity(&items, count, &capacity);
@@ -185,10 +185,10 @@ void render2d_bridge_draw(void) {
         }
     }
 
-    if (g_text_query) {
-        ecs_iter_t it = ecs_query_iter(ecs, g_text_query);
+    if (g_sys_2d_text_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_sys_2d_text_query);
         while (ecs_query_next(&it)) {
-            RenderText *t = ecs_field(&it, RenderText, 0);
+            comp_2d_text *t = ecs_field(&it, comp_2d_text, 0);
             for (int i = 0; i < it.count; i++) {
                 if (!t[i].visible) continue;
                 ensure_capacity(&items, count, &capacity);

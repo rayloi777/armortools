@@ -122,8 +122,8 @@ void game_engine_init(void) {
     camera_bridge_set_world(g_world);
     camera_bridge_init();
 
-    render2d_bridge_set_world(g_world);
-    render2d_bridge_init();
+    sys_2d_set_world(g_world);
+    sys_2d_init();
 
     runtime_api_set_world(g_world);
     runtime_api_register();
@@ -147,7 +147,7 @@ void game_engine_shutdown(void) {
     if (!g_initialized) return;
     printf("Game Engine Shutting Down...\n");
 
-    render2d_bridge_shutdown();
+    sys_2d_shutdown();
     sprite_bridge_shutdown();
     sprite_renderer_shutdown();
     camera_bridge_shutdown();

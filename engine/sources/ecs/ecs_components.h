@@ -3,9 +3,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef struct { float x, y, z; } TransformPosition;
-typedef struct { float x, y, z, w; } TransformRotation;
-typedef struct { float x, y, z; } TransformScale;
+typedef struct { float x, y, z; } comp_2d_position;
+typedef struct { float x, y, z, w; } comp_2d_rotation;
+typedef struct { float x, y, z; } comp_2d_scale;
 typedef struct { char *value; } EntityName;
 typedef struct { bool value; } EntityActive;
 
@@ -40,7 +40,7 @@ typedef struct {
     bool visible;
     float width, height;
     void *render_object;
-} RenderSprite;
+} comp_2d_sprite;
 
 typedef struct {
     float x, y;
@@ -52,7 +52,7 @@ typedef struct {
     float bounds_min_x, bounds_min_y;
     float bounds_max_x, bounds_max_y;
     bool has_bounds;
-} Camera2D;
+} comp_2d_camera;
 
 typedef struct {
     float x, y;
@@ -62,7 +62,7 @@ typedef struct {
     bool filled;
     float strength;
     bool visible;
-} RenderRect;
+} comp_2d_rect;
 
 typedef struct {
     float cx, cy;
@@ -73,7 +73,7 @@ typedef struct {
     bool filled;
     float strength;
     bool visible;
-} RenderCircle;
+} comp_2d_circle;
 
 typedef struct {
     float x0, y0;
@@ -82,7 +82,7 @@ typedef struct {
     uint32_t color;
     int layer;
     bool visible;
-} RenderLine;
+} comp_2d_line;
 
 typedef struct {
     char *text;
@@ -92,7 +92,7 @@ typedef struct {
     uint32_t color;
     int layer;
     bool visible;
-} RenderText;
+} comp_2d_text;
 
 void ecs_register_components(void *world);
 void ecs_register_builtin_fields(void);
@@ -100,17 +100,17 @@ void ecs_register_builtin_fields(void);
 uint64_t ecs_get_builtin_component(const char *name);
 const char *ecs_get_builtin_component_name(uint64_t component_id);
 
-uint64_t ecs_component_TransformPosition(void);
-uint64_t ecs_component_TransformRotation(void);
-uint64_t ecs_component_TransformScale(void);
+uint64_t ecs_component_comp_2d_position(void);
+uint64_t ecs_component_comp_2d_rotation(void);
+uint64_t ecs_component_comp_2d_scale(void);
 uint64_t ecs_component_EntityName(void);
 uint64_t ecs_component_EntityActive(void);
 uint64_t ecs_component_RenderObject(void);
 uint64_t ecs_component_RenderMesh(void);
 uint64_t ecs_component_EntityScript(void);
-uint64_t ecs_component_RenderSprite(void);
-uint64_t ecs_component_Camera2D(void);
-uint64_t ecs_component_RenderRect(void);
-uint64_t ecs_component_RenderCircle(void);
-uint64_t ecs_component_RenderLine(void);
-uint64_t ecs_component_RenderText(void);
+uint64_t ecs_component_comp_2d_sprite(void);
+uint64_t ecs_component_comp_2d_camera(void);
+uint64_t ecs_component_comp_2d_rect(void);
+uint64_t ecs_component_comp_2d_circle(void);
+uint64_t ecs_component_comp_2d_line(void);
+uint64_t ecs_component_comp_2d_text(void);

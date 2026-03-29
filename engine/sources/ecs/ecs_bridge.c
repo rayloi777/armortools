@@ -7,9 +7,9 @@ static game_world_t *g_game_world = NULL;
 static ecs_entity_t g_bridge_system = 0;
 
 static void bridge_system(ecs_iter_t *it) {
-    TransformPosition *pos = ecs_field(it, TransformPosition, 1);
-    TransformRotation *rot = ecs_field(it, TransformRotation, 2);
-    TransformScale *scale = ecs_field(it, TransformScale, 3);
+    comp_2d_position *pos = ecs_field(it, comp_2d_position, 1);
+    comp_2d_rotation *rot = ecs_field(it, comp_2d_rotation, 2);
+    comp_2d_scale *scale = ecs_field(it, comp_2d_scale, 3);
     RenderObject *render_obj = ecs_field(it, RenderObject, 4);
     RenderMesh *mesh = ecs_field(it, RenderMesh, 5);
 
@@ -71,9 +71,9 @@ void ecs_bridge_init(void) {
     
     ecs_system_desc_t sys_desc = {0};
     sys_desc.entity = 0;
-    sys_desc.query.terms[0].id = ecs_component_TransformPosition();
-    sys_desc.query.terms[1].id = ecs_component_TransformRotation();
-    sys_desc.query.terms[2].id = ecs_component_TransformScale();
+    sys_desc.query.terms[0].id = ecs_component_comp_2d_position();
+    sys_desc.query.terms[1].id = ecs_component_comp_2d_rotation();
+    sys_desc.query.terms[2].id = ecs_component_comp_2d_scale();
     sys_desc.query.terms[3].id = ecs_component_RenderObject();
     sys_desc.query.terms[4].id = ecs_component_RenderMesh();
     sys_desc.callback = bridge_system;
@@ -114,10 +114,10 @@ void ecs_bridge_sync_transform(uint64_t entity) {
     
     RenderObject *render_obj = (RenderObject *)ecs_get_id(ecs, e, ecs_component_RenderObject());
     if (!render_obj || !render_obj->transform) return;
-    
-    TransformPosition *pos = (TransformPosition *)ecs_get_id(ecs, e, ecs_component_TransformPosition());
-    TransformRotation *rot = (TransformRotation *)ecs_get_id(ecs, e, ecs_component_TransformRotation());
-    TransformScale *scale = (TransformScale *)ecs_get_id(ecs, e, ecs_component_TransformScale());
+
+    comp_2d_position *pos = (comp_2d_position *)ecs_get_id(ecs, e, ecs_component_comp_2d_position());
+    comp_2d_rotation *rot = (comp_2d_rotation *)ecs_get_id(ecs, e, ecs_component_comp_2d_rotation());
+    comp_2d_scale *scale = (comp_2d_scale *)ecs_get_id(ecs, e, ecs_component_comp_2d_scale());
     
     if (!pos || !rot || !scale) return;
     
