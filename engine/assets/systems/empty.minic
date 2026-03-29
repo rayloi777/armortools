@@ -1,0 +1,15 @@
+
+int init(void)
+{
+    printf("=== Empty Init ===");
+}
+
+int step(void)
+{
+
+}
+
+int draw(void)
+{
+
+}
