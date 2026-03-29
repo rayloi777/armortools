@@ -76,10 +76,10 @@ int minic_system_load(const char *name, const char *path) {
     sys->draw_fn = draw_fn;
     
     g_minic_system_count++;
-    
-    printf("[minic_system] Loaded '%s' from '%s' (step=%p, init=%p, draw=%p)\n", 
+
+    printf("[minic_system] Loaded '%s' from '%s' (step=%p, init=%p, draw=%p)\n",
            name, path, step_fn, init_fn, draw_fn);
-    
+
     return 0;
 }
 

@@ -29,15 +29,15 @@ void game_loop_update(void) {
     if (!g_loop_world) {
         return;
     }
-    
+
     g_delta_time = sys_delta();
     g_time += g_delta_time;
     g_frame_count++;
-    
+
     game_world_progress(g_loop_world, g_delta_time);
     minic_system_call_step();
     sys_render();
-    
+
     draw_begin(NULL, true, 0xff1a1a2e);
     camera2d_apply(camera_bridge_get_camera());
     sys_2d_draw();

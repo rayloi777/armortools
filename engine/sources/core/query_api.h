@@ -18,9 +18,13 @@ typedef struct {
     int total_count;
     uint64_t last_entities[1024];
     uint64_t *all_entities;
+    int all_entities_capacity;
     void *cached_it;
     uint64_t components[MAX_QUERY_COMPONENTS];
     int component_count;
+    void *cached_comp_data[MAX_QUERY_COMPONENTS];
+    size_t cached_comp_sizes[MAX_QUERY_COMPONENTS];
+    int cached_comp_count;
 } runtime_query_t;
 
 void query_api_register(void);
@@ -41,3 +45,9 @@ void query_free(int query_id);
 int query_total_count(int query_id);
 bool query_was_truncated(int query_id);
 int query_get_all(int query_id, uint64_t *entities, int max);
+
+void query_iter_begin(int query_id);
+bool query_iter_next(int query_id);
+int query_iter_count(int query_id);
+uint64_t query_iter_entity(int query_id, int index);
+void *query_iter_comp_ptr(int query_id, int entity_index, int comp_index);

@@ -1,0 +1,286 @@
+// BenchSystem - 6-phase performance comparison
+// P1: comp_get/set float (4 round trips/entity)
+// P2: comp_add_float (2 round trips/entity)
+// P3: comp_add_floats batch (1 round trip/entity)
+// P4: query + entity_get (3 round trips/entity)
+// P5: query + comp_ptr (2 round trips/entity)
+// P6: query_foreach (C iterates, 1 callback/entity)
+
+int g_pos_comp = -1;
+int g_vel_comp = -1;
+int g_query = -1;
+
+int g_entities[500];
+int g_count = 500;
+int g_iters = 10;
+int g_phase = 0;
+int g_frames = 0;
+int g_target = 30;
+
+float g_t_work = 0.0;
+float g_p1_time = 0.0;
+float g_p2_time = 0.0;
+float g_p3_time = 0.0;
+float g_p4_time = 0.0;
+float g_p5_time = 0.0;
+float g_p6_time = 0.0;
+
+float g_time_start = 0.0;
+float g_time_end = 0.0;
+
+float g_deltas[2];
+
+// Callback for P6 query_foreach
+int bench_foreach_step(int entity, void *vel) {
+    comp_add_floats(g_vel_comp, vel, "vx,vy", &g_deltas);
+    return 0;
+}
+
+int init(void) {
+    printf("=== BenchSystem: Init ===\n");
+    g_pos_comp = component_lookup("comp_2d_position");
+    g_vel_comp = component_register("BenchVelocity", 12);
+    if (g_vel_comp <= 0) { return -1; }
+    component_add_field(g_vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(g_vel_comp, "vy", TYPE_FLOAT, 4);
+    component_add_field(g_vel_comp, "vz", TYPE_FLOAT, 8);
+
+    g_deltas[0] = 0.01;
+    g_deltas[1] = 0.01;
+
+    printf("  Creating %d entities (x%d iters)...\n", g_count, g_iters);
+    int i = 0;
+    while (i < g_count) {
+        int e = entity_create();
+        entity_add(e, g_pos_comp);
+        entity_add(e, g_vel_comp);
+        g_entities[i] = e;
+        i = i + 1;
+    }
+    g_query = query_create("BenchVelocity");
+    printf("  query=%d. Warmup...\n", g_query);
+    return 0;
+}
+
+int step(void) {
+    if (g_phase == 0) {
+        g_frames = g_frames + 1;
+        if (g_frames >= 5) {
+            g_phase = 1;
+            g_frames = 0;
+            printf("P1: get+set x%d (%d fr)...\n", g_iters, g_target);
+        }
+        return 0;
+    }
+
+    // Phase 1: comp_get_float + comp_set_float (4 calls/entity/iter)
+    if (g_phase == 1) {
+        g_time_start = bench_time();
+        int n = 0;
+        while (n < g_iters) {
+            int i = 0;
+            while (i < g_count) {
+                void *vel = entity_get(g_entities[i], g_vel_comp);
+                float vx = comp_get_float(g_vel_comp, vel, "vx");
+                float vy = comp_get_float(g_vel_comp, vel, "vy");
+                comp_set_float(g_vel_comp, vel, "vx", vx + 0.01);
+                comp_set_float(g_vel_comp, vel, "vy", vy + 0.01);
+                i = i + 1;
+            }
+            n = n + 1;
+        }
+        g_time_end = bench_time();
+        g_t_work = g_t_work + (g_time_end - g_time_start);
+        g_frames = g_frames + 1;
+        if (g_frames >= g_target) {
+            g_p1_time = g_t_work;
+            g_phase = 2;
+            g_frames = 0;
+            g_t_work = 0.0;
+            printf("P2: add_float x%d (%d fr)...\n", g_iters, g_target);
+        }
+        return 0;
+    }
+
+    // Phase 2: comp_add_float (2 calls/entity/iter)
+    if (g_phase == 2) {
+        g_time_start = bench_time();
+        int n = 0;
+        while (n < g_iters) {
+            int i = 0;
+            while (i < g_count) {
+                void *vel = entity_get(g_entities[i], g_vel_comp);
+                comp_add_float(g_vel_comp, vel, "vx", 0.01);
+                comp_add_float(g_vel_comp, vel, "vy", 0.01);
+                i = i + 1;
+            }
+            n = n + 1;
+        }
+        g_time_end = bench_time();
+        g_t_work = g_t_work + (g_time_end - g_time_start);
+        g_frames = g_frames + 1;
+        if (g_frames >= g_target) {
+            g_p2_time = g_t_work;
+            g_phase = 3;
+            g_frames = 0;
+            g_t_work = 0.0;
+            printf("P3: add_floats batch x%d (%d fr)...\n", g_iters, g_target);
+        }
+        return 0;
+    }
+
+    // Phase 3: comp_add_floats batch (1 call/entity/iter, 2 fields at once)
+    if (g_phase == 3) {
+        g_time_start = bench_time();
+        int n = 0;
+        while (n < g_iters) {
+            int i = 0;
+            while (i < g_count) {
+                void *vel = entity_get(g_entities[i], g_vel_comp);
+                comp_add_floats(g_vel_comp, vel, "vx,vy", &g_deltas);
+                i = i + 1;
+            }
+            n = n + 1;
+        }
+        g_time_end = bench_time();
+        g_t_work = g_t_work + (g_time_end - g_time_start);
+        g_frames = g_frames + 1;
+        if (g_frames >= g_target) {
+            g_p3_time = g_t_work;
+            g_phase = 4;
+            g_frames = 0;
+            g_t_work = 0.0;
+            printf("P4: query+entity_get x%d (%d fr)...\n", g_iters, g_target);
+        }
+        return 0;
+    }
+
+    // Phase 4: query + entity_get (baseline query)
+    if (g_phase == 4) {
+        g_time_start = bench_time();
+        int n = 0;
+        while (n < g_iters) {
+            query_iter_begin(g_query);
+            while (query_iter_next(g_query)) {
+                int count = query_iter_count(g_query);
+                int i = 0;
+                while (i < count) {
+                    int e = query_iter_entity(g_query, i);
+                    void *vel = entity_get(e, g_vel_comp);
+                    comp_add_float(g_vel_comp, vel, "vx", 0.01);
+                    comp_add_float(g_vel_comp, vel, "vy", 0.01);
+                    i = i + 1;
+                }
+            }
+            n = n + 1;
+        }
+        g_time_end = bench_time();
+        g_t_work = g_t_work + (g_time_end - g_time_start);
+        g_frames = g_frames + 1;
+        if (g_frames >= g_target) {
+            g_p4_time = g_t_work;
+            g_phase = 5;
+            g_frames = 0;
+            g_t_work = 0.0;
+            printf("P5: query+comp_ptr x%d (%d fr)...\n", g_iters, g_target);
+        }
+        return 0;
+    }
+
+    // Phase 5: query + comp_ptr (skip entity_get)
+    if (g_phase == 5) {
+        g_time_start = bench_time();
+        int n = 0;
+        while (n < g_iters) {
+            query_iter_begin(g_query);
+            while (query_iter_next(g_query)) {
+                int count = query_iter_count(g_query);
+                int i = 0;
+                while (i < count) {
+                    void *vel = query_iter_comp_ptr(g_query, i, 0);
+                    comp_add_float(g_vel_comp, vel, "vx", 0.01);
+                    comp_add_float(g_vel_comp, vel, "vy", 0.01);
+                    i = i + 1;
+                }
+            }
+            n = n + 1;
+        }
+        g_time_end = bench_time();
+        g_t_work = g_t_work + (g_time_end - g_time_start);
+        g_frames = g_frames + 1;
+        if (g_frames >= g_target) {
+            g_p5_time = g_t_work;
+            g_phase = 6;
+            g_frames = 0;
+            g_t_work = 0.0;
+            printf("P6: query_foreach x%d (%d fr)...\n", g_iters, g_target);
+        }
+        return 0;
+    }
+
+    // Phase 6: query_foreach (C iterates, calls minic callback per entity)
+    if (g_phase == 6) {
+        g_time_start = bench_time();
+        int n = 0;
+        while (n < g_iters) {
+            query_foreach(g_query, bench_foreach_step);
+            n = n + 1;
+        }
+        g_time_end = bench_time();
+        g_t_work = g_t_work + (g_time_end - g_time_start);
+        g_frames = g_frames + 1;
+        if (g_frames >= g_target) {
+            g_p6_time = g_t_work;
+            g_phase = 7;
+            printf("\n========================================\n");
+            printf("  BenchSystem Results\n");
+            printf("  Entities: %d  Iters/frame: %d\n", g_count, g_iters);
+            printf("========================================\n");
+            printf("  P1: get+set float (4 trips/e)\n");
+            printf("    Work time: %f s\n", g_p1_time);
+            printf("  P2: comp_add_float (2 trips/e)\n");
+            printf("    Work time: %f s\n", g_p2_time);
+            printf("  P3: comp_add_floats batch (1 trip/e)\n");
+            printf("    Work time: %f s\n", g_p3_time);
+            printf("  P4: query + entity_get (3 trips/e)\n");
+            printf("    Work time: %f s\n", g_p4_time);
+            printf("  P5: query + comp_ptr (2 trips/e)\n");
+            printf("    Work time: %f s\n", g_p5_time);
+            printf("  P6: query_foreach (C iterate + callback)\n");
+            printf("    Work time: %f s\n", g_p6_time);
+            printf("========================================\n");
+            printf("  P2 vs P1: %f x\n", g_p1_time / g_p2_time);
+            printf("  P3 vs P2: %f x\n", g_p2_time / g_p3_time);
+            printf("  P3 vs P1: %f x\n", g_p1_time / g_p3_time);
+            printf("  P5 vs P4: %f x\n", g_p4_time / g_p5_time);
+            printf("  P6 vs P5: %f x\n", g_p5_time / g_p6_time);
+            printf("  P6 vs P1: %f x\n", g_p1_time / g_p6_time);
+            printf("========================================\n\n");
+        }
+        return 0;
+    }
+
+    return 0;
+}
+
+int draw(void) {
+    draw_set_color(0xffffffff);
+    if (g_phase == 0) {
+        draw_string("Warmup...", 10.0, 70.0);
+    } else if (g_phase == 1) {
+        draw_string("P1: get+set", 10.0, 70.0);
+    } else if (g_phase == 2) {
+        draw_string("P2: add_float", 10.0, 70.0);
+    } else if (g_phase == 3) {
+        draw_string("P3: add_floats", 10.0, 70.0);
+    } else if (g_phase == 4) {
+        draw_string("P4: query+get", 10.0, 70.0);
+    } else if (g_phase == 5) {
+        draw_string("P5: query+ptr", 10.0, 70.0);
+    } else if (g_phase == 6) {
+        draw_string("P6: foreach", 10.0, 70.0);
+    } else {
+        draw_string("Bench Complete", 10.0, 70.0);
+    }
+    return 0;
+}

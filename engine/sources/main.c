@@ -2,6 +2,7 @@
 
 // Unity Build - 包含所有源文件
 #include "game_engine.c"
+#include "core/engine_world.c"
 #include "core/runtime_api.c"
 #include "core/entity_api.c"
 #include "core/component_api.c"

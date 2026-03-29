@@ -1,4 +1,5 @@
 #include "game_engine.h"
+#include "core/engine_world.h"
 #include "core/game_loop.h"
 #include "core/runtime_api.h"
 #include "core/system_api.h"
@@ -112,6 +113,7 @@ void game_engine_init(void) {
     system_api_init();
 
     g_world = game_world_create();
+    engine_world_set(g_world);
 
     ecs_bridge_set_world(g_world);
     ecs_bridge_init();
@@ -124,6 +126,9 @@ void game_engine_init(void) {
 
     sys_2d_set_world(g_world);
     sys_2d_init();
+
+    ecs_dynamic_field_cache_build();
+    ecs_dynamic_comp_id_cache_build();
 
     runtime_api_set_world(g_world);
     runtime_api_register();
@@ -149,13 +154,14 @@ void game_engine_shutdown(void) {
 
     sys_2d_shutdown();
     sprite_bridge_shutdown();
-    sprite_renderer_shutdown();
+    sprite_texture_cache_shutdown();
     camera_bridge_shutdown();
     minic_system_unload_all();
     game_loop_shutdown();
     ecs_dynamic_shutdown();
     game_world_destroy(g_world);
     g_world = NULL;
+    engine_world_set(NULL);
     g_initialized = false;
 
     printf("Game Engine Shutdown Complete\n");

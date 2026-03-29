@@ -11,6 +11,75 @@ dynamic_component_t g_components[MAX_DYNAMIC_COMPONENTS];
 int g_component_count = 0;
 static game_world_t *g_dynamic_world = NULL;
 
+// Component ID hash table — maps flecs_id -> g_components[] index
+static int g_comp_id_buckets[COMP_ID_BUCKETS];   // start index per bucket, -1 = empty
+static int g_comp_id_bucket_sizes[COMP_ID_BUCKETS];
+static struct { uint64_t flecs_id; int index; } g_comp_id_entries[MAX_DYNAMIC_COMPONENTS];
+static int g_comp_id_entry_count = 0;
+
+// Hash table with open-addressing: buckets[hash] → start index into flat entries[]
+// Each bucket has at most FIELD_CACHE_BUCKET_CAP entries (collisions within bucket)
+static field_cache_entry_t g_field_cache[MAX_FIELD_CACHE];
+static int g_field_cache_count = 0;
+static int g_field_cache_buckets[FIELD_CACHE_BUCKETS]; // index into g_field_cache, -1 = empty
+static int g_field_cache_bucket_sizes[FIELD_CACHE_BUCKETS];
+
+static inline uint32_t field_name_hash(const char *s) {
+    uint32_t h = 5381;
+    while (*s) h = h * 33 + (uint8_t)*s++;
+    return h;
+}
+
+void ecs_dynamic_field_cache_build(void) {
+    g_field_cache_count = 0;
+    memset(g_field_cache_buckets, -1, sizeof(g_field_cache_buckets));
+    memset(g_field_cache_bucket_sizes, 0, sizeof(g_field_cache_bucket_sizes));
+
+    for (int c = 0; c < g_component_count; c++) {
+        dynamic_component_t *dc = &g_components[c];
+        for (int f = 0; f < dc->field_count; f++) {
+            if (g_field_cache_count >= MAX_FIELD_CACHE) return;
+
+            uint32_t h = field_name_hash(dc->fields[f].name);
+            uint32_t bucket = h & (FIELD_CACHE_BUCKETS - 1);
+
+            // Set bucket start index if this is the first entry in the bucket
+            if (g_field_cache_bucket_sizes[bucket] == 0) {
+                g_field_cache_buckets[bucket] = g_field_cache_count;
+            }
+            g_field_cache_bucket_sizes[bucket]++;
+
+            field_cache_entry_t *entry = &g_field_cache[g_field_cache_count++];
+            entry->component_id = dc->flecs_id;
+            entry->field_name_hash = h;
+            entry->field_offset = dc->fields[f].offset;
+            entry->field_type = dc->fields[f].type;
+        }
+    }
+}
+
+field_cache_entry_t *ecs_dynamic_field_cache_lookup_hashed(uint64_t component_id, uint32_t name_hash) {
+    uint32_t bucket = name_hash & (FIELD_CACHE_BUCKETS - 1);
+    int start = g_field_cache_buckets[bucket];
+    if (start < 0) return NULL;
+
+    int size = g_field_cache_bucket_sizes[bucket];
+    int end = start + size;
+    // Entries for this bucket are contiguous in g_field_cache[start..end)
+    // Also filter by component_id (bucket may have different component_id entries with same name hash)
+    for (int i = start; i < end && i < g_field_cache_count; i++) {
+        if (g_field_cache[i].component_id == component_id &&
+            g_field_cache[i].field_name_hash == name_hash) {
+            return &g_field_cache[i];
+        }
+    }
+    return NULL;
+}
+
+field_cache_entry_t *ecs_dynamic_field_cache_lookup(uint64_t component_id, const char *field_name) {
+    return ecs_dynamic_field_cache_lookup_hashed(component_id, field_name_hash(field_name));
+}
+
 static void component_ctor_wrapper(void *ptr, int32_t count, const ecs_type_info_t *type_info) {
     if (!ptr || !type_info) return;
     dynamic_component_t *dc = ecs_dynamic_component_get(type_info->component);
@@ -133,6 +202,9 @@ int ecs_dynamic_component_add_field(uint64_t component_id, const char *name, int
 }
 
 dynamic_component_t *ecs_dynamic_component_get(uint64_t component_id) {
+    if (g_comp_id_entry_count > 0) {
+        return ecs_dynamic_component_get_fast(component_id);
+    }
     for (int i = 0; i < g_component_count; i++) {
         if (g_components[i].flecs_id == component_id) {
             return &g_components[i];
@@ -232,8 +304,46 @@ int ecs_dynamic_component_set_hooks(struct game_world_t *world, uint64_t compone
     
     ecs_set_hooks_id(ecs, (ecs_entity_t)component_id, &hooks);
     
-    printf("[ecs_dynamic] Set hooks for %s: ctor=%s, dtor=%s\n", 
+    printf("[ecs_dynamic] Set hooks for %s: ctor=%s, dtor=%s\n",
            dc->name, ctor_name ? ctor_name : "none", dtor_name ? dtor_name : "none");
-    
+
     return 0;
+}
+
+// --- Component ID hash table ---
+
+void ecs_dynamic_comp_id_cache_build(void) {
+    g_comp_id_entry_count = 0;
+    memset(g_comp_id_buckets, -1, sizeof(g_comp_id_buckets));
+    memset(g_comp_id_bucket_sizes, 0, sizeof(g_comp_id_bucket_sizes));
+
+    for (int i = 0; i < g_component_count; i++) {
+        uint64_t id = g_components[i].flecs_id;
+        uint32_t bucket = (uint32_t)(id & (COMP_ID_BUCKETS - 1));
+
+        if (g_comp_id_bucket_sizes[bucket] == 0) {
+            g_comp_id_buckets[bucket] = g_comp_id_entry_count;
+        }
+        g_comp_id_bucket_sizes[bucket]++;
+
+        g_comp_id_entries[g_comp_id_entry_count].flecs_id = id;
+        g_comp_id_entries[g_comp_id_entry_count].index = i;
+        g_comp_id_entry_count++;
+    }
+}
+
+dynamic_component_t *ecs_dynamic_component_get_fast(uint64_t component_id) {
+    if (g_comp_id_entry_count == 0) return ecs_dynamic_component_get(component_id);
+
+    uint32_t bucket = (uint32_t)(component_id & (COMP_ID_BUCKETS - 1));
+    int start = g_comp_id_buckets[bucket];
+    if (start < 0) return NULL;
+
+    int end = start + g_comp_id_bucket_sizes[bucket];
+    for (int i = start; i < end && i < g_comp_id_entry_count; i++) {
+        if (g_comp_id_entries[i].flecs_id == component_id) {
+            return &g_components[g_comp_id_entries[i].index];
+        }
+    }
+    return NULL;
 }

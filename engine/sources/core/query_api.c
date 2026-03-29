@@ -2,6 +2,7 @@
 #include "ecs/ecs_world.h"
 #include "ecs/ecs_components.h"
 #include "flecs.h"
+#include "engine_world.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,10 +12,9 @@
 
 static runtime_query_t g_queries[MAX_QUERIES];
 static bool g_query_api_initialized = false;
-static game_world_t *g_query_world = NULL;
 
 void query_api_set_world(game_world_t *world) {
-    g_query_world = world;
+    (void)world;
 }
 
 void query_api_init(void) {
@@ -39,7 +39,7 @@ static runtime_query_t *get_query_by_id(int query_id) {
 }
 
 int query_create(const char *filter_expr) {
-    if (!g_query_world || !g_query_world->world || !filter_expr) return -1;
+    if (!engine_world_get() || !engine_world_get()->world || !filter_expr) return -1;
     
     runtime_query_t *q = find_free_query();
     if (!q) {
@@ -47,7 +47,7 @@ int query_create(const char *filter_expr) {
         return -1;
     }
     
-    ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
+    ecs_world_t *ecs = (ecs_world_t *)engine_world_get()->world;
     
     ecs_query_desc_t desc = {0};
     desc.expr = filter_expr;
@@ -77,7 +77,7 @@ int query_create(const char *filter_expr) {
 }
 
 int query_new(void) {
-    if (!g_query_world || !g_query_world->world) return -1;
+    if (!engine_world_get() || !engine_world_get()->world) return -1;
     
     runtime_query_t *q = find_free_query();
     if (!q) {
@@ -103,7 +103,7 @@ int query_with(int query_id, uint64_t component_id) {
 }
 
 static bool build_filter_and_run(runtime_query_t *q) {
-    if (!g_query_world || !g_query_world->world) return false;
+    if (!engine_world_get() || !engine_world_get()->world) return false;
     if (q->component_count == 0) return false;
     
     if (q->flecs_query) {
@@ -135,15 +135,12 @@ static bool build_filter_and_run(runtime_query_t *q) {
         }
     }
     
-    ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
+    ecs_world_t *ecs = (ecs_world_t *)engine_world_get()->world;
     ecs_query_desc_t desc = {0};
     desc.expr = filter;
     
-    printf("[query_api] Filter: '%s'\n", filter);
-    
     ecs_query_t *query = ecs_query_init(ecs, &desc);
     if (!query) {
-        printf("[query_api] Query init failed\n");
         return false;
     }
     
@@ -172,16 +169,15 @@ static bool build_filter_and_run(runtime_query_t *q) {
     }
     
     if (q->truncated) {
-        if (q->all_entities) {
+        if (!q->all_entities || q->all_entities_capacity < it->count) {
             free(q->all_entities);
+            q->all_entities = malloc(sizeof(uint64_t) * it->count);
+            q->all_entities_capacity = q->all_entities ? it->count : 0;
         }
-        q->all_entities = malloc(sizeof(uint64_t) * it->count);
         if (q->all_entities) {
             for (int i = 0; i < it->count; i++) {
                 q->all_entities[i] = (uint64_t)it->entities[i];
             }
-        } else {
-            printf("[query_api] Warning: failed to allocate memory for %d entities\n", it->count);
         }
     }
     
@@ -190,18 +186,11 @@ static bool build_filter_and_run(runtime_query_t *q) {
 
 int query_find(int query_id) {
     runtime_query_t *q = get_query_by_id(query_id);
-    if (!q) {
-        printf("[query_api] query_find: query not found (id=%d)\n", query_id);
-        return 0;
-    }
-    
-    printf("[query_api] query_find: id=%d, component_count=%d\n", query_id, q->component_count);
-    
+    if (!q) return 0;
+
     if (build_filter_and_run(q)) {
-        printf("[query_api] query_find: found %d entities\n", q->total_count);
         return q->total_count;
     }
-    printf("[query_api] query_find: build_filter_and_run failed\n");
     return 0;
 }
 
@@ -266,7 +255,7 @@ bool query_next(int query_id) {
     runtime_query_t *q = get_query_by_id(query_id);
     if (!q || !q->flecs_query) return false;
     
-    ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
+    ecs_world_t *ecs = (ecs_world_t *)engine_world_get()->world;
     ecs_query_t *query = (ecs_query_t *)q->flecs_query;
     
     if (!q->iter_started) {
@@ -293,17 +282,18 @@ bool query_next(int query_id) {
     }
     
     if (q->truncated) {
-        if (q->all_entities) {
+        if (!q->all_entities || q->all_entities_capacity < it->count) {
             free(q->all_entities);
+            q->all_entities = malloc(sizeof(uint64_t) * it->count);
+            q->all_entities_capacity = q->all_entities ? it->count : 0;
         }
-        q->all_entities = malloc(sizeof(uint64_t) * it->count);
         if (q->all_entities) {
             for (int i = 0; i < it->count; i++) {
                 q->all_entities[i] = (uint64_t)it->entities[i];
             }
         }
     }
-    
+
     return true;
 }
 
@@ -326,16 +316,7 @@ uint64_t query_get(int query_id, int index) {
     } else {
         return 0;
     }
-    
-    if (g_query_world && g_query_world->world) {
-        ecs_world_t *ecs = (ecs_world_t *)g_query_world->world;
-        if (!ecs_is_alive(ecs, (ecs_entity_t)entity)) {
-            printf("[query_get] Entity %llu is no longer alive (ecs_is_alive=false)\n", 
-                   (unsigned long long)entity);
-            return 0;
-        }
-    }
-    
+
     return entity;
 }
 
@@ -368,6 +349,76 @@ int query_get_all(int query_id, uint64_t *entities, int max) {
     }
     
     return count;
+}
+
+void query_iter_begin(int query_id) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q || !q->flecs_query || !engine_world_get()) return;
+
+    ecs_world_t *ecs = (ecs_world_t *)engine_world_get()->world;
+    if (!q->cached_it) {
+        q->cached_it = malloc(ECS_ITER_SIZE);
+    }
+    *(ecs_iter_t *)q->cached_it = ecs_query_iter(ecs, (ecs_query_t *)q->flecs_query);
+    q->iter_started = true;
+    q->last_count = 0;
+    q->total_count = 0;
+}
+
+bool query_iter_next(int query_id) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q || !q->cached_it || !q->iter_started) return false;
+
+    if (!ecs_query_next((ecs_iter_t *)q->cached_it)) {
+        q->last_count = 0;
+        q->iter_started = false;
+        return false;
+    }
+
+    ecs_iter_t *it = (ecs_iter_t *)q->cached_it;
+    q->total_count = it->count;
+    q->last_count = it->count < 1024 ? it->count : 1024;
+    q->truncated = it->count > 1024;
+
+    for (int i = 0; i < q->last_count; i++) {
+        q->last_entities[i] = (uint64_t)it->entities[i];
+    }
+
+    // Cache component data arrays for direct access
+    q->cached_comp_count = 0;
+    int term_count = it->field_count;
+    if (term_count > MAX_QUERY_COMPONENTS) term_count = MAX_QUERY_COMPONENTS;
+    for (int t = 0; t < term_count; t++) {
+        size_t sz = ecs_field_size(it, t + 1);
+        q->cached_comp_data[t] = ecs_field_w_size(it, sz, t + 1);
+        q->cached_comp_sizes[t] = sz;
+        q->cached_comp_count = t + 1;
+    }
+
+    return true;
+}
+
+int query_iter_count(int query_id) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q) return 0;
+    return q->total_count;
+}
+
+uint64_t query_iter_entity(int query_id, int index) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q || index < 0 || index >= q->last_count) return 0;
+    return q->last_entities[index];
+}
+
+void *query_iter_comp_ptr(int query_id, int entity_index, int comp_index) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q || entity_index < 0 || entity_index >= q->last_count) return NULL;
+    if (comp_index < 0 || comp_index >= q->cached_comp_count) return NULL;
+    if (!q->cached_comp_data[comp_index] || q->cached_comp_sizes[comp_index] == 0) return NULL;
+
+    char *base = (char *)q->cached_comp_data[comp_index];
+    size_t stride = q->cached_comp_sizes[comp_index];
+    return base + entity_index * stride;
 }
 
 void query_api_register(void) {

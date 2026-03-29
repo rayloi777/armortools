@@ -1,12 +1,23 @@
 // FrogSystem - 2D ECS component test via render2d_bridge
-// Tests RenderRect, RenderCircle, RenderLine, RenderText components
+// Tests RenderRect, RenderCircle, RenderLine, RenderText, RenderSprite components
 
 int g_rect_comp = -1;
 int g_circle_comp = -1;
 int g_line_comp = -1;
 int g_text_comp = -1;
+int g_sprite_comp = -1;
+int g_pos_comp = -1;
 int g_entities[8];
 int g_frame = 0;
+
+int g_frog_count = 10;
+int g_frog_entities[10];
+float g_frog_x[10];
+float g_frog_y[10];
+float g_frog_vx[10];
+float g_frog_vy[10];
+int g_frog_facing[10];
+int g_frog_layer[10];
 
 int init(void) {
     printf("FrogSystem: Init - 2D ECS component test\n");
@@ -15,9 +26,11 @@ int init(void) {
     g_circle_comp = component_lookup("comp_2d_circle");
     g_line_comp = component_lookup("comp_2d_line");
     g_text_comp = component_lookup("comp_2d_text");
+    g_sprite_comp = component_lookup("comp_2d_sprite");
+    g_pos_comp = component_lookup("comp_2d_position");
 
-    printf("Components: rect=%d circle=%d line=%d text=%d\n",
-           g_rect_comp, g_circle_comp, g_line_comp, g_text_comp);
+    printf("Components: rect=%d circle=%d line=%d text=%d sprite=%d pos=%d\n",
+           g_rect_comp, g_circle_comp, g_line_comp, g_text_comp, g_sprite_comp, g_pos_comp);
 
     if (g_rect_comp < 0 || g_circle_comp < 0) {
         printf("FrogSystem: Components not found - check ecs_register_builtin_fields\n");
@@ -79,14 +92,55 @@ int init(void) {
     comp_set_int(g_line_comp, line, "layer", 10);
     comp_set_bool(g_line_comp, line, "visible", 1);
 
-    printf("FrogSystem: Created %d test entities\n", 8);
+    // Create 10 frog sprites
+    int fi = 0;
+    while (fi < 10) {
+        int e = entity_create();
+        entity_add(e, g_pos_comp);
+        entity_add(e, g_sprite_comp);
+
+        void *pos = entity_get(e, g_pos_comp);
+        void *spr = entity_get(e, g_sprite_comp);
+
+        float start_x = 100.0 + fi * 120.0;
+        float start_y = 200.0 + (fi / 5) * 150.0;
+        float vx = 60.0 + fi * 8.0;
+        float vy = 40.0 + fi * 5.0;
+        int facing = 1;
+        if (fi / 2 * 2 == fi) facing = 0 - 1;
+
+        comp_set_float(g_pos_comp, pos, "x", start_x);
+        comp_set_float(g_pos_comp, pos, "y", start_y);
+        comp_set_float(g_pos_comp, pos, "z", 0.0);
+
+        comp_set_ptr(g_sprite_comp, spr, "texture_path", "images/frog_idle.k");
+        comp_set_float(g_sprite_comp, spr, "scale_x", 2.0);
+        comp_set_float(g_sprite_comp, spr, "scale_y", 2.0);
+        comp_set_bool(g_sprite_comp, spr, "flip_x", facing < 0);
+        comp_set_int(g_sprite_comp, spr, "layer", 20 + fi);
+        comp_set_bool(g_sprite_comp, spr, "visible", 1);
+
+        sprite_create(e);
+
+        g_frog_entities[fi] = e;
+        g_frog_x[fi] = start_x;
+        g_frog_y[fi] = start_y;
+        g_frog_vx[fi] = vx;
+        g_frog_vy[fi] = vy;
+        g_frog_facing[fi] = facing;
+
+        fi = fi + 1;
+    }
+
+    g_frog_count = 10;
+    printf("FrogSystem: Created %d test entities + %d frogs\n", 8, g_frog_count);
     return 0;
 }
 
 int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("FrogSystem - 2D ECS Test (RenderRect/Circle/Line)", 10, 10);
+    draw_string("FrogSystem - 2D ECS Test (Rect/Circle/Line/Text/Sprite)", 10, 10);
     draw_fps(10, 32);
     return 0;
 }
@@ -123,6 +177,8 @@ int step(void) {
         comp_set_float(g_circle_comp, circle, "cy", cy);
         i = i + 1;
     }
+
+
 
     return 0;
 }

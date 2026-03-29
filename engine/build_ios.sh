@@ -2,4 +2,4 @@
 set -e
 
 cd "$(dirname "$0")/../base"
-./make --target ios
+./make --target ios --run

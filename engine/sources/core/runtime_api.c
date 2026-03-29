@@ -8,10 +8,11 @@
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
 #include "ecs/camera_bridge.h"
+#include "ecs/sprite_bridge.h"
 
 #include <minic.h>
 #include <iron_input.h>
-
+#include <time.h>
 static game_world_t *g_runtime_world = NULL;
 
 static minic_val_t minic_printf(minic_val_t *args, int argc) {
@@ -81,82 +82,283 @@ static minic_val_t minic_printf(minic_val_t *args, int argc) {
 
 static minic_val_t minic_comp_set_float_native(minic_val_t *args, int argc) {
     if (argc < 4) return minic_val_void();
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     void *data = args[1].p;
     const char *field = (const char *)args[2].p;
     float value = (float)minic_val_to_d(args[3]);
-    component_set_field_float(comp_id, data, field, value);
+    if (!data || !field) return minic_val_void();
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        *(float *)((char *)data + fc->field_offset) = value;
+    } else {
+        component_set_field_float(comp_id, data, field, value);
+    }
     return minic_val_void();
 }
 
 static minic_val_t minic_comp_get_float_native(minic_val_t *args, int argc) {
     if (argc < 3) return minic_val_float(0.0f);
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     void *data = args[1].p;
     const char *field = (const char *)args[2].p;
-    float result = component_get_field_float(comp_id, data, field);
-    return minic_val_float(result);
+    if (!data || !field) return minic_val_float(0.0f);
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        return minic_val_float(*(float *)((char *)data + fc->field_offset));
+    }
+    return minic_val_float(component_get_field_float(comp_id, data, field));
+}
+
+static minic_val_t minic_comp_add_float_native(minic_val_t *args, int argc) {
+    if (argc < 4) return minic_val_void();
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
+    void *data = args[1].p;
+    const char *field = (const char *)args[2].p;
+    float delta = (float)minic_val_to_d(args[3]);
+    if (!data || !field) return minic_val_void();
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        *(float *)((char *)data + fc->field_offset) += delta;
+    } else {
+        float cur = component_get_field_float(comp_id, data, field);
+        component_set_field_float(comp_id, data, field, cur + delta);
+    }
+    return minic_val_void();
+}
+
+#define MAX_BATCH_FIELDS 8
+
+// Helper: parse comma-separated field names, look up field cache offsets.
+// Returns number of fields parsed. Writes offsets to out_offsets[].
+static int batch_lookup_fields(uint64_t comp_id, const char *fields, size_t *out_offsets, int max) {
+    if (!fields) return 0;
+    int count = 0;
+    const char *p = fields;
+    while (*p && count < max) {
+        // Find end of current field name
+        const char *start = p;
+        while (*p && *p != ',') p++;
+        int len = (int)(p - start);
+        if (len == 0) break;
+        // Copy to temp buffer for lookup
+        char name[64];
+        if (len >= (int)sizeof(name)) len = (int)sizeof(name) - 1;
+        memcpy(name, start, len);
+        name[len] = '\0';
+        // Look up field cache
+        field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, name);
+        if (fc) {
+            out_offsets[count] = fc->field_offset;
+        } else {
+            // Fallback: use component API to get offset (slow, but correct)
+            out_offsets[count] = (size_t)-1;
+        }
+        count++;
+        if (*p == ',') p++;
+    }
+    return count;
+}
+
+static minic_val_t minic_comp_set_floats_native(minic_val_t *args, int argc) {
+    if (argc < 4) return minic_val_void();
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
+    void *data = args[1].p;
+    const char *fields = (const char *)args[2].p;
+    float *values = (float *)args[3].p;
+    if (!data || !fields || !values) return minic_val_void();
+
+    size_t offsets[MAX_BATCH_FIELDS];
+    int count = batch_lookup_fields(comp_id, fields, offsets, MAX_BATCH_FIELDS);
+    char *base = (char *)data;
+    for (int i = 0; i < count; i++) {
+        if (offsets[i] != (size_t)-1) {
+            *(float *)(base + offsets[i]) = values[i];
+        }
+    }
+    return minic_val_int(count);
+}
+
+static minic_val_t minic_comp_get_floats_native(minic_val_t *args, int argc) {
+    if (argc < 4) return minic_val_int(0);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
+    void *data = args[1].p;
+    const char *fields = (const char *)args[2].p;
+    float *out = (float *)args[3].p;
+    if (!data || !fields || !out) return minic_val_int(0);
+
+    size_t offsets[MAX_BATCH_FIELDS];
+    int count = batch_lookup_fields(comp_id, fields, offsets, MAX_BATCH_FIELDS);
+    char *base = (char *)data;
+    for (int i = 0; i < count; i++) {
+        if (offsets[i] != (size_t)-1) {
+            out[i] = *(float *)(base + offsets[i]);
+        }
+    }
+    return minic_val_int(count);
+}
+
+static minic_val_t minic_comp_add_floats_native(minic_val_t *args, int argc) {
+    if (argc < 4) return minic_val_void();
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
+    void *data = args[1].p;
+    const char *fields = (const char *)args[2].p;
+    float *deltas = (float *)args[3].p;
+    if (!data || !fields || !deltas) return minic_val_void();
+
+    size_t offsets[MAX_BATCH_FIELDS];
+    int count = batch_lookup_fields(comp_id, fields, offsets, MAX_BATCH_FIELDS);
+    char *base = (char *)data;
+    for (int i = 0; i < count; i++) {
+        if (offsets[i] != (size_t)-1) {
+            *(float *)(base + offsets[i]) += deltas[i];
+        }
+    }
+    return minic_val_int(count);
+}
+
+static minic_val_t minic_query_iter_comp_ptr_native(minic_val_t *args, int argc) {
+    if (argc < 3) return minic_val_ptr(NULL);
+    int query_id = (int)minic_val_to_d(args[0]);
+    int entity_index = (int)minic_val_to_d(args[1]);
+    int comp_index = (int)minic_val_to_d(args[2]);
+    void *ptr = query_iter_comp_ptr(query_id, entity_index, comp_index);
+    return minic_val_ptr(ptr);
+}
+
+static minic_val_t minic_query_foreach_native(minic_val_t *args, int argc) {
+    if (argc < 2) return minic_val_int(0);
+    int query_id = (int)minic_val_to_d(args[0]);
+    void *callback = args[1].p;
+    if (!callback) return minic_val_int(0);
+
+    int total = 0;
+    query_iter_begin(query_id);
+    while (query_iter_next(query_id)) {
+        int count = query_iter_count(query_id);
+        for (int i = 0; i < count; i++) {
+            uint64_t entity = query_iter_entity(query_id, i);
+            void *comp_data = query_iter_comp_ptr(query_id, i, 0);
+            minic_val_t cb_args[2];
+            cb_args[0] = minic_val_int((int)entity);
+            cb_args[1] = minic_val_ptr(comp_data);
+            minic_call_fn(callback, cb_args, 2);
+            total++;
+        }
+    }
+    return minic_val_int(total);
+}
+
+static minic_val_t minic_query_foreach_batch_native(minic_val_t *args, int argc) {
+    if (argc < 2) return minic_val_int(0);
+    int query_id = (int)minic_val_to_d(args[0]);
+    void *callback = args[1].p;
+    if (!callback) return minic_val_int(0);
+
+    int total = 0;
+    query_iter_begin(query_id);
+    while (query_iter_next(query_id)) {
+        int count = query_iter_count(query_id);
+        // Get pointer to first entity's component data — they're contiguous
+        void *comp_data = query_iter_comp_ptr(query_id, 0, 0);
+        minic_val_t cb_args[2];
+        cb_args[0] = minic_val_int(count);
+        cb_args[1] = minic_val_ptr(comp_data);
+        minic_call_fn(callback, cb_args, 2);
+        total += count;
+    }
+    return minic_val_int(total);
 }
 
 static minic_val_t minic_comp_set_int_native(minic_val_t *args, int argc) {
     if (argc < 4) return minic_val_void();
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     void *data = args[1].p;
     const char *field = (const char *)args[2].p;
     int32_t value = (int32_t)minic_val_to_d(args[3]);
-    component_set_field_int(comp_id, data, field, value);
+    if (!data || !field) return minic_val_void();
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        *(int32_t *)((char *)data + fc->field_offset) = value;
+    } else {
+        component_set_field_int(comp_id, data, field, value);
+    }
     return minic_val_void();
 }
 
 static minic_val_t minic_comp_get_int_native(minic_val_t *args, int argc) {
     if (argc < 3) return minic_val_int(0);
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     void *data = args[1].p;
     const char *field = (const char *)args[2].p;
-    int32_t result = component_get_field_int(comp_id, data, field);
-    return minic_val_int(result);
+    if (!data || !field) return minic_val_int(0);
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        return minic_val_int(*(int32_t *)((char *)data + fc->field_offset));
+    }
+    return minic_val_int(component_get_field_int(comp_id, data, field));
 }
 
 static minic_val_t minic_comp_set_ptr_native(minic_val_t *args, int argc) {
     if (argc < 4) return minic_val_void();
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     void *data = args[1].p;
     const char *field = (const char *)args[2].p;
     void *value = args[3].p;
-    component_set_field_ptr(comp_id, data, field, value);
+    if (!data || !field) return minic_val_void();
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        *(void **)((char *)data + fc->field_offset) = value;
+    } else {
+        component_set_field_ptr(comp_id, data, field, value);
+    }
     return minic_val_void();
 }
 
 static minic_val_t minic_comp_get_ptr_native(minic_val_t *args, int argc) {
     if (argc < 3) return minic_val_ptr(NULL);
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     void *data = args[1].p;
     const char *field = (const char *)args[2].p;
-    void *result = component_get_field_ptr(comp_id, data, field);
-    return minic_val_ptr(result);
+    if (!data || !field) return minic_val_ptr(NULL);
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        return minic_val_ptr(*(void **)((char *)data + fc->field_offset));
+    }
+    return minic_val_ptr(component_get_field_ptr(comp_id, data, field));
 }
 
 static minic_val_t minic_comp_set_bool_native(minic_val_t *args, int argc) {
     if (argc < 4) return minic_val_void();
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     void *data = args[1].p;
     const char *field = (const char *)args[2].p;
     bool value = (bool)(int)minic_val_to_d(args[3]);
-    component_set_field_bool(comp_id, data, field, value);
+    if (!data || !field) return minic_val_void();
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        *(bool *)((char *)data + fc->field_offset) = value;
+    } else {
+        component_set_field_bool(comp_id, data, field, value);
+    }
     return minic_val_void();
 }
 
 static minic_val_t minic_comp_get_bool_native(minic_val_t *args, int argc) {
     if (argc < 3) return minic_val_int(0);
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     void *data = args[1].p;
     const char *field = (const char *)args[2].p;
+    if (!data || !field) return minic_val_int(0);
+    field_cache_entry_t *fc = ecs_dynamic_field_cache_lookup(comp_id, field);
+    if (fc) {
+        return minic_val_int(*(bool *)((char *)data + fc->field_offset) ? 1 : 0);
+    }
     return minic_val_int(component_get_field_bool(comp_id, data, field) ? 1 : 0);
 }
 
 static minic_val_t minic_component_add_field_native(minic_val_t *args, int argc) {
     if (argc < 4) return minic_val_int(0);
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     const char *name = (const char *)args[1].p;
     int type = (int)minic_val_to_d(args[2]);
     int offset = (int)minic_val_to_d(args[3]);
@@ -174,13 +376,54 @@ static int minic_component_get_field_count(uint64_t comp_id) {
 
 static minic_val_t minic_component_get_field_info_native(minic_val_t *args, int argc) {
     if (argc < 4) return minic_val_int(-1);
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
     int field_index = (int)minic_val_to_d(args[1]);
     char *name_out = (char *)args[2].p;
     int *type_out = (int *)args[3].p;
     size_t offset_out = 0;
     int result = component_get_field_info(comp_id, field_index, name_out, type_out, &offset_out);
     return minic_val_int(result);
+}
+
+static minic_type_t component_type_to_minic(int comp_type) {
+    switch (comp_type) {
+    case COMPONENT_TYPE_INT:   return MINIC_T_INT;
+    case COMPONENT_TYPE_FLOAT: return MINIC_T_FLOAT;
+    case COMPONENT_TYPE_PTR:   return MINIC_T_PTR;
+    case COMPONENT_TYPE_BOOL:  return MINIC_T_BOOL;
+    default:                   return MINIC_T_INT;
+    }
+}
+
+static minic_val_t minic_component_finalize_native(minic_val_t *args, int argc) {
+    if (argc < 2) return minic_val_int(-1);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[0]);
+    const char *struct_name = (const char *)args[1].p;
+    if (!struct_name) struct_name = component_get_name(comp_id);
+    if (!struct_name) return minic_val_int(-1);
+
+    int field_count = component_get_field_count(comp_id);
+    if (field_count <= 0) return minic_val_int(-1);
+
+    static const char *names[16];
+    static char name_bufs[16][64];
+    static int offsets[16];
+    static minic_type_t types[16];
+    static minic_type_t derefs[16];
+
+    int actual = field_count < 16 ? field_count : 16;
+    for (int i = 0; i < actual; i++) {
+        int ftype = 0;
+        size_t foffset = 0;
+        component_get_field_info(comp_id, i, name_bufs[i], &ftype, &foffset);
+        names[i] = name_bufs[i];
+        offsets[i] = (int)foffset;
+        types[i] = component_type_to_minic(ftype);
+        derefs[i] = types[i];
+    }
+
+    minic_register_struct_native(struct_name, names, offsets, types, derefs, actual);
+    return minic_val_int(0);
 }
 
 void minic_register_builtins(void) {
@@ -252,7 +495,7 @@ static const char *minic_entity_get_name(uint64_t entity) {
 }
 static minic_val_t minic_entity_set_name_native(minic_val_t *args, int argc) {
     if (argc < 2) return minic_val_void();
-    uint64_t entity = (uint64_t)(int)minic_val_to_d(args[0]);
+    uint64_t entity = (uint64_t)minic_val_to_d(args[0]);
     const char *name = (const char *)args[1].p;
     if (!g_runtime_world || entity == 0 || !name) return minic_val_void();
     entity_set_name(g_runtime_world, entity, name);
@@ -276,17 +519,18 @@ static void *minic_entity_get(uint64_t entity, uint64_t component_id) {
 }
 static minic_val_t minic_entity_set_data_native(minic_val_t *args, int argc) {
     if (argc < 3) return minic_val_void();
-    uint64_t entity = (uint64_t)(int)minic_val_to_d(args[0]);
-    uint64_t component_id = (uint64_t)(int)minic_val_to_d(args[1]);
+    uint64_t entity = (uint64_t)minic_val_to_d(args[0]);
+    uint64_t component_id = (uint64_t)minic_val_to_d(args[1]);
     void *data = args[2].p;
     if (!g_runtime_world || entity == 0 || component_id == 0 || !data) return minic_val_void();
     entity_set_component_data(g_runtime_world, entity, component_id, data);
     return minic_val_void();
 }
+
 static minic_val_t minic_dbg_entity_has_comp(minic_val_t *args, int argc) {
     if (argc < 2) return minic_val_int(0);
-    uint64_t entity = (uint64_t)(int)minic_val_to_d(args[0]);
-    uint64_t comp_id = (uint64_t)(int)minic_val_to_d(args[1]);
+    uint64_t entity = (uint64_t)minic_val_to_d(args[0]);
+    uint64_t comp_id = (uint64_t)minic_val_to_d(args[1]);
     int result = entity_has_component(g_runtime_world, entity, comp_id) ? 1 : 0;
     printf("[dbg] entity_has_comp(%llu, %llu) = %d\n", (unsigned long long)entity, (unsigned long long)comp_id, result);
     return minic_val_int(result);
@@ -320,6 +564,22 @@ static uint64_t minic_sys_frame(void) {
 static float minic_sys_fps(void) {
     return g_fps;
 }
+
+static struct timespec g_bench_epoch = {0, 0};
+static bool g_bench_epoch_set = false;
+
+static minic_val_t minic_bench_time_native(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    if (!g_bench_epoch_set) {
+        g_bench_epoch = ts;
+        g_bench_epoch_set = true;
+    }
+    double elapsed = (double)(ts.tv_sec - g_bench_epoch.tv_sec) +
+                     (double)(ts.tv_nsec - g_bench_epoch.tv_nsec) * 1e-9;
+    return minic_val_float((float)elapsed);
+}
 static float minic_rand_float(void) {
     return (float)rand() / (float)RAND_MAX;
 }
@@ -351,6 +611,23 @@ static minic_val_t minic_sprite_draw(minic_val_t *args, int argc) {
         draw_scaled_image(tex, x, y, w, h);
     }
     return minic_val_void();
+}
+
+static minic_val_t minic_sprite_create(minic_val_t *args, int argc) {
+    if (argc < 1) return minic_val_void();
+    uint64_t entity = (uint64_t)(int)minic_val_to_d(args[0]);
+    sprite_bridge_create_sprite(entity);
+    return minic_val_void();
+}
+
+static minic_val_t minic_sys_width(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    return minic_val_float((float)iron_window_width());
+}
+
+static minic_val_t minic_sys_height(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    return minic_val_float((float)iron_window_height());
 }
 
 static minic_val_t minic_draw_begin(minic_val_t *args, int argc) {
@@ -721,6 +998,7 @@ void runtime_api_register(void) {
     
     minic_register("component_register", "i(p,i)", (minic_ext_fn_raw_t)minic_component_register);
     minic_register_native("component_add_field", minic_component_add_field_native);
+    minic_register_native("component_finalize", minic_component_finalize_native);
     minic_register("component_get_id", "i(p)", (minic_ext_fn_raw_t)minic_component_get_id);
     minic_register("component_lookup", "i(p)", (minic_ext_fn_raw_t)minic_component_get_id);
     minic_register("component_get_name", "p(i)", (minic_ext_fn_raw_t)component_get_name);
@@ -748,6 +1026,10 @@ void runtime_api_register(void) {
     
     minic_register_native("comp_set_int", minic_comp_set_int_native);
     minic_register_native("comp_set_float", minic_comp_set_float_native);
+    minic_register_native("comp_add_float", minic_comp_add_float_native);
+    minic_register_native("comp_set_floats", minic_comp_set_floats_native);
+    minic_register_native("comp_get_floats", minic_comp_get_floats_native);
+    minic_register_native("comp_add_floats", minic_comp_add_floats_native);
     minic_register_native("comp_set_ptr", minic_comp_set_ptr_native);
     minic_register_native("comp_set_bool", minic_comp_set_bool_native);
     minic_register_native("comp_get_int", minic_comp_get_int_native);
@@ -759,11 +1041,15 @@ void runtime_api_register(void) {
     minic_register("sys_time", "f()", (minic_ext_fn_raw_t)minic_sys_time);
     minic_register("sys_frame", "i()", (minic_ext_fn_raw_t)minic_sys_frame);
     minic_register("sys_fps", "f()", (minic_ext_fn_raw_t)minic_sys_fps);
+    minic_register("sys_width", "f()", (minic_ext_fn_raw_t)minic_sys_width);
+    minic_register("sys_height", "f()", (minic_ext_fn_raw_t)minic_sys_height);
     minic_register("rand_float", "f()", (minic_ext_fn_raw_t)minic_rand_float);
     minic_register("rand_range", "f(ff)", (minic_ext_fn_raw_t)minic_rand_range);
-    
+    minic_register_native("bench_time", minic_bench_time_native);
+
     minic_register_native("sprite_load", minic_sprite_load);
     minic_register_native("sprite_draw", minic_sprite_draw);
+    minic_register_native("sprite_create", minic_sprite_create);
     minic_register_native("draw_begin", minic_draw_begin);
     minic_register_native("draw_end", minic_draw_end);
     minic_register_native("draw_set_color", minic_draw_set_color);
@@ -785,6 +1071,14 @@ void runtime_api_register(void) {
     minic_register_native("camera_get_zoom", minic_camera_get_zoom);
     
     minic_register_native("dbg_entity_has_comp", minic_dbg_entity_has_comp);
+    
+    minic_register("query_iter_begin", "v(i)", (minic_ext_fn_raw_t)query_iter_begin);
+    minic_register("query_iter_next", "i(i)", (minic_ext_fn_raw_t)query_iter_next);
+    minic_register("query_iter_count", "i(i)", (minic_ext_fn_raw_t)query_iter_count);
+    minic_register("query_iter_entity", "i(i,i)", (minic_ext_fn_raw_t)query_iter_entity);
+    minic_register_native("query_iter_comp_ptr", minic_query_iter_comp_ptr_native);
+    minic_register_native("query_foreach", minic_query_foreach_native);
+    minic_register_native("query_foreach_batch", minic_query_foreach_batch_native);
     
     minic_register("TYPE_INT", "i", NULL);
     minic_register("TYPE_FLOAT", "i", NULL);

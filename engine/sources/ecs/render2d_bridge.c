@@ -3,7 +3,6 @@
 #include "ecs_components.h"
 #include "ecs_bridge.h"
 #include "flecs.h"
-#include "../core/sprite_api.h"
 #include <iron_draw.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +28,7 @@ typedef struct {
     r2d_type_t type;
     int layer;
     union {
-        sprite_renderer_t *sprite;
+        struct { gpu_texture_t *texture; float x, y; float scale_x, scale_y; float src_width, src_height; float pivot_x, pivot_y; bool flip_x, flip_y; } sprite;
         struct { float x, y, w, h; bool filled; float strength; uint32_t color; } rect;
         struct { float cx, cy, radius; int segments; bool filled; float strength; uint32_t color; } circle;
         struct { float x0, y0, x1, y1; float strength; uint32_t color; } line;
@@ -37,10 +36,32 @@ typedef struct {
     };
 } r2d_item_t;
 
-static int r2d_item_compare(const void *a, const void *b) {
-    const r2d_item_t *ia = (const r2d_item_t *)a;
-    const r2d_item_t *ib = (const r2d_item_t *)b;
-    return ia->layer - ib->layer;
+static r2d_item_t *s_items = NULL;
+static int s_capacity = 0;
+static int s_prev_count = 0; // items from previous frame, nearly sorted
+
+// Insertion sort for nearly-sorted data (O(n) best case when frame order is stable)
+static void r2d_insertion_sort(r2d_item_t *items, int count) {
+    for (int i = 1; i < count; i++) {
+        r2d_item_t tmp = items[i];
+        int j = i - 1;
+        while (j >= 0 && items[j].layer > tmp.layer) {
+            items[j + 1] = items[j];
+            j--;
+        }
+        items[j + 1] = tmp;
+    }
+}
+
+static void ensure_capacity(int needed) {
+    if (needed < s_capacity) return;
+    int new_cap = s_capacity == 0 ? 128 : s_capacity;
+    while (new_cap <= needed) new_cap *= 2;
+    r2d_item_t *new_items = realloc(s_items, sizeof(r2d_item_t) * new_cap);
+    if (new_items) {
+        s_items = new_items;
+        s_capacity = new_cap;
+    }
 }
 
 void sys_2d_set_world(game_world_t *world) {
@@ -85,40 +106,52 @@ void sys_2d_shutdown(void) {
     if (g_sys_2d_line_query) { ecs_query_fini(g_sys_2d_line_query); g_sys_2d_line_query = NULL; }
     if (g_sys_2d_text_query) { ecs_query_fini(g_sys_2d_text_query); g_sys_2d_text_query = NULL; }
     if (g_sys_2d_sprite_query) { ecs_query_fini(g_sys_2d_sprite_query); g_sys_2d_sprite_query = NULL; }
+    free(s_items);
+    s_items = NULL;
+    s_capacity = 0;
     g_render2d_world = NULL;
     printf("Render2d Bridge shutdown\n");
-}
-
-static void ensure_capacity(r2d_item_t **items, int count, int *capacity) {
-    if (count >= *capacity) {
-        *capacity *= 2;
-        *items = realloc(*items, sizeof(r2d_item_t) * (*capacity));
-    }
 }
 
 void sys_2d_draw(void) {
     if (!g_render2d_world) return;
 
-    int capacity = 64;
+    // Reuse pre-allocated buffer; only reset count per frame, no malloc/free
     int count = 0;
-    r2d_item_t *items = malloc(sizeof(r2d_item_t) * capacity);
-    if (!items) return;
+    ensure_capacity(128); // ensure initial allocation
 
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_render2d_world);
-    if (!ecs) { free(items); return; }
+    if (!ecs) return;
+
+    // First pass: count total visible items to do a single ensure_capacity
+    int total_estimate = 0;
+    // (Skip estimate for simplicity — ensure_capacity handles per-item growth efficiently)
 
     if (g_sys_2d_sprite_query) {
         ecs_iter_t it = ecs_query_iter(ecs, g_sys_2d_sprite_query);
         while (ecs_query_next(&it)) {
             comp_2d_position *pos = ecs_field(&it, comp_2d_position, 0);
-            comp_2d_sprite *sprite = ecs_field(&it, comp_2d_sprite, 1);
+            comp_2d_sprite *spr = ecs_field(&it, comp_2d_sprite, 1);
             for (int i = 0; i < it.count; i++) {
-                if (!sprite[i].visible || !sprite[i].render_object) continue;
-                ensure_capacity(&items, count, &capacity);
-                r2d_item_t *item = &items[count++];
+                if (!spr[i].visible || !spr[i].render_object) continue;
+                gpu_texture_t *tex = (gpu_texture_t *)spr[i].render_object;
+                float src_w = spr[i].src_width > 0 ? spr[i].src_width : (float)tex->width;
+                float src_h = spr[i].src_height > 0 ? spr[i].src_height : (float)tex->height;
+                ensure_capacity(count);
+                r2d_item_t *item = &s_items[count++];
                 item->type = R2D_SPRITE;
-                item->layer = sprite[i].layer;
-                item->sprite = (sprite_renderer_t *)sprite[i].render_object;
+                item->layer = spr[i].layer;
+                item->sprite.texture = tex;
+                item->sprite.x = pos[i].x;
+                item->sprite.y = pos[i].y;
+                item->sprite.scale_x = spr[i].scale_x;
+                item->sprite.scale_y = spr[i].scale_y;
+                item->sprite.src_width = src_w;
+                item->sprite.src_height = src_h;
+                item->sprite.pivot_x = spr[i].pivot_x;
+                item->sprite.pivot_y = spr[i].pivot_y;
+                item->sprite.flip_x = spr[i].flip_x;
+                item->sprite.flip_y = spr[i].flip_y;
             }
         }
     }
@@ -129,8 +162,8 @@ void sys_2d_draw(void) {
             comp_2d_rect *r = ecs_field(&it, comp_2d_rect, 0);
             for (int i = 0; i < it.count; i++) {
                 if (!r[i].visible) continue;
-                ensure_capacity(&items, count, &capacity);
-                r2d_item_t *item = &items[count++];
+                ensure_capacity(count);
+                r2d_item_t *item = &s_items[count++];
                 item->type = R2D_RECT;
                 item->layer = r[i].layer;
                 item->rect.x = r[i].x;
@@ -150,8 +183,8 @@ void sys_2d_draw(void) {
             comp_2d_circle *c = ecs_field(&it, comp_2d_circle, 0);
             for (int i = 0; i < it.count; i++) {
                 if (!c[i].visible) continue;
-                ensure_capacity(&items, count, &capacity);
-                r2d_item_t *item = &items[count++];
+                ensure_capacity(count);
+                r2d_item_t *item = &s_items[count++];
                 item->type = R2D_CIRCLE;
                 item->layer = c[i].layer;
                 item->circle.cx = c[i].cx;
@@ -171,8 +204,8 @@ void sys_2d_draw(void) {
             comp_2d_line *l = ecs_field(&it, comp_2d_line, 0);
             for (int i = 0; i < it.count; i++) {
                 if (!l[i].visible) continue;
-                ensure_capacity(&items, count, &capacity);
-                r2d_item_t *item = &items[count++];
+                ensure_capacity(count);
+                r2d_item_t *item = &s_items[count++];
                 item->type = R2D_LINE;
                 item->layer = l[i].layer;
                 item->line.x0 = l[i].x0;
@@ -191,8 +224,8 @@ void sys_2d_draw(void) {
             comp_2d_text *t = ecs_field(&it, comp_2d_text, 0);
             for (int i = 0; i < it.count; i++) {
                 if (!t[i].visible) continue;
-                ensure_capacity(&items, count, &capacity);
-                r2d_item_t *item = &items[count++];
+                ensure_capacity(count);
+                r2d_item_t *item = &s_items[count++];
                 item->type = R2D_TEXT;
                 item->layer = t[i].layer;
                 item->text.text = t[i].text;
@@ -205,22 +238,36 @@ void sys_2d_draw(void) {
         }
     }
 
-    if (count == 0) {
-        free(items);
-        return;
-    }
+    if (count == 0) return;
 
-    qsort(items, count, sizeof(r2d_item_t), r2d_item_compare);
+    // Insertion sort: O(n) for nearly-sorted data (stable between frames)
+    // Much faster than qsort's O(n log n) for the common case
+    r2d_insertion_sort(s_items, count);
 
     uint32_t prev_color = draw_get_color();
     for (int i = 0; i < count; i++) {
-        r2d_item_t *item = &items[i];
+        r2d_item_t *item = &s_items[i];
         switch (item->type) {
-        case R2D_SPRITE:
-            if (item->sprite && sprite_renderer_is_visible(item->sprite)) {
-                sprite_renderer_draw(item->sprite);
+        case R2D_SPRITE: {
+            gpu_texture_t *tex = item->sprite.texture;
+            float draw_w = item->sprite.src_width * item->sprite.scale_x;
+            float draw_h = item->sprite.src_height * item->sprite.scale_y;
+            float draw_x = item->sprite.x - (draw_w * item->sprite.pivot_x);
+            float draw_y = item->sprite.y - (draw_h * item->sprite.pivot_y);
+            float sw = item->sprite.src_width;
+            float sh = item->sprite.src_height;
+            if (item->sprite.flip_x || item->sprite.flip_y) {
+                draw_scaled_sub_image(tex,
+                    item->sprite.flip_x ? sw : 0,
+                    item->sprite.flip_y ? sh : 0,
+                    item->sprite.flip_x ? -sw : sw,
+                    item->sprite.flip_y ? -sh : sh,
+                    draw_x, draw_y, draw_w, draw_h);
+            } else {
+                draw_scaled_sub_image(tex, 0, 0, sw, sh, draw_x, draw_y, draw_w, draw_h);
             }
             break;
+        }
         case R2D_RECT:
             draw_set_color(item->rect.color);
             if (item->rect.filled) {
@@ -257,5 +304,4 @@ void sys_2d_draw(void) {
         }
     }
     draw_set_color(prev_color);
-    free(items);
 }
