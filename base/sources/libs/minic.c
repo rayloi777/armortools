@@ -57,6 +57,7 @@ typedef enum {
 	TOK_MINUS_ASSIGN,
 	TOK_MUL_ASSIGN,
 	TOK_DIV_ASSIGN,
+	TOK_MOD_ASSIGN,
 	TOK_EQ,
 	TOK_NEQ,
 	TOK_LT,
@@ -73,6 +74,7 @@ typedef enum {
 	TOK_DEC,
 	TOK_STAR,
 	TOK_SLASH,
+	TOK_MOD,
 	TOK_DOT,
 	TOK_ARROW,
 	TOK_EOF
@@ -397,6 +399,15 @@ static void minic_lex_next(minic_lexer_t *l) {
 			l->cur.type = TOK_SLASH;
 		}
 		return;
+		case '%':
+			if (l->src[l->pos] == '=') {
+				l->pos++;
+				l->cur.type = TOK_MOD_ASSIGN;
+			}
+			else {
+				l->cur.type = TOK_MOD;
+			}
+			return;
 	case '+':
 		if (l->src[l->pos] == '+') {
 			l->pos++;
@@ -672,10 +683,14 @@ static const char *minic_tok_name(minic_tok_type_t t) {
 		return "'*='";
 	case TOK_DIV_ASSIGN:
 		return "'/='";
+	case TOK_MOD_ASSIGN:
+		return "'%='";
 	case TOK_STAR:
 		return "'*'";
 	case TOK_SLASH:
 		return "'/'";
+	case TOK_MOD:
+		return "'%'";
 	case TOK_DOT:
 		return "'.'";
 	case TOK_ARROW:
@@ -1101,6 +1116,9 @@ static minic_val_t minic_arith(minic_val_t a, minic_val_t b, char op) {
 	case '/':
 		r = (db != 0.0) ? da / db : 0.0;
 		break;
+		case '%':
+			r = (db != 0.0) ? fmod(da, db) : 0.0;
+			break;
 	default:
 		r = 0.0;
 	}
@@ -1314,8 +1332,8 @@ static minic_val_t minic_parse_primary(minic_env_t *e) {
 // term: primary (('*' | '/') primary)*
 static minic_val_t minic_parse_term(minic_env_t *e) {
 	minic_val_t v = minic_parse_primary(e);
-	while (e->lex.cur.type == TOK_STAR || e->lex.cur.type == TOK_SLASH) {
-		char op = (e->lex.cur.type == TOK_STAR) ? '*' : '/';
+		while (e->lex.cur.type == TOK_STAR || e->lex.cur.type == TOK_SLASH || e->lex.cur.type == TOK_MOD) {
+			char op = (e->lex.cur.type == TOK_STAR) ? '*' : (e->lex.cur.type == TOK_SLASH) ? '/' : '%';
 		minic_lex_next(&e->lex);
 		minic_val_t r = minic_parse_primary(e);
 		v             = minic_arith(v, r, op);
@@ -1688,13 +1706,14 @@ static void minic_parse_stmt(minic_env_t *e) {
 		}
 
 		if (e->lex.cur.type == TOK_PLUS_ASSIGN || e->lex.cur.type == TOK_MINUS_ASSIGN || e->lex.cur.type == TOK_MUL_ASSIGN ||
-		    e->lex.cur.type == TOK_DIV_ASSIGN) {
+			    e->lex.cur.type == TOK_DIV_ASSIGN ||
+			    e->lex.cur.type == TOK_MOD_ASSIGN) {
 			minic_tok_type_t op = e->lex.cur.type;
 			minic_lex_next(&e->lex);
 			minic_val_t dv = minic_parse_expr(e);
 			minic_val_t ov = minic_var_get(e, name);
 			double      a = minic_val_to_d(ov), b = minic_val_to_d(dv);
-			double      r = (op == TOK_PLUS_ASSIGN) ? a + b : (op == TOK_MINUS_ASSIGN) ? a - b : (op == TOK_MUL_ASSIGN) ? a * b : (b != 0.0 ? a / b : 0.0);
+			double      r = (op == TOK_PLUS_ASSIGN) ? a + b : (op == TOK_MINUS_ASSIGN) ? a - b : (op == TOK_MUL_ASSIGN) ? a * b : (op == TOK_DIV_ASSIGN) ? (b != 0.0 ? a / b : 0.0) : (b != 0.0 ? fmod(a, b) : 0.0);
 			minic_var_set(e, name, minic_val_coerce(r, ov.type));
 			minic_expect(e, TOK_SEMICOLON);
 			return;
@@ -1839,13 +1858,14 @@ static void minic_parse_stmt(minic_env_t *e) {
 					minic_var_set(e, iname, minic_val_coerce(minic_val_to_d(ov) + delta, ov.type));
 				}
 				else if (e->lex.cur.type == TOK_PLUS_ASSIGN || e->lex.cur.type == TOK_MINUS_ASSIGN || e->lex.cur.type == TOK_MUL_ASSIGN ||
-				         e->lex.cur.type == TOK_DIV_ASSIGN) {
+					         e->lex.cur.type == TOK_DIV_ASSIGN ||
+					         e->lex.cur.type == TOK_MOD_ASSIGN) {
 					minic_tok_type_t op = e->lex.cur.type;
 					minic_lex_next(&e->lex);
 					minic_val_t dv = minic_parse_expr(e);
 					minic_val_t ov = minic_var_get(e, iname);
 					double      a = minic_val_to_d(ov), b = minic_val_to_d(dv);
-					double r = (op == TOK_PLUS_ASSIGN) ? a + b : (op == TOK_MINUS_ASSIGN) ? a - b : (op == TOK_MUL_ASSIGN) ? a * b : (b != 0.0 ? a / b : 0.0);
+					double r = (op == TOK_PLUS_ASSIGN) ? a + b : (op == TOK_MINUS_ASSIGN) ? a - b : (op == TOK_MUL_ASSIGN) ? a * b : (op == TOK_DIV_ASSIGN) ? (b != 0.0 ? a / b : 0.0) : (b != 0.0 ? fmod(a, b) : 0.0);
 					minic_var_set(e, iname, minic_val_coerce(r, ov.type));
 				}
 				else if (e->lex.cur.type == TOK_ASSIGN) {
@@ -1894,7 +1914,7 @@ static void minic_parse_stmt(minic_env_t *e) {
 			minic_expect(e, TOK_SEMICOLON);
 			return;
 		}
-		minic_tok_type_t op = e->lex.cur.type; // TOK_ASSIGN, TOK_PLUS_ASSIGN, TOK_MINUS_ASSIGN, TOK_MUL_ASSIGN, TOK_DIV_ASSIGN
+		minic_tok_type_t op = e->lex.cur.type; // TOK_ASSIGN, TOK_PLUS_ASSIGN, TOK_MINUS_ASSIGN, TOK_MUL_ASSIGN, TOK_DIV_ASSIGN, TOK_MOD_ASSIGN
 		minic_lex_next(&e->lex);
 		minic_val_t v = minic_parse_expr(e);
 		if (ptr != NULL) {
@@ -1907,6 +1927,7 @@ static void minic_parse_stmt(minic_env_t *e) {
 				            : (op == TOK_MINUS_ASSIGN) ? ov - b
 				            : (op == TOK_MUL_ASSIGN)   ? ov * b
 				            : (op == TOK_DIV_ASSIGN)   ? (b != 0.0 ? ov / b : 0.0)
+				            : (op == TOK_MOD_ASSIGN)   ? (b != 0.0 ? fmod(ov, b) : 0.0)
 				                                       : b;
 				int    iv = (int)r;
 				memcpy(ptr, &iv, sizeof(int));
@@ -1920,6 +1941,7 @@ static void minic_parse_stmt(minic_env_t *e) {
 				            : (op == TOK_MINUS_ASSIGN) ? ov - b
 				            : (op == TOK_MUL_ASSIGN)   ? ov * b
 				            : (op == TOK_DIV_ASSIGN)   ? (b != 0.0 ? ov / b : 0.0)
+				            : (op == TOK_MOD_ASSIGN)   ? (b != 0.0 ? fmod(ov, b) : 0.0)
 				                                       : b;
 				float  fv = (float)r;
 				memcpy(ptr, &fv, sizeof(float));
@@ -1933,6 +1955,7 @@ static void minic_parse_stmt(minic_env_t *e) {
 				                 : (op == TOK_MINUS_ASSIGN) ? a - b
 				                 : (op == TOK_MUL_ASSIGN)   ? a * b
 				                 : (op == TOK_DIV_ASSIGN)   ? (b != 0.0 ? a / b : 0.0)
+				                 : (op == TOK_MOD_ASSIGN)   ? (b != 0.0 ? fmod(a, b) : 0.0)
 				                                            : b;
 				minic_val_t nv = (op == TOK_ASSIGN) ? v : minic_val_coerce(r, ov.type);
 				memcpy(ptr, &nv, sizeof(minic_val_t));

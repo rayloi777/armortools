@@ -1,0 +1,98 @@
+// MinicTest - Operator and language feature tests
+// Tests: %, %=, arithmetic, comparisons, loops, functions
+
+int g_pass = 0;
+int g_fail = 0;
+
+void check_int(char *label, int actual, int expected) {
+    if (actual == expected) {
+        g_pass = g_pass + 1;
+    }
+    else {
+        g_fail = g_fail + 1;
+        printf("  FAIL: %s = %d (expected %d)\n", label, actual, expected);
+    }
+}
+
+void check_float(char *label, float actual, float expected) {
+    float diff = actual - expected;
+    if (diff < 0.0) {
+        diff = 0.0 - diff;
+    }
+    if (diff < 0.0001) {
+        g_pass = g_pass + 1;
+    }
+    else {
+        g_fail = g_fail + 1;
+        printf("  FAIL: %s = %g (expected %g)\n", label, actual, expected);
+    }
+}
+
+int init(void) {
+    printf("\n========================================\n");
+    printf("  MinicTest: Language Feature Tests\n");
+    printf("========================================\n");
+
+    // --- Modulo operator ---
+    printf("\n--- Modulo %% ---\n");
+    check_int("10 % 3", 10 % 3, 1);
+    check_int("7 % 7", 7 % 7, 0);
+    check_int("0 % 5", 0 % 5, 0);
+    check_int("15 % 1", 15 % 1, 0);
+    check_int("100 % 7", 100 % 7, 2);
+    check_int("(-10) % 3", (0 - 10) % 3, -1);
+
+    // --- Modulo compound assignment ---
+    printf("\n--- Modulo %%= ---\n");
+    int a = 17;
+    a %= 5;
+    check_int("17 %%= 5", a, 2);
+    a = 100;
+    a %= 7;
+    check_int("100 %%= 7", a, 2);
+    a = 3;
+    a %= 3;
+    check_int("3 %%= 3", a, 0);
+
+    // --- Modulo in expression ---
+    printf("\n--- Modulo in expressions ---\n");
+    check_int("(10 % 3) + 4", (10 % 3) + 4, 5);
+    check_int("(20 % 6) * 3", (20 % 6) * 3, 6);
+    check_int("(10 % 3) + (7 % 2)", (10 % 3) + (7 % 2), 2);
+
+    // --- Float modulo ---
+    printf("\n--- Float modulo ---\n");
+    check_float("5.5 % 2.0", 5.5 % 2.0, 1.5);
+    check_float("10.0 % 3.0", 10.0 % 3.0, 1.0);
+
+    // --- Modulo in loop ---
+    printf("\n--- Modulo in loop ---\n");
+    int sum = 0;
+    int i = 1;
+    while (i <= 10) {
+        if (i % 2 == 0) {
+            sum = sum + i;
+        }
+        i = i + 1;
+    }
+    check_int("sum of evens 1..10", sum, 30);
+
+    // --- Division by zero ---
+    printf("\n--- Division by zero ---\n");
+    check_int("10 % 0", 10 % 0, 0);
+
+    // --- Summary ---
+    printf("\n========================================\n");
+    int total = g_pass + g_fail;
+    printf("  Results: %d / %d passed", g_pass, total);
+    if (g_fail > 0) {
+        printf(" (%d FAILED)", g_fail);
+    }
+    printf("\n========================================\n\n");
+
+    return 0;
+}
+
+int step(void) {
+    return 0;
+}
