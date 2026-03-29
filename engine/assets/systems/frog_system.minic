@@ -1,5 +1,5 @@
 // FrogSystem - 2D ECS component test via render2d_bridge
-// Tests RenderRect, RenderCircle, RenderLine, RenderText, RenderSprite components
+// Demonstrates optimized API patterns: comp_set_floats, query_foreach, comp_add_floats
 
 int g_rect_comp = -1;
 int g_circle_comp = -1;
@@ -7,17 +7,16 @@ int g_line_comp = -1;
 int g_text_comp = -1;
 int g_sprite_comp = -1;
 int g_pos_comp = -1;
+int g_vel_comp = -1;
 int g_entities[8];
 int g_frame = 0;
 
-int g_frog_count = 10;
-int g_frog_entities[10];
-float g_frog_x[10];
-float g_frog_y[10];
-float g_frog_vx[10];
-float g_frog_vy[10];
-int g_frog_facing[10];
-int g_frog_layer[10];
+float g_rect_vals[2];
+float g_circle_vals[2];
+float g_pos_vals[2];
+float g_vel_vals[2];
+float g_gravity[2];
+int g_pos_query = -1;
 
 int init(void) {
     printf("FrogSystem: Init - 2D ECS component test\n");
@@ -37,6 +36,14 @@ int init(void) {
         return 0;
     }
 
+    // Register dynamic FrogVelocity component
+    g_vel_comp = component_register("FrogVelocity", 8);
+    component_add_field(g_vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(g_vel_comp, "vy", TYPE_FLOAT, 4);
+
+    g_gravity[0] = 0.0;
+    g_gravity[1] = 80.0;
+
     // Create test entities with RenderRect
     int i = 0;
     while (i < 4) {
@@ -44,8 +51,9 @@ int init(void) {
         entity_add(e, g_rect_comp);
 
         void *rect = entity_get(e, g_rect_comp);
-        comp_set_float(g_rect_comp, rect, "x", 100.0 + i * 200.0);
-        comp_set_float(g_rect_comp, rect, "y", 100.0 + i * 50.0);
+        g_rect_vals[0] = 100.0 + i * 200.0;
+        g_rect_vals[1] = 100.0 + i * 50.0;
+        comp_set_floats(g_rect_comp, rect, "x,y", &g_rect_vals);
         comp_set_float(g_rect_comp, rect, "width", 80.0);
         comp_set_float(g_rect_comp, rect, "height", 60.0);
         comp_set_int(g_rect_comp, rect, "color", 0xff3366ff);
@@ -65,8 +73,9 @@ int init(void) {
         entity_add(e, g_circle_comp);
 
         void *circle = entity_get(e, g_circle_comp);
-        comp_set_float(g_circle_comp, circle, "cx", 200.0 + i * 300.0);
-        comp_set_float(g_circle_comp, circle, "cy", 400.0);
+        g_circle_vals[0] = 200.0 + i * 300.0;
+        g_circle_vals[1] = 400.0;
+        comp_set_floats(g_circle_comp, circle, "cx,cy", &g_circle_vals);
         comp_set_float(g_circle_comp, circle, "radius", 40.0 + i * 10.0);
         comp_set_int(g_circle_comp, circle, "segments", 32);
         comp_set_int(g_circle_comp, circle, "color", 0xff66ff33);
@@ -92,27 +101,31 @@ int init(void) {
     comp_set_int(g_line_comp, line, "layer", 10);
     comp_set_bool(g_line_comp, line, "visible", 1);
 
-    // Create 10 frog sprites
+    // Create 10 frog sprites with velocity
     int fi = 0;
     while (fi < 10) {
         int e = entity_create();
         entity_add(e, g_pos_comp);
         entity_add(e, g_sprite_comp);
-
-        void *pos = entity_get(e, g_pos_comp);
-        void *spr = entity_get(e, g_sprite_comp);
+        entity_add(e, g_vel_comp);
 
         float start_x = 100.0 + fi * 120.0;
         float start_y = 200.0 + (fi / 5) * 150.0;
-        float vx = 60.0 + fi * 8.0;
-        float vy = 40.0 + fi * 5.0;
         int facing = 1;
         if (fi / 2 * 2 == fi) facing = 0 - 1;
 
-        comp_set_float(g_pos_comp, pos, "x", start_x);
-        comp_set_float(g_pos_comp, pos, "y", start_y);
+        void *pos = entity_get(e, g_pos_comp);
+        g_pos_vals[0] = start_x;
+        g_pos_vals[1] = start_y;
+        comp_set_floats(g_pos_comp, pos, "x,y", &g_pos_vals);
         comp_set_float(g_pos_comp, pos, "z", 0.0);
 
+        void *vel = entity_get(e, g_vel_comp);
+        g_vel_vals[0] = (60.0 + fi * 8.0) * facing;
+        g_vel_vals[1] = 40.0 + fi * 5.0;
+        comp_set_floats(g_vel_comp, vel, "vx,vy", &g_vel_vals);
+
+        void *spr = entity_get(e, g_sprite_comp);
         comp_set_ptr(g_sprite_comp, spr, "texture_path", "images/frog_idle.k");
         comp_set_float(g_sprite_comp, spr, "scale_x", 2.0);
         comp_set_float(g_sprite_comp, spr, "scale_y", 2.0);
@@ -122,25 +135,55 @@ int init(void) {
 
         sprite_create(e);
 
-        g_frog_entities[fi] = e;
-        g_frog_x[fi] = start_x;
-        g_frog_y[fi] = start_y;
-        g_frog_vx[fi] = vx;
-        g_frog_vy[fi] = vy;
-        g_frog_facing[fi] = facing;
-
         fi = fi + 1;
     }
 
-    g_frog_count = 10;
-    printf("FrogSystem: Created %d test entities + %d frogs\n", 8, g_frog_count);
+    // Query for all entities with velocity (frogs)
+    g_pos_query = query_create("FrogVelocity");
+
+    printf("FrogSystem: Created 8 test entities + 10 frogs (query=%d)\n", g_pos_query);
+    return 0;
+}
+
+// query_foreach callback: apply gravity + move frog
+int frog_step(int entity, void *vel) {
+    // Apply gravity to velocity
+    comp_add_floats(g_vel_comp, vel, "vx,vy", &g_gravity);
+
+    // Get velocity values
+    float v[2];
+    comp_get_floats(g_vel_comp, vel, "vx,vy", &v);
+
+    // Bounce off screen edges
+    void *pos = entity_get(entity, g_pos_comp);
+    float p[2];
+    comp_get_floats(g_pos_comp, pos, "x,y", &p);
+
+    float bounce = 0 - 0.8;
+    if (p[0] < 0.0) { p[0] = 0.0; v[0] = v[0] * bounce; }
+    if (p[0] > 1200.0) { p[0] = 1200.0; v[0] = v[0] * bounce; }
+    if (p[1] < 0.0) { p[1] = 0.0; v[1] = v[1] * bounce; }
+    if (p[1] > 700.0) { p[1] = 700.0; v[1] = v[1] * bounce; }
+
+    // Write back position + velocity
+    comp_set_floats(g_pos_comp, pos, "x,y", &p);
+    comp_set_floats(g_vel_comp, vel, "vx,vy", &v);
+
+    // Flip sprite based on horizontal direction
+    if (v[0] > 0.5) {
+        void *spr = entity_get(entity, g_sprite_comp);
+        comp_set_bool(g_sprite_comp, spr, "flip_x", 0);
+    } else if (v[0] < -0.5) {
+        void *spr = entity_get(entity, g_sprite_comp);
+        comp_set_bool(g_sprite_comp, spr, "flip_x", 1);
+    }
     return 0;
 }
 
 int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("FrogSystem - 2D ECS Test (Rect/Circle/Line/Text/Sprite)", 10, 10);
+    draw_string("FrogSystem - 2D ECS Test (query_foreach + comp_set_floats)", 10, 10);
     draw_fps(10, 32);
     return 0;
 }
@@ -150,35 +193,36 @@ int step(void) {
     float delta = sys_delta();
     if (delta <= 0.0) delta = 0.016;
 
-    // Animate: move rectangles in a wave pattern using frame-based oscillation
+    // Scale gravity by delta
+    g_gravity[0] = 0.0;
+    g_gravity[1] = 80.0 * delta;
+
+    // Animate rectangles: wave pattern using comp_set_floats
     int i = 0;
     while (i < 4) {
-        int e = g_entities[i];
-        void *rect = entity_get(e, g_rect_comp);
+        void *rect = entity_get(g_entities[i], g_rect_comp);
         float fx = g_frame * 3 + i * 40;
         float fy = g_frame * 2 + i * 30;
-        float x = 100.0 + i * 200.0 + fx - (fx / 100.0) * 100.0 - 50.0;
-        float y = 100.0 + i * 50.0 + fy - (fy / 80.0) * 80.0 - 40.0;
-        comp_set_float(g_rect_comp, rect, "x", x);
-        comp_set_float(g_rect_comp, rect, "y", y);
+        g_rect_vals[0] = 100.0 + i * 200.0 + fx - (fx / 100.0) * 100.0 - 50.0;
+        g_rect_vals[1] = 100.0 + i * 50.0 + fy - (fy / 80.0) * 80.0 - 40.0;
+        comp_set_floats(g_rect_comp, rect, "x,y", &g_rect_vals);
         i = i + 1;
     }
 
-    // Animate circles
+    // Animate circles: wave pattern using comp_set_floats
     i = 0;
     while (i < 3) {
-        int e = g_entities[4 + i];
-        void *circle = entity_get(e, g_circle_comp);
+        void *circle = entity_get(g_entities[4 + i], g_circle_comp);
         float fx = g_frame * 6 + i * 40;
         float fy = g_frame * 3 + i * 25;
-        float cx = 200.0 + i * 300.0 + fx - (fx / 120.0) * 120.0 - 60.0;
-        float cy = 400.0 + fy - (fy / 70.0) * 70.0 - 35.0;
-        comp_set_float(g_circle_comp, circle, "cx", cx);
-        comp_set_float(g_circle_comp, circle, "cy", cy);
+        g_circle_vals[0] = 200.0 + i * 300.0 + fx - (fx / 120.0) * 120.0 - 60.0;
+        g_circle_vals[1] = 400.0 + fy - (fy / 70.0) * 70.0 - 35.0;
+        comp_set_floats(g_circle_comp, circle, "cx,cy", &g_circle_vals);
         i = i + 1;
     }
 
-
+    // Move frogs using query_foreach (C-side iteration + minic callback)
+    query_foreach(g_pos_query, frog_step);
 
     return 0;
 }

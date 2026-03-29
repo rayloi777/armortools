@@ -67,6 +67,7 @@ typedef struct {
 	minic_type_t       ret_type;
 	minic_type_t       param_types[MINIC_MAX_PARAMS];
 	int                param_count;
+	uint32_t           name_hash;
 } minic_ext_func_t;
 
 extern minic_enum_const_t    minic_enum_consts[MINIC_MAX_ENUM_CONSTS];

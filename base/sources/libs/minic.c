@@ -8,6 +8,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+static uint32_t minic_name_hash(const char *name) {
+	uint32_t h = 5381;
+	while (*name) {
+		h = ((h << 5) + h) ^ (uint8_t)(*name++);
+	}
+	return h;
+}
+
 // ████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗
 // ╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║
 //    ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║
@@ -489,6 +497,7 @@ void *minic_alloc(int size) {
 
 typedef struct {
 	char        name[64];
+	uint32_t    name_hash;
 	minic_val_t val;
 } minic_var_t;
 
@@ -527,8 +536,9 @@ typedef struct {
 
 // Maps a variable name to its struct type name
 typedef struct {
-	char var_name[64];
-	char struct_name[64];
+	char      var_name[64];
+	char      struct_name[64];
+	uint32_t  var_name_hash;
 } minic_vartype_t;
 
 typedef struct minic_env_s {
@@ -708,14 +718,15 @@ static void minic_expect(minic_env_t *e, minic_tok_type_t expected) {
 }
 
 static minic_val_t minic_var_get(minic_env_t *e, const char *name) {
+	uint32_t h = minic_name_hash(name);
 	for (int i = e->var_count - 1; i >= 0; --i) {
-		if (strcmp(e->vars[i].name, name) == 0) {
+		if (e->vars[i].name_hash == h && strcmp(e->vars[i].name, name) == 0) {
 			return e->vars[i].val;
 		}
 	}
 	if (e->global_env != NULL) {
 		for (int i = e->global_env->var_count - 1; i >= 0; --i) {
-			if (strcmp(e->global_env->vars[i].name, name) == 0) {
+			if (e->global_env->vars[i].name_hash == h && strcmp(e->global_env->vars[i].name, name) == 0) {
 				return e->global_env->vars[i].val;
 			}
 		}
@@ -724,8 +735,9 @@ static minic_val_t minic_var_get(minic_env_t *e, const char *name) {
 }
 
 static void minic_var_set(minic_env_t *e, const char *name, minic_val_t val) {
+	uint32_t h = minic_name_hash(name);
 	for (int i = e->var_count - 1; i >= 0; --i) {
-		if (strcmp(e->vars[i].name, name) == 0) {
+		if (e->vars[i].name_hash == h && strcmp(e->vars[i].name, name) == 0) {
 			// Preserve declared type, coerce if needed
 			if (e->vars[i].val.type != val.type) {
 				val = minic_val_cast(val, e->vars[i].val.type);
@@ -742,7 +754,7 @@ static void minic_var_set(minic_env_t *e, const char *name, minic_val_t val) {
 	if (e->global_env != NULL) {
 		minic_env_t *g = e->global_env;
 		for (int i = g->var_count - 1; i >= 0; --i) {
-			if (strcmp(g->vars[i].name, name) == 0) {
+			if (g->vars[i].name_hash == h && strcmp(g->vars[i].name, name) == 0) {
 				if (g->vars[i].val.type != val.type) {
 					val = minic_val_cast(val, g->vars[i].val.type);
 				}
@@ -756,6 +768,7 @@ static void minic_var_set(minic_env_t *e, const char *name, minic_val_t val) {
 	}
 	if (e->var_count < e->var_cap) {
 		strncpy(e->vars[e->var_count].name, name, 63);
+		e->vars[e->var_count].name_hash = h;
 		e->vars[e->var_count].val = val;
 		e->var_count++;
 	}
@@ -770,14 +783,16 @@ static void minic_var_decl(minic_env_t *e, const char *name, minic_type_t type, 
 	}
 	if (e->var_count < e->var_cap) {
 		strncpy(e->vars[e->var_count].name, name, 63);
+		e->vars[e->var_count].name_hash = minic_name_hash(name);
 		e->vars[e->var_count].val = v;
 		e->var_count++;
 	}
 }
 
 static minic_val_t minic_var_addr(minic_env_t *e, const char *name) {
+	uint32_t h = minic_name_hash(name);
 	for (int i = e->var_count - 1; i >= 0; --i) {
-		if (strcmp(e->vars[i].name, name) == 0) {
+		if (e->vars[i].name_hash == h && strcmp(e->vars[i].name, name) == 0) {
 			// Address of a minic_val_t — deref reads a full minic_val_t
 			minic_val_t addr = minic_val_ptr(&e->vars[i].val);
 			addr.deref_type  = MINIC_T_PTR; // sentinel: deref reads minic_val_t
@@ -788,7 +803,7 @@ static minic_val_t minic_var_addr(minic_env_t *e, const char *name) {
 	if (e->global_env != NULL) {
 		minic_env_t *g = e->global_env;
 		for (int i = g->var_count - 1; i >= 0; --i) {
-			if (strcmp(g->vars[i].name, name) == 0) {
+			if (g->vars[i].name_hash == h && strcmp(g->vars[i].name, name) == 0) {
 				minic_val_t addr = minic_val_ptr(&g->vars[i].val);
 				addr.deref_type  = MINIC_T_PTR;
 				return addr;
@@ -798,6 +813,7 @@ static minic_val_t minic_var_addr(minic_env_t *e, const char *name) {
 	// Create it as a local
 	if (e->var_count < e->var_cap) {
 		strncpy(e->vars[e->var_count].name, name, 63);
+		e->vars[e->var_count].name_hash = h;
 		e->vars[e->var_count].val = minic_val_int(0);
 		minic_val_t addr          = minic_val_ptr(&e->vars[e->var_count].val);
 		addr.deref_type           = MINIC_T_PTR;
@@ -898,19 +914,21 @@ static void minic_vartype_set(minic_env_t *e, const char *var_name, const char *
 	if (e->vartype_count < e->vartype_cap) {
 		strncpy(e->vartypes[e->vartype_count].var_name, var_name, 63);
 		strncpy(e->vartypes[e->vartype_count].struct_name, struct_name, 63);
+		e->vartypes[e->vartype_count].var_name_hash = minic_name_hash(var_name);
 		e->vartype_count++;
 	}
 }
 
 static minic_struct_def_t *minic_var_struct(minic_env_t *e, const char *var_name) {
+	uint32_t h = minic_name_hash(var_name);
 	for (int i = e->vartype_count - 1; i >= 0; --i) {
-		if (strcmp(e->vartypes[i].var_name, var_name) == 0) {
+		if (e->vartypes[i].var_name_hash == h && strcmp(e->vartypes[i].var_name, var_name) == 0) {
 			return minic_struct_get(e, e->vartypes[i].struct_name);
 		}
 	}
 	if (e->global_env != NULL) {
 		for (int i = e->global_env->vartype_count - 1; i >= 0; --i) {
-			if (strcmp(e->global_env->vartypes[i].var_name, var_name) == 0) {
+			if (e->global_env->vartypes[i].var_name_hash == h && strcmp(e->global_env->vartypes[i].var_name, var_name) == 0) {
 				return minic_struct_get(e, e->global_env->vartypes[i].struct_name);
 			}
 		}
@@ -999,6 +1017,7 @@ static void minic_struct_field_set(minic_env_t *e, const char *var_name, minic_s
 }
 
 static minic_val_t minic_call(minic_env_t *e, minic_func_t *fn, minic_val_t *args, int argc) {
+	int saved_mem_used = *minic_active_mem_used;
 	minic_env_t child   = {0};
 	child.lex.src       = e->lex.src;
 	child.lex.pos       = fn->body_pos;
@@ -1028,6 +1047,7 @@ static minic_val_t minic_call(minic_env_t *e, minic_func_t *fn, minic_val_t *arg
 	}
 	minic_lex_next(&child.lex);
 	minic_parse_block(&child);
+	*minic_active_mem_used = saved_mem_used;
 	return child.return_val;
 }
 

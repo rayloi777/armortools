@@ -14,6 +14,40 @@
 static minic_ext_func_t minic_ext_funcs[MINIC_MAX_EXTFUNS];
 static int              minic_ext_func_count = 0;
 
+// Hash table for O(1) ext function lookup
+#define EXTFUN_HASH_SIZE 1024
+static int  minic_ext_func_hashtbl[EXTFUN_HASH_SIZE];
+static bool minic_ext_hash_initialized = false;
+
+static uint32_t minic_ext_name_hash(const char *name) {
+	uint32_t h = 5381;
+	while (*name) {
+		h = ((h << 5) + h) ^ (uint8_t)(*name++);
+	}
+	return h;
+}
+
+static void minic_ext_hash_insert(int func_index) {
+	uint32_t h = minic_ext_funcs[func_index].name_hash;
+	int idx = h % EXTFUN_HASH_SIZE;
+	for (int i = 0; i < EXTFUN_HASH_SIZE; i++) {
+		if (minic_ext_func_hashtbl[idx] == -1) {
+			minic_ext_func_hashtbl[idx] = func_index;
+			return;
+		}
+		idx = (idx + 1) % EXTFUN_HASH_SIZE;
+	}
+}
+
+static void minic_ext_func_hash_init(void) {
+	for (int i = 0; i < EXTFUN_HASH_SIZE; i++)
+		minic_ext_func_hashtbl[i] = -1;
+	minic_ext_hash_initialized = true;
+	for (int i = 0; i < minic_ext_func_count; i++) {
+		minic_ext_hash_insert(i);
+	}
+}
+
 minic_enum_const_t  minic_enum_consts[MINIC_MAX_ENUM_CONSTS];
 int                 minic_enum_const_count = 0;
 minic_int_typedef_t minic_int_typedefs[MINIC_MAX_INT_TYPEDEFS];
@@ -164,46 +198,73 @@ static void minic_parse_sig(minic_ext_func_t *ef) {
 }
 
 void minic_register(const char *name, const char *sig, minic_ext_fn_raw_t fn) {
-	// Check for existing entry with same name
-	for (int i = 0; i < minic_ext_func_count; ++i) {
-		if (strcmp(minic_ext_funcs[i].name, name) == 0) {
+	if (!minic_ext_hash_initialized) minic_ext_func_hash_init();
+	uint32_t hash = minic_ext_name_hash(name);
+
+	// Check for existing entry via hash table
+	int idx = hash % EXTFUN_HASH_SIZE;
+	for (int i = 0; i < EXTFUN_HASH_SIZE; i++) {
+		int fi = minic_ext_func_hashtbl[idx];
+		if (fi == -1) break;
+		if (minic_ext_funcs[fi].name_hash == hash && strcmp(minic_ext_funcs[fi].name, name) == 0) {
 			// Update in-place
-			strncpy(minic_ext_funcs[i].sig, sig ? sig : "d()", MINIC_MAX_SIG - 1);
-			minic_ext_funcs[i].fn = fn;
-			minic_parse_sig(&minic_ext_funcs[i]);
+			strncpy(minic_ext_funcs[fi].sig, sig ? sig : "d()", MINIC_MAX_SIG - 1);
+			minic_ext_funcs[fi].fn = fn;
+			minic_parse_sig(&minic_ext_funcs[fi]);
 			return;
 		}
+		idx = (idx + 1) % EXTFUN_HASH_SIZE;
 	}
 	if (minic_ext_func_count >= MINIC_MAX_EXTFUNS) {
 		return;
 	}
-	minic_ext_func_t *ef = &minic_ext_funcs[minic_ext_func_count++];
+	minic_ext_func_t *ef = &minic_ext_funcs[minic_ext_func_count];
 	strncpy(ef->name, name, 63);
 	strncpy(ef->sig, sig ? sig : "d()", MINIC_MAX_SIG - 1);
 	ef->fn = fn;
+	ef->name_hash = hash;
 	minic_parse_sig(ef);
+	minic_ext_func_count++;
+	minic_ext_hash_insert(minic_ext_func_count - 1);
 }
 
 void minic_register_native(const char *name, minic_native_fn_t fn) {
-	for (int i = 0; i < minic_ext_func_count; ++i) {
-		if (strcmp(minic_ext_funcs[i].name, name) == 0) {
-			minic_ext_funcs[i].native_fn = fn;
+	if (!minic_ext_hash_initialized) minic_ext_func_hash_init();
+	uint32_t hash = minic_ext_name_hash(name);
+
+	// Check for existing entry via hash table
+	int idx = hash % EXTFUN_HASH_SIZE;
+	for (int i = 0; i < EXTFUN_HASH_SIZE; i++) {
+		int fi = minic_ext_func_hashtbl[idx];
+		if (fi == -1) break;
+		if (minic_ext_funcs[fi].name_hash == hash && strcmp(minic_ext_funcs[fi].name, name) == 0) {
+			minic_ext_funcs[fi].native_fn = fn;
 			return;
 		}
+		idx = (idx + 1) % EXTFUN_HASH_SIZE;
 	}
 	if (minic_ext_func_count >= MINIC_MAX_EXTFUNS) {
 		return;
 	}
-	minic_ext_func_t *ef = &minic_ext_funcs[minic_ext_func_count++];
+	minic_ext_func_t *ef = &minic_ext_funcs[minic_ext_func_count];
 	strncpy(ef->name, name, 63);
 	ef->native_fn = fn;
+	ef->name_hash = hash;
+	minic_ext_func_count++;
+	minic_ext_hash_insert(minic_ext_func_count - 1);
 }
 
 minic_ext_func_t *minic_ext_func_get(const char *name) {
-	for (int i = 0; i < minic_ext_func_count; ++i) {
-		if (strcmp(minic_ext_funcs[i].name, name) == 0) {
-			return &minic_ext_funcs[i];
+	if (!minic_ext_hash_initialized) minic_ext_func_hash_init();
+	uint32_t hash = minic_ext_name_hash(name);
+	int idx = hash % EXTFUN_HASH_SIZE;
+	for (int i = 0; i < EXTFUN_HASH_SIZE; i++) {
+		int fi = minic_ext_func_hashtbl[idx];
+		if (fi == -1) break;
+		if (minic_ext_funcs[fi].name_hash == hash && strcmp(minic_ext_funcs[fi].name, name) == 0) {
+			return &minic_ext_funcs[fi];
 		}
+		idx = (idx + 1) % EXTFUN_HASH_SIZE;
 	}
 	return NULL;
 }

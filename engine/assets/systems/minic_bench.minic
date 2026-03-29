@@ -1,0 +1,223 @@
+// MinicBench - Interpreter micro-benchmarks
+// Tests: variable lookup, ext dispatch, function calls, loop overhead, math ops
+
+int g_iters = 100000;
+int g_runs = 3;
+int g_phase = 0;
+int g_frame = 0;
+
+float g_r1 = 0.0;
+float g_r2 = 0.0;
+float g_r3 = 0.0;
+float g_r4 = 0.0;
+float g_r5 = 0.0;
+float g_acc = 0.0;
+
+int add_one(int x) {
+    return x + 1;
+}
+
+// Phase 1: Variable get/set
+float bench_var(int iters) {
+    int a = 0;
+    int b = 1;
+    int c = 2;
+    int d = 3;
+    int e = 4;
+    int f = 5;
+    int g = 6;
+    int h = 7;
+    int i = 0;
+    int sum = 0;
+    float t0 = bench_time();
+    while (i < iters) {
+        sum = sum + a + b + c + d + e + f + g + h;
+        a = a + 1;
+        i = i + 1;
+    }
+    float t1 = bench_time();
+    return t1 - t0;
+}
+
+// Phase 2: Ext function dispatch (12 calls/iter)
+float bench_ext(int iters) {
+    int i = 0;
+    float x = 0.0;
+    float t0 = bench_time();
+    while (i < iters) {
+        x = x + sys_delta() + sys_time() + sys_width() + sys_height() + rand_float();
+        x = x + sys_delta() + sys_time() + sys_width() + sys_height() + rand_float();
+        i = i + 1;
+    }
+    float t1 = bench_time();
+    return t1 - t0;
+}
+
+// Phase 3: Function call overhead
+float bench_call(int iters) {
+    int i = 0;
+    int result = 0;
+    float t0 = bench_time();
+    while (i < iters) {
+        result = add_one(result);
+        i = i + 1;
+    }
+    float t1 = bench_time();
+    return t1 - t0;
+}
+
+// Phase 4: Float math
+float bench_math(int iters) {
+    float x = 1.0;
+    float y = 2.0;
+    float z = 0.0;
+    int i = 0;
+    float t0 = bench_time();
+    while (i < iters) {
+        z = x + y;
+        x = z * 0.5;
+        y = z - x;
+        z = x * x + y * y;
+        i = i + 1;
+    }
+    float t1 = bench_time();
+    return t1 - t0;
+}
+
+// Phase 5: Empty loop
+float bench_loop(int iters) {
+    int i = 0;
+    float t0 = bench_time();
+    while (i < iters) {
+        i = i + 1;
+    }
+    float t1 = bench_time();
+    return t1 - t0;
+}
+
+int init(void) {
+    printf("\n========================================\n");
+    printf("  MinicBench: Interpreter Micro-Benchmarks\n");
+    printf("  Iters: %d  Runs: %d\n", g_iters, g_runs);
+    printf("========================================\n");
+    return 0;
+}
+
+int step(void) {
+    if (g_phase == 0) {
+        g_frame = g_frame + 1;
+        if (g_frame >= 3) {
+            g_phase = 1;
+            g_frame = 0;
+            printf("\n--- P1: Variable get/set ---\n");
+        }
+        return 0;
+    }
+
+    if (g_phase == 1) {
+        g_acc = g_acc + bench_var(g_iters);
+        g_frame = g_frame + 1;
+        if (g_frame >= g_runs) {
+            g_r1 = g_acc / g_runs;
+            printf("  P1: %g ms\n", g_r1 * 1000.0);
+            g_phase = 2;
+            g_frame = 0;
+            g_acc = 0.0;
+            printf("\n--- P2: Ext dispatch (12 calls/iter) ---\n");
+        }
+        return 0;
+    }
+
+    if (g_phase == 2) {
+        g_acc = g_acc + bench_ext(g_iters);
+        g_frame = g_frame + 1;
+        if (g_frame >= g_runs) {
+            g_r2 = g_acc / g_runs;
+            printf("  P2: %g ms\n", g_r2 * 1000.0);
+            g_phase = 3;
+            g_frame = 0;
+            g_acc = 0.0;
+            printf("\n--- P3: Function call overhead ---\n");
+        }
+        return 0;
+    }
+
+    if (g_phase == 3) {
+        g_acc = g_acc + bench_call(g_iters);
+        g_frame = g_frame + 1;
+        if (g_frame >= g_runs) {
+            g_r3 = g_acc / g_runs;
+            printf("  P3: %g ms\n", g_r3 * 1000.0);
+            g_phase = 4;
+            g_frame = 0;
+            g_acc = 0.0;
+            printf("\n--- P4: Float math ---\n");
+        }
+        return 0;
+    }
+
+    if (g_phase == 4) {
+        g_acc = g_acc + bench_math(g_iters);
+        g_frame = g_frame + 1;
+        if (g_frame >= g_runs) {
+            g_r4 = g_acc / g_runs;
+            printf("  P4: %g ms\n", g_r4 * 1000.0);
+            g_phase = 5;
+            g_frame = 0;
+            g_acc = 0.0;
+            printf("\n--- P5: Loop overhead ---\n");
+        }
+        return 0;
+    }
+
+    if (g_phase == 5) {
+        g_acc = g_acc + bench_loop(g_iters);
+        g_frame = g_frame + 1;
+        if (g_frame >= g_runs) {
+            g_r5 = g_acc / g_runs;
+            printf("  P5: %g ms\n", g_r5 * 1000.0);
+            g_phase = 6;
+
+            printf("\n========================================\n");
+            printf("  MinicBench Results (%d iters x %d runs)\n", g_iters, g_runs);
+            printf("========================================\n");
+            printf("  P1  Variable get/set:   %g ms\n", g_r1 * 1000.0);
+            printf("  P2  Ext dispatch 12/i:  %g ms\n", g_r2 * 1000.0);
+            printf("  P3  Function call:      %g ms\n", g_r3 * 1000.0);
+            printf("  P4  Float math:          %g ms\n", g_r4 * 1000.0);
+            printf("  P5  Loop overhead:      %g ms\n", g_r5 * 1000.0);
+            printf("========================================\n");
+            printf("  P3-P5 (call overhead):  %g ms\n", (g_r3 - g_r5) * 1000.0);
+            printf("  P2/P5 (dispatch/loop):  %g x\n", g_r2 / g_r5);
+            printf("  P3/P5 (call/loop):      %g x\n", g_r3 / g_r5);
+            printf("  P4/P5 (math/loop):      %g x\n", g_r4 / g_r5);
+            printf("========================================\n\n");
+        }
+        return 0;
+    }
+
+    return 0;
+}
+
+int draw(void) {
+    draw_set_font("font.ttf", 16);
+    draw_set_color(0xffffffff);
+    draw_string("MinicBench", 10.0, 10.0);
+    draw_fps(10.0, 32.0);
+    if (g_phase == 0) {
+        draw_string("Warmup...", 10.0, 70.0);
+    } else if (g_phase == 1) {
+        draw_string("P1: Variable get/set", 10.0, 70.0);
+    } else if (g_phase == 2) {
+        draw_string("P2: Ext function dispatch", 10.0, 70.0);
+    } else if (g_phase == 3) {
+        draw_string("P3: Function call overhead", 10.0, 70.0);
+    } else if (g_phase == 4) {
+        draw_string("P4: Float math", 10.0, 70.0);
+    } else if (g_phase == 5) {
+        draw_string("P5: Loop overhead", 10.0, 70.0);
+    } else {
+        draw_string("Done - see console", 10.0, 70.0);
+    }
+    return 0;
+}

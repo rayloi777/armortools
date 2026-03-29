@@ -212,7 +212,7 @@ void _kickstart(void) {
     game_engine_init();
 
     printf("Loading Minic systems...\n");
-    minic_system_load("FrogSystem", "data/systems/frog_system.minic");
+    minic_system_load("MinicBench", "data/systems/minic_bench.minic");
     minic_system_call_init();
 
     game_engine_start();
