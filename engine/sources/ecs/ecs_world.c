@@ -1,5 +1,6 @@
 #include "ecs_world.h"
 #include "ecs_components.h"
+#include "ecs_dynamic.h"
 #include "flecs/flecs.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -7,20 +8,22 @@
 game_world_t *game_world_create(void) {
     game_world_t *gw = malloc(sizeof(game_world_t));
     if (!gw) return NULL;
-    
+
     ecs_world_t *world = ecs_init();
     if (!world) {
         free(gw);
         return NULL;
     }
-    
+
+    ecs_dynamic_init();
     ecs_register_components(world);
-    
+    ecs_register_builtin_fields();
+
     gw->world = world;
     gw->delta_time = 0.0f;
     gw->time = 0.0f;
     gw->frame_count = 0;
-    
+
     printf("Game World Created with Flecs ECS v4.0.0\n");
     return gw;
 }

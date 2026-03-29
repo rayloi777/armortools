@@ -7,6 +7,7 @@
 #include "ecs/ecs_world.h"
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
+#include "ecs/camera_bridge.h"
 
 #include <minic.h>
 #include <iron_input.h>
@@ -450,6 +451,73 @@ static minic_val_t minic_draw_rect(minic_val_t *args, int argc) {
     return minic_val_void();
 }
 
+static minic_val_t minic_draw_filled_circle(minic_val_t *args, int argc) {
+    if (argc < 3) {
+        return minic_val_void();
+    }
+    float cx = (float)minic_val_to_d(args[0]);
+    float cy = (float)minic_val_to_d(args[1]);
+    float radius = (float)minic_val_to_d(args[2]);
+    int segments = (argc > 3) ? (int)minic_val_to_d(args[3]) : 32;
+    draw_filled_circle(cx, cy, radius, segments);
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_circle(minic_val_t *args, int argc) {
+    if (argc < 4) {
+        return minic_val_void();
+    }
+    float cx = (float)minic_val_to_d(args[0]);
+    float cy = (float)minic_val_to_d(args[1]);
+    float radius = (float)minic_val_to_d(args[2]);
+    float strength = (float)minic_val_to_d(args[3]);
+    int segments = (argc > 4) ? (int)minic_val_to_d(args[4]) : 32;
+    draw_circle(cx, cy, radius, segments, strength);
+    return minic_val_void();
+}
+
+static minic_val_t minic_camera_set_position(minic_val_t *args, int argc) {
+    if (argc < 2) return minic_val_void();
+    float x = (float)minic_val_to_d(args[0]);
+    float y = (float)minic_val_to_d(args[1]);
+    camera2d_set_position(camera_bridge_get_camera(), x, y);
+    return minic_val_void();
+}
+
+static minic_val_t minic_camera_set_zoom(minic_val_t *args, int argc) {
+    if (argc < 1) return minic_val_void();
+    float zoom = (float)minic_val_to_d(args[0]);
+    camera2d_set_zoom(camera_bridge_get_camera(), zoom);
+    return minic_val_void();
+}
+
+static minic_val_t minic_camera_set_rotation(minic_val_t *args, int argc) {
+    if (argc < 1) return minic_val_void();
+    float rotation = (float)minic_val_to_d(args[0]);
+    camera2d_set_rotation(camera_bridge_get_camera(), rotation);
+    return minic_val_void();
+}
+
+static minic_val_t minic_camera_follow(minic_val_t *args, int argc) {
+    if (argc < 2) return minic_val_void();
+    float tx = (float)minic_val_to_d(args[0]);
+    float ty = (float)minic_val_to_d(args[1]);
+    camera2d_follow(camera_bridge_get_camera(), tx, ty);
+    return minic_val_void();
+}
+
+static minic_val_t minic_camera_get_x(void) {
+    return minic_val_float(camera2d_get_x(camera_bridge_get_camera()));
+}
+
+static minic_val_t minic_camera_get_y(void) {
+    return minic_val_float(camera2d_get_y(camera_bridge_get_camera()));
+}
+
+static minic_val_t minic_camera_get_zoom(void) {
+    return minic_val_float(camera2d_get_zoom(camera_bridge_get_camera()));
+}
+
 static minic_val_t minic_keyboard_down(minic_val_t *args, int argc) {
     if (argc < 1 || args[0].type != MINIC_T_PTR) {
         return minic_val_int(0);
@@ -704,7 +772,17 @@ void runtime_api_register(void) {
     minic_register_native("draw_line", minic_draw_line);
     minic_register_native("draw_filled_rect", minic_draw_filled_rect);
     minic_register_native("draw_rect", minic_draw_rect);
+    minic_register_native("draw_filled_circle", minic_draw_filled_circle);
+    minic_register_native("draw_circle", minic_draw_circle);
     minic_register_native("draw_fps", minic_draw_fps);
+
+    minic_register_native("camera_set_position", minic_camera_set_position);
+    minic_register_native("camera_set_zoom", minic_camera_set_zoom);
+    minic_register_native("camera_set_rotation", minic_camera_set_rotation);
+    minic_register_native("camera_follow", minic_camera_follow);
+    minic_register_native("camera_get_x", minic_camera_get_x);
+    minic_register_native("camera_get_y", minic_camera_get_y);
+    minic_register_native("camera_get_zoom", minic_camera_get_zoom);
     
     minic_register_native("dbg_entity_has_comp", minic_dbg_entity_has_comp);
     

@@ -16,6 +16,7 @@ gpu_texture_t *_draw_current = NULL;
 static mat3_t draw_transform;
 static uint32_t         draw_color           = 0;
 static gpu_pipeline_t  *draw_custom_pipeline = NULL;
+static int              draw_depth           = 0;
 
 static gpu_buffer_t           rect_vertex_buffer;
 static gpu_buffer_t           rect_index_buffer;
@@ -209,6 +210,9 @@ void draw_init(buffer_t *image_vert, buffer_t *image_frag, buffer_t *image_trans
 }
 
 void draw_begin(gpu_texture_t *target, bool clear, unsigned color) {
+	if (draw_depth++ > 0) {
+		return;
+	}
 	draw_set_color(0xffffffff);
 	_draw_current = target;
 	if (target == NULL) {
@@ -221,6 +225,9 @@ void draw_begin(gpu_texture_t *target, bool clear, unsigned color) {
 }
 
 void draw_end(void) {
+	if (--draw_depth > 0) {
+		return;
+	}
 	gpu_end();
 }
 

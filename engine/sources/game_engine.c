@@ -10,6 +10,7 @@
 #include "ecs/ecs_bridge.h"
 #include "ecs/sprite_bridge.h"
 #include "ecs/camera_bridge.h"
+#include "ecs/render2d_bridge.h"
 #include <iron_input.h>
 #include <iron.h>
 #include <stdio.h>
@@ -36,13 +37,6 @@ static void engine_mouse_up_callback(i32 button, i32 x, i32 y) {
 
 static void engine_mouse_move_callback(i32 x, i32 y, i32 dx, i32 dy) {
     mouse_move_listener(x, y, dx, dy);
-}
-
-static void sprite_render_callback(void) {
-    draw_begin(NULL, true, 0xff1a1a2e);
-    camera2d_apply(camera_bridge_get_camera());
-    sprite_bridge_render_all();
-    draw_end();
 }
 
 minic_ctx_t *game_engine_get_minic_ctx(void) {
@@ -116,34 +110,35 @@ void import_texture_importers(void) {}
 
 void game_engine_init(void) {
     system_api_init();
-    
+
     g_world = game_world_create();
-    
+
     ecs_bridge_set_world(g_world);
     ecs_bridge_init();
-    
+
     sprite_bridge_set_world(g_world);
     sprite_bridge_init();
-    
+
     camera_bridge_set_world(g_world);
     camera_bridge_init();
-    
+
+    render2d_bridge_set_world(g_world);
+    render2d_bridge_init();
+
     runtime_api_set_world(g_world);
     runtime_api_register();
-    
+
     input_register();
     gamepad_reset();
-    
+
     iron_set_keyboard_down_callback(engine_keyboard_down_callback);
     iron_set_keyboard_up_callback(engine_keyboard_up_callback);
     iron_set_mouse_down_callback(engine_mouse_down_callback);
     iron_set_mouse_up_callback(engine_mouse_up_callback);
     iron_set_mouse_move_callback(engine_mouse_move_callback);
-    
+
     game_loop_init(g_world);
-    
-    sys_notify_on_render(sprite_render_callback, NULL);
-    
+
     _iron_set_update_callback(game_loop_update);
     g_initialized = true;
 }
@@ -151,8 +146,8 @@ void game_engine_init(void) {
 void game_engine_shutdown(void) {
     if (!g_initialized) return;
     printf("Game Engine Shutting Down...\n");
-    
-    sys_remove_render(sprite_render_callback);
+
+    render2d_bridge_shutdown();
     sprite_bridge_shutdown();
     sprite_renderer_shutdown();
     camera_bridge_shutdown();
@@ -162,7 +157,7 @@ void game_engine_shutdown(void) {
     game_world_destroy(g_world);
     g_world = NULL;
     g_initialized = false;
-    
+
     printf("Game Engine Shutdown Complete\n");
 }
 
@@ -206,19 +201,13 @@ void _kickstart(void) {
         .color_bits = 32,
         .depth_bits = 24
     });
-    
+
     sys_start(ops);
     game_engine_init();
-    
+
     printf("Loading Minic systems...\n");
-    //minic_system_load("Game", "data/game.minic");
-    // minic_system_load("MovementSystem", "data/systems/movement_system.minic");
-    // minic_system_load("HealthSystem", "data/systems/health_system.minic");
-    // minic_system_load("MouseSystem", "data/systems/mouse_system.minic");
-    // minic_system_load("GamepadSystem", "data/systems/gamepad_system.minic");
     minic_system_load("FrogSystem", "data/systems/frog_system.minic");
     minic_system_call_init();
-    
-    _iron_set_update_callback(game_loop_update);
+
     game_engine_start();
 }

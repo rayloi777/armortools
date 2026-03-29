@@ -54,6 +54,46 @@ typedef struct {
     bool has_bounds;
 } Camera2D;
 
+typedef struct {
+    float x, y;
+    float width, height;
+    uint32_t color;
+    int layer;
+    bool filled;
+    float strength;
+    bool visible;
+} RenderRect;
+
+typedef struct {
+    float cx, cy;
+    float radius;
+    int segments;
+    uint32_t color;
+    int layer;
+    bool filled;
+    float strength;
+    bool visible;
+} RenderCircle;
+
+typedef struct {
+    float x0, y0;
+    float x1, y1;
+    float strength;
+    uint32_t color;
+    int layer;
+    bool visible;
+} RenderLine;
+
+typedef struct {
+    char *text;
+    float x, y;
+    char *font_path;
+    int font_size;
+    uint32_t color;
+    int layer;
+    bool visible;
+} RenderText;
+
 void ecs_register_components(void *world);
 void ecs_register_builtin_fields(void);
 
@@ -70,3 +110,7 @@ uint64_t ecs_component_RenderMesh(void);
 uint64_t ecs_component_EntityScript(void);
 uint64_t ecs_component_RenderSprite(void);
 uint64_t ecs_component_Camera2D(void);
+uint64_t ecs_component_RenderRect(void);
+uint64_t ecs_component_RenderCircle(void);
+uint64_t ecs_component_RenderLine(void);
+uint64_t ecs_component_RenderText(void);

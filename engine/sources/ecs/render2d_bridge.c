@@ -1,0 +1,261 @@
+#include "render2d_bridge.h"
+#include "ecs_world.h"
+#include "ecs_components.h"
+#include "ecs_bridge.h"
+#include "flecs.h"
+#include "../core/sprite_api.h"
+#include <iron_draw.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static game_world_t *g_render2d_world = NULL;
+
+static ecs_query_t *g_rect_query = NULL;
+static ecs_query_t *g_circle_query = NULL;
+static ecs_query_t *g_line_query = NULL;
+static ecs_query_t *g_text_query = NULL;
+static ecs_query_t *g_sprite_query = NULL;
+
+typedef enum {
+    R2D_SPRITE,
+    R2D_RECT,
+    R2D_CIRCLE,
+    R2D_LINE,
+    R2D_TEXT,
+} r2d_type_t;
+
+typedef struct {
+    r2d_type_t type;
+    int layer;
+    union {
+        sprite_renderer_t *sprite;
+        struct { float x, y, w, h; bool filled; float strength; uint32_t color; } rect;
+        struct { float cx, cy, radius; int segments; bool filled; float strength; uint32_t color; } circle;
+        struct { float x0, y0, x1, y1; float strength; uint32_t color; } line;
+        struct { char *text; float x, y; char *font_path; int font_size; uint32_t color; } text;
+    };
+} r2d_item_t;
+
+static int r2d_item_compare(const void *a, const void *b) {
+    const r2d_item_t *ia = (const r2d_item_t *)a;
+    const r2d_item_t *ib = (const r2d_item_t *)b;
+    return ia->layer - ib->layer;
+}
+
+void render2d_bridge_set_world(game_world_t *world) {
+    g_render2d_world = world;
+}
+
+void render2d_bridge_init(void) {
+    if (!g_render2d_world) {
+        fprintf(stderr, "Render2d Bridge: world not set\n");
+        return;
+    }
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_render2d_world);
+    if (!ecs) {
+        fprintf(stderr, "Render2d Bridge: failed to get ECS world\n");
+        return;
+    }
+
+    ecs_query_desc_t qdesc = {0};
+    qdesc.terms[0].id = ecs_component_RenderRect();
+    g_rect_query = ecs_query_init(ecs, &qdesc);
+
+    qdesc.terms[0].id = ecs_component_RenderCircle();
+    g_circle_query = ecs_query_init(ecs, &qdesc);
+
+    qdesc.terms[0].id = ecs_component_RenderLine();
+    g_line_query = ecs_query_init(ecs, &qdesc);
+
+    qdesc.terms[0].id = ecs_component_RenderText();
+    g_text_query = ecs_query_init(ecs, &qdesc);
+
+    memset(&qdesc, 0, sizeof(qdesc));
+    qdesc.terms[0].id = ecs_component_TransformPosition();
+    qdesc.terms[1].id = ecs_component_RenderSprite();
+    g_sprite_query = ecs_query_init(ecs, &qdesc);
+
+    printf("Render2d Bridge initialized\n");
+}
+
+void render2d_bridge_shutdown(void) {
+    if (g_rect_query) { ecs_query_fini(g_rect_query); g_rect_query = NULL; }
+    if (g_circle_query) { ecs_query_fini(g_circle_query); g_circle_query = NULL; }
+    if (g_line_query) { ecs_query_fini(g_line_query); g_line_query = NULL; }
+    if (g_text_query) { ecs_query_fini(g_text_query); g_text_query = NULL; }
+    if (g_sprite_query) { ecs_query_fini(g_sprite_query); g_sprite_query = NULL; }
+    g_render2d_world = NULL;
+    printf("Render2d Bridge shutdown\n");
+}
+
+static void ensure_capacity(r2d_item_t **items, int count, int *capacity) {
+    if (count >= *capacity) {
+        *capacity *= 2;
+        *items = realloc(*items, sizeof(r2d_item_t) * (*capacity));
+    }
+}
+
+void render2d_bridge_draw(void) {
+    if (!g_render2d_world) return;
+
+    int capacity = 64;
+    int count = 0;
+    r2d_item_t *items = malloc(sizeof(r2d_item_t) * capacity);
+    if (!items) return;
+
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_render2d_world);
+    if (!ecs) { free(items); return; }
+
+    if (g_sprite_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_sprite_query);
+        while (ecs_query_next(&it)) {
+            TransformPosition *pos = ecs_field(&it, TransformPosition, 0);
+            RenderSprite *sprite = ecs_field(&it, RenderSprite, 1);
+            for (int i = 0; i < it.count; i++) {
+                if (!sprite[i].visible || !sprite[i].render_object) continue;
+                ensure_capacity(&items, count, &capacity);
+                r2d_item_t *item = &items[count++];
+                item->type = R2D_SPRITE;
+                item->layer = sprite[i].layer;
+                item->sprite = (sprite_renderer_t *)sprite[i].render_object;
+            }
+        }
+    }
+
+    if (g_rect_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_rect_query);
+        while (ecs_query_next(&it)) {
+            RenderRect *r = ecs_field(&it, RenderRect, 0);
+            for (int i = 0; i < it.count; i++) {
+                if (!r[i].visible) continue;
+                ensure_capacity(&items, count, &capacity);
+                r2d_item_t *item = &items[count++];
+                item->type = R2D_RECT;
+                item->layer = r[i].layer;
+                item->rect.x = r[i].x;
+                item->rect.y = r[i].y;
+                item->rect.w = r[i].width;
+                item->rect.h = r[i].height;
+                item->rect.filled = r[i].filled;
+                item->rect.strength = r[i].strength;
+                item->rect.color = r[i].color;
+            }
+        }
+    }
+
+    if (g_circle_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_circle_query);
+        while (ecs_query_next(&it)) {
+            RenderCircle *c = ecs_field(&it, RenderCircle, 0);
+            for (int i = 0; i < it.count; i++) {
+                if (!c[i].visible) continue;
+                ensure_capacity(&items, count, &capacity);
+                r2d_item_t *item = &items[count++];
+                item->type = R2D_CIRCLE;
+                item->layer = c[i].layer;
+                item->circle.cx = c[i].cx;
+                item->circle.cy = c[i].cy;
+                item->circle.radius = c[i].radius;
+                item->circle.segments = c[i].segments;
+                item->circle.filled = c[i].filled;
+                item->circle.strength = c[i].strength;
+                item->circle.color = c[i].color;
+            }
+        }
+    }
+
+    if (g_line_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_line_query);
+        while (ecs_query_next(&it)) {
+            RenderLine *l = ecs_field(&it, RenderLine, 0);
+            for (int i = 0; i < it.count; i++) {
+                if (!l[i].visible) continue;
+                ensure_capacity(&items, count, &capacity);
+                r2d_item_t *item = &items[count++];
+                item->type = R2D_LINE;
+                item->layer = l[i].layer;
+                item->line.x0 = l[i].x0;
+                item->line.y0 = l[i].y0;
+                item->line.x1 = l[i].x1;
+                item->line.y1 = l[i].y1;
+                item->line.strength = l[i].strength;
+                item->line.color = l[i].color;
+            }
+        }
+    }
+
+    if (g_text_query) {
+        ecs_iter_t it = ecs_query_iter(ecs, g_text_query);
+        while (ecs_query_next(&it)) {
+            RenderText *t = ecs_field(&it, RenderText, 0);
+            for (int i = 0; i < it.count; i++) {
+                if (!t[i].visible) continue;
+                ensure_capacity(&items, count, &capacity);
+                r2d_item_t *item = &items[count++];
+                item->type = R2D_TEXT;
+                item->layer = t[i].layer;
+                item->text.text = t[i].text;
+                item->text.x = t[i].x;
+                item->text.y = t[i].y;
+                item->text.font_path = t[i].font_path;
+                item->text.font_size = t[i].font_size;
+                item->text.color = t[i].color;
+            }
+        }
+    }
+
+    if (count == 0) {
+        free(items);
+        return;
+    }
+
+    qsort(items, count, sizeof(r2d_item_t), r2d_item_compare);
+
+    uint32_t prev_color = draw_get_color();
+    for (int i = 0; i < count; i++) {
+        r2d_item_t *item = &items[i];
+        switch (item->type) {
+        case R2D_SPRITE:
+            if (item->sprite && sprite_renderer_is_visible(item->sprite)) {
+                sprite_renderer_draw(item->sprite);
+            }
+            break;
+        case R2D_RECT:
+            draw_set_color(item->rect.color);
+            if (item->rect.filled) {
+                draw_filled_rect(item->rect.x, item->rect.y, item->rect.w, item->rect.h);
+            } else {
+                draw_rect(item->rect.x, item->rect.y, item->rect.w, item->rect.h, item->rect.strength);
+            }
+            break;
+        case R2D_CIRCLE:
+            draw_set_color(item->circle.color);
+            if (item->circle.filled) {
+                draw_filled_circle(item->circle.cx, item->circle.cy, item->circle.radius, item->circle.segments);
+            } else {
+                draw_circle(item->circle.cx, item->circle.cy, item->circle.radius, item->circle.segments, item->circle.strength);
+            }
+            break;
+        case R2D_LINE:
+            draw_set_color(item->line.color);
+            draw_line(item->line.x0, item->line.y0, item->line.x1, item->line.y1, item->line.strength);
+            break;
+        case R2D_TEXT:
+            draw_set_color(item->text.color);
+            if (item->text.font_path) {
+                draw_font_t *font = data_get_font(item->text.font_path);
+                if (font) {
+                    draw_font_init(font);
+                    draw_set_font(font, item->text.font_size);
+                }
+            }
+            if (item->text.text) {
+                draw_string(item->text.text, item->text.x, item->text.y);
+            }
+            break;
+        }
+    }
+    draw_set_color(prev_color);
+    free(items);
+}

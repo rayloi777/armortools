@@ -26,6 +26,7 @@
 #include "core/camera2d.c"
 #include "ecs/sprite_bridge.c"
 #include "ecs/camera_bridge.c"
+#include "ecs/render2d_bridge.c"
 
 // Base minic library
 #include "../../base/sources/libs/minic.c"
