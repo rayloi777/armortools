@@ -29,9 +29,36 @@ typedef struct {
     bool initialized;
 } EntityScript;
 
+typedef struct {
+    char *texture_path;
+    float region_x, region_y;
+    float src_width, src_height;
+    float pivot_x, pivot_y;
+    float scale_x, scale_y;
+    bool flip_x, flip_y;
+    int layer;
+    bool visible;
+    float width, height;
+    void *render_object;
+} RenderSprite;
+
+typedef struct {
+    float x, y;
+    float zoom;
+    float rotation;
+    float smoothing;
+    float target_x, target_y;
+    bool has_target;
+    float bounds_min_x, bounds_min_y;
+    float bounds_max_x, bounds_max_y;
+    bool has_bounds;
+} Camera2D;
+
 void ecs_register_components(void *world);
+void ecs_register_builtin_fields(void);
 
 uint64_t ecs_get_builtin_component(const char *name);
+const char *ecs_get_builtin_component_name(uint64_t component_id);
 
 uint64_t ecs_component_TransformPosition(void);
 uint64_t ecs_component_TransformRotation(void);
@@ -41,3 +68,5 @@ uint64_t ecs_component_EntityActive(void);
 uint64_t ecs_component_RenderObject(void);
 uint64_t ecs_component_RenderMesh(void);
 uint64_t ecs_component_EntityScript(void);
+uint64_t ecs_component_RenderSprite(void);
+uint64_t ecs_component_Camera2D(void);

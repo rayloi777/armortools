@@ -7,10 +7,8 @@
 #include <minic.h>
 #include "game_engine.h"
 
-#define MAX_DYNAMIC_COMPONENTS 256
-
-static dynamic_component_t g_components[MAX_DYNAMIC_COMPONENTS];
-static int g_component_count = 0;
+dynamic_component_t g_components[MAX_DYNAMIC_COMPONENTS];
+int g_component_count = 0;
 static game_world_t *g_dynamic_world = NULL;
 
 static void component_ctor_wrapper(void *ptr, int32_t count, const ecs_type_info_t *type_info) {

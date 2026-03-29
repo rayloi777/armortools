@@ -7,19 +7,36 @@ int g_cam_comp = -1;
 int g_query = -1;
 int g_camera_entity = 0;
 int g_frame = 0;
+int g_debug_counter = 0;
 int g_target_entity = 0;
+
+// Velocity storage
+int g_entities[1000];
+float g_vel_x[1000];
+float g_vel_y[1000];
 
 int init(void) {
     printf("FrogSystem: Init\n");
 
-    g_pos_comp = component_lookup("TransformPosition");
-    g_sprite_comp = component_lookup("RenderSprite");
-    g_cam_comp = component_lookup("Camera2D");
+    
 
+    int frog_pos_comp = component_register("Position2D", 8);
+    component_add_field(frog_pos_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(frog_pos_comp, "y", TYPE_FLOAT, 4);
+    
+    int frog_vel_comp = component_register("Velocity2D", 8);
+    component_add_field(frog_vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(frog_vel_comp, "vy", TYPE_FLOAT, 4);
+    
+
+    //g_pos_comp = component_lookup("TransformPosition");
+    //g_sprite_comp = component_lookup("RenderSprite");
+    //g_cam_comp = component_lookup("Camera2D");
+/*
     printf("FrogSystem: pos_comp=%d sprite_comp=%d cam_comp=%d\n",
-           g_pos_comp, g_sprite_comp, g_cam_comp);
+           frog_pos_comp, frog_vel_comp, g_cam_comp);
 
-    if (g_pos_comp < 0 || g_sprite_comp < 0) {
+    if (frog_pos_comp < 0 || g_sprite_comp < 0) {
         printf("FrogSystem: Components not found\n");
         return 0;
     }
@@ -37,8 +54,8 @@ int init(void) {
         void *pos = entity_get(e, g_pos_comp);
         void *sprite = entity_get(e, g_sprite_comp);
 
-        float rx = rand_float() * 1280.0;
-        float ry = rand_float() * 720.0;
+        float rx = 64.0 + rand_float() * (1280.0 - 128.0);
+        float ry = 64.0 + rand_float() * (720.0 - 128.0);
         comp_set_float(g_pos_comp, pos, "x", rx);
         comp_set_float(g_pos_comp, pos, "y", ry);
         comp_set_float(g_pos_comp, pos, "z", 0.0);
@@ -54,6 +71,17 @@ int init(void) {
         comp_set_bool(g_sprite_comp, sprite, "flip_y", 0);
         comp_set_bool(g_sprite_comp, sprite, "visible", 1);
         comp_set_int(g_sprite_comp, sprite, "layer", 0);
+
+        // Initialize random velocity
+        float speed = 50.0 + rand_float() * 150.0;
+        int negx = 1;
+        int negy = 1;
+        if (rand_float() > 0.5) negx = -1;
+        if (rand_float() > 0.5) negy = -1;
+        g_vel_x[i] = negx * speed;
+        g_vel_y[i] = negy * speed;
+        
+        g_entities[i] = e;
 
         if (i == 0) {
             g_target_entity = e;
@@ -80,44 +108,90 @@ int init(void) {
     int count = query_find(g_query);
     printf("FrogSystem: Created %d entities\n", count);
     
-    draw_set_font("font.ttf", 16);
-
+    
+*/
     return 0;
 }
 
-int draw(void) {
-    // UI overlay - sprites are rendered by sprite_render_callback
+int draw(void)
+{
+    //printf("FrogSystem: Draw\n");
     draw_begin(NULL, 0, 0);
+    draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("FrogSystem Active", 10.0, 10.0);
-    draw_string("Use WASD to move camera", 10.0, 30.0);
+    draw_string("FrogSystem - 1000 frogs bouncing with ECS + 2D rendering", 10, 10);
+    draw_fps(10, 32);
     draw_end();
     return 0;
 }
 
+//void on_ui(void)
+//{
+//    printf("on_ui called\n");
+//    draw_set_font("font.ttf", 16);
+//    // 设置颜色
+//    draw_set_color(0xffffffff);  // 白色
+//    
+//    // 绘制字符串
+//    draw_string("Hello World!", 50, 100);
+//}
+
 int step(void) {
+    /*
     g_frame = g_frame + 1;
+    
+    float delta = sys_delta();
+    if (delta <= 0.0) delta = 0.016;
 
-    float speed = 5.0;
-    float dx = 0.0;
-    float dy = 0.0;
+    // Debug: print first frog's position every 60 frames
+    // g_debug_counter = g_debug_counter + 1;
+    // if (g_debug_counter >= 60) {
+    //     g_debug_counter = 0;
+    //     int entity = g_entities[0];
+    //     void *pos = entity_get(entity, g_pos_comp);
+    //     float x = comp_get_float(g_pos_comp, pos, "x");
+    //     float y = comp_get_float(g_pos_comp, pos, "y");
+    //     printf("step: frame=%d entity=%d pos=(%.1f, %.1f) vel=(%.1f, %.1f)\n", 
+    //            g_frame, entity, x, y, g_vel_x[0], g_vel_y[0]);
+    // }
 
-    if (keyboard_down("w")) dy = dy + 1.0;
-    if (keyboard_down("s")) dy = dy - 1.0;
-    if (keyboard_down("a")) dx = dx - 1.0;
-    if (keyboard_down("d")) dx = dx + 1.0;
-
-    if (dx != 0.0 || dy != 0.0) {
-        void *cam = entity_get(g_camera_entity, g_cam_comp);
-        if (cam != 0) {
-            float cx = comp_get_float(g_cam_comp, cam, "x");
-            float cy = comp_get_float(g_cam_comp, cam, "y");
-            comp_set_float(g_cam_comp, cam, "x", cx + dx * speed);
-            comp_set_float(g_cam_comp, cam, "y", cy + dy * speed);
-            comp_set_float(g_cam_comp, cam, "target_x", cx + dx * speed);
-            comp_set_float(g_cam_comp, cam, "target_y", cy + dy * speed);
+    // Move frogs
+    int i = 0;
+    while (i < 1000) {
+        int entity = g_entities[i];
+        void *pos = entity_get(entity, g_pos_comp);
+        
+        float x = comp_get_float(g_pos_comp, pos, "x");
+        float y = comp_get_float(g_pos_comp, pos, "y");
+        
+        // Update position
+        x = x + g_vel_x[i] * delta;
+        y = y + g_vel_y[i] * delta;
+        
+        // Bounce off edges
+        float margin = 32.0;
+        if (x < margin) {
+            x = margin;
+            g_vel_x[i] = -g_vel_x[i];
         }
+        if (x > 1280.0 - margin) {
+            x = 1280.0 - margin;
+            g_vel_x[i] = -g_vel_x[i];
+        }
+        if (y < margin) {
+            y = margin;
+            g_vel_y[i] = -g_vel_y[i];
+        }
+        if (y > 720.0 - margin) {
+            y = 720.0 - margin;
+            g_vel_y[i] = -g_vel_y[i];
+        }
+        
+        comp_set_float(g_pos_comp, pos, "x", x);
+        comp_set_float(g_pos_comp, pos, "y", y);
+        
+        i = i + 1;
     }
-
+    */
     return 0;
 }

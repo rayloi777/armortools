@@ -1,5 +1,6 @@
 #include "query_api.h"
 #include "ecs/ecs_world.h"
+#include "ecs/ecs_components.h"
 #include "flecs.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -115,9 +116,18 @@ static bool build_filter_and_run(runtime_query_t *q) {
         if (i > 0) {
             strcat(filter, ", ");
         }
+        
+        const char *name = NULL;
+        
         dynamic_component_t *dc = ecs_dynamic_component_get(q->components[i]);
         if (dc) {
-            strcat(filter, dc->name);
+            name = dc->name;
+        } else {
+            name = ecs_get_builtin_component_name(q->components[i]);
+        }
+        
+        if (name) {
+            strcat(filter, name);
         } else {
             char tmp[32];
             snprintf(tmp, sizeof(tmp), "%llu", (unsigned long long)q->components[i]);
@@ -129,8 +139,11 @@ static bool build_filter_and_run(runtime_query_t *q) {
     ecs_query_desc_t desc = {0};
     desc.expr = filter;
     
+    printf("[query_api] Filter: '%s'\n", filter);
+    
     ecs_query_t *query = ecs_query_init(ecs, &desc);
     if (!query) {
+        printf("[query_api] Query init failed\n");
         return false;
     }
     
@@ -177,11 +190,18 @@ static bool build_filter_and_run(runtime_query_t *q) {
 
 int query_find(int query_id) {
     runtime_query_t *q = get_query_by_id(query_id);
-    if (!q) return 0;
+    if (!q) {
+        printf("[query_api] query_find: query not found (id=%d)\n", query_id);
+        return 0;
+    }
+    
+    printf("[query_api] query_find: id=%d, component_count=%d\n", query_id, q->component_count);
     
     if (build_filter_and_run(q)) {
+        printf("[query_api] query_find: found %d entities\n", q->total_count);
         return q->total_count;
     }
+    printf("[query_api] query_find: build_filter_and_run failed\n");
     return 0;
 }
 

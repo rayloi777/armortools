@@ -85,6 +85,13 @@ void entity_set_name(struct game_world_t *world, uint64_t entity, const char *na
     ecs_set_name(ecs, (ecs_entity_t)entity, name);
 }
 
+uint64_t entity_find_by_name(struct game_world_t *world, const char *name) {
+    if (!world || !world->world || !name) return 0;
+    ecs_world_t *ecs = (ecs_world_t *)world->world;
+    ecs_entity_t e = ecs_lookup(ecs, name);
+    return (uint64_t)e;
+}
+
 uint64_t entity_get_parent(struct game_world_t *world, uint64_t entity) {
     if (!world || !world->world || entity == 0) return 0;
     ecs_world_t *ecs = (ecs_world_t *)world->world;

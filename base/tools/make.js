@@ -944,11 +944,14 @@ class WasmExporter extends Exporter {
 		super();
 		this.compile_commands = new CompilerCommandsExporter();
 		let clang = goptions.ccompiler === 'clang' ? 'clang' : goptions.ccompiler;
-		let compiler          = clang + " --target=wasm32 -nostdlib -matomics -mbulk-memory";
+		let is_emcc = (clang === 'emcc' || clang.endsWith('/emcc'));
+		let compiler_flags = is_emcc ? "-nostdlib -matomics -mbulk-memory" : "--target=wasm32 -nostdlib -matomics -mbulk-memory";
+		let linker_flags = is_emcc ? "-Wl,--export-all -Wl,--allow-undefined -Wl,--no-entry" : "--target=wasm32 -nostdlib -matomics -mbulk-memory \"-Wl,--import-memory,--shared-memory,--allow-undefined,--no-entry,--initial-memory=671088640,--max-memory=671088640,-z,stack-size=256000\"";
+		let compiler          = clang + " " + compiler_flags;
 		let compilerFlags     = "";
 		this.make =
 		    new MakeExporter(compiler, compiler, compilerFlags, compilerFlags,
-							 '--target=wasm32 -nostdlib -matomics -mbulk-memory "-Wl,--import-memory,--shared-memory,--allow-undefined,--no-entry,--initial-memory=671088640,--max-memory=671088640,-z,stack-size=256000"', '.wasm');
+							 linker_flags, '.wasm');
 	}
 
 	export_solution(project) {

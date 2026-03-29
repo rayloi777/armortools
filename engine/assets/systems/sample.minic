@@ -1,0 +1,21 @@
+
+int init()
+{
+    return 0;
+}
+
+int draw()
+{
+    draw_begin(NULL, 0, 0);
+    draw_set_font("font.ttf", 32);
+    draw_set_color(0xffffffff);
+    draw_string("FrogSystem - 1000 frogs bouncing with ECS + 2D rendering", 10, 10);
+    draw_end();
+
+    return 0;
+}
+
+int step()
+{
+    return 0;
+}

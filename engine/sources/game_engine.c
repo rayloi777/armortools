@@ -211,7 +211,7 @@ void _kickstart(void) {
     game_engine_init();
     
     printf("Loading Minic systems...\n");
-    minic_system_load("Game", "data/game.minic");
+    //minic_system_load("Game", "data/game.minic");
     // minic_system_load("MovementSystem", "data/systems/movement_system.minic");
     // minic_system_load("HealthSystem", "data/systems/health_system.minic");
     // minic_system_load("MouseSystem", "data/systems/mouse_system.minic");

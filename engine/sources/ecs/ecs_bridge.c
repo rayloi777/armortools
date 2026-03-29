@@ -100,6 +100,10 @@ void ecs_bridge_set_world(game_world_t *world) {
     g_game_world = world;
 }
 
+game_world_t *ecs_bridge_get_world(void) {
+    return g_game_world;
+}
+
 void ecs_bridge_sync_transform(uint64_t entity) {
     if (!g_game_world || !entity) return;
     

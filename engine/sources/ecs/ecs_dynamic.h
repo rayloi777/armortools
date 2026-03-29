@@ -11,6 +11,8 @@ struct game_world_t;
 #define DYNAMIC_TYPE_PTR 3
 #define DYNAMIC_TYPE_STRING 4
 
+#define MAX_DYNAMIC_COMPONENTS 256
+
 typedef struct {
     char name[32];
     int type;
@@ -29,6 +31,9 @@ typedef struct {
     char ctor_name[64];
     char dtor_name[64];
 } dynamic_component_t;
+
+extern dynamic_component_t g_components[MAX_DYNAMIC_COMPONENTS];
+extern int g_component_count;
 
 void ecs_dynamic_init(void);
 void ecs_dynamic_shutdown(void);

@@ -1,45 +1,43 @@
 int init(void) {
     printf("=== Game Initialization ===\n");
     
-    int pos_comp = component_register("Position", 12);
-    component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
-    component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
+    //int pos_comp = component_register("Position", 12);
+    //component_add_field(pos_comp, "x", TYPE_FLOAT, 0);
+    //component_add_field(pos_comp, "y", TYPE_FLOAT, 4);
+    //component_add_field(pos_comp, "z", TYPE_FLOAT, 8);
     
-    int vel_comp = component_register("Velocity", 12);
-    component_add_field(vel_comp, "vx", TYPE_FLOAT, 0);
-    component_add_field(vel_comp, "vy", TYPE_FLOAT, 4);
-    component_add_field(vel_comp, "vz", TYPE_FLOAT, 8);
+    //int vel_comp = component_register("Velocity", 12);
+    //component_add_field(vel_comp, "vx", TYPE_FLOAT, 0);
+    //component_add_field(vel_comp, "vy", TYPE_FLOAT, 4);
+    //component_add_field(vel_comp, "vz", TYPE_FLOAT, 8);
     
-    int frog_pos_comp = component_register("FrogTransform2D", 8);
-    component_add_field(frog_pos_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(frog_pos_comp, "y", TYPE_FLOAT, 4);
+    //int frog_pos_comp = component_register("FrogTransform2D", 8);
+    //component_add_field(frog_pos_comp, "x", TYPE_FLOAT, 0);
+    //component_add_field(frog_pos_comp, "y", TYPE_FLOAT, 4);
     
-    int frog_vel_comp = component_register("FrogVelocity2D", 8);
-    component_add_field(frog_vel_comp, "vx", TYPE_FLOAT, 0);
-    component_add_field(frog_vel_comp, "vy", TYPE_FLOAT, 4);
+   //int frog_vel_comp = component_register("FrogVelocity2D", 8);
+   //component_add_field(frog_vel_comp, "vx", TYPE_FLOAT, 0);
+   //component_add_field(frog_vel_comp, "vy", TYPE_FLOAT, 4);
     
-    printf("Creating 5 test entities...\n");
-    int i = 0;
-    while (i < 5) {
-        int e = entity_create();
-        entity_add(e, pos_comp);
-        entity_add(e, vel_comp);
-        
-        void* pos = entity_get(e, pos_comp);
-        
-        comp_set_float(pos_comp, pos, "x", i * 10.0);
-        comp_set_float(pos_comp, pos, "y", i * 5.0);
-        comp_set_float(pos_comp, pos, "z", 0.0);
-        
-        printf("  Created entity %d: pos=(%f, %f, %f)\n", 
-               e,
-               comp_get_float(pos_comp, pos, "x"),
-               comp_get_float(pos_comp, pos, "y"),
-               comp_get_float(pos_comp, pos, "z"));
-        
-        i = i + 1;
-    }
+    //printf("Creating 5 test entities...\n");
+    //int i = 0;
+    //while (i < 5) {
+    //    int e = entity_create();
+    //    entity_add(e, frog_pos_comp);
+    //    entity_add(e, frog_vel_comp);
+    //    
+    //    void* pos = entity_get(e, frog_pos_comp);
+    //    
+    //    comp_set_float(frog_pos_comp, pos, "x", i * 10.0);
+    //    comp_set_float(frog_pos_comp, pos, "y", i * 5.0);
+    //    
+    //    printf("  Created entity %d: pos=(%f, %f, %f)\n", 
+    //           e,
+    //           comp_get_float(pos_comp, pos, "x"),
+    //           comp_get_float(pos_comp, pos, "y"),
+    //    
+    //    i = i + 1;
+    //}
     
     printf("=== Game Init Complete ===\n");
     return 0;

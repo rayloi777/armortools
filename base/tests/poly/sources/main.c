@@ -25,7 +25,7 @@ void render() {
         gpu_set_pipeline(pipeline);
         gpu_set_vertex_buffer(vb);
         gpu_set_index_buffer(ib);
-        gpu_set_matrix4(0, mvp);
+        gpu_set_mat4(0, mvp);
 
         gpu_draw();
         gpu_end();

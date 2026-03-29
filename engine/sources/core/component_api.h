@@ -38,6 +38,8 @@ int component_get_field_info(uint64_t component_id, int field_index, char *name_
 void component_set_field_int(uint64_t component_id, void *data, const char *field_name, int32_t value);
 void component_set_field_float(uint64_t component_id, void *data, const char *field_name, float value);
 void component_set_field_ptr(uint64_t component_id, void *data, const char *field_name, void *value);
+void component_set_field_bool(uint64_t component_id, void *data, const char *field_name, bool value);
 int32_t component_get_field_int(uint64_t component_id, void *data, const char *field_name);
 float component_get_field_float(uint64_t component_id, void *data, const char *field_name);
 void *component_get_field_ptr(uint64_t component_id, void *data, const char *field_name);
+bool component_get_field_bool(uint64_t component_id, void *data, const char *field_name);

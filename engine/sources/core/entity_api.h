@@ -21,6 +21,7 @@ bool entity_exists(struct game_world_t *world, uint64_t entity);
 
 const char *entity_get_name(struct game_world_t *world, uint64_t entity);
 void entity_set_name(struct game_world_t *world, uint64_t entity, const char *name);
+uint64_t entity_find_by_name(struct game_world_t *world, const char *name);
 uint64_t entity_get_parent(struct game_world_t *world, uint64_t entity);
 void entity_set_parent(struct game_world_t *world, uint64_t child, uint64_t parent);
 

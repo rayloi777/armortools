@@ -6,6 +6,27 @@
 #include "../core/sprite_api.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
+
+static FILE* s_debug_log = NULL;
+
+static void sb_debug_log_init(void) {
+    if (!s_debug_log) {
+        s_debug_log = fopen("/tmp/sprite_bridge_debug.log", "w");
+    }
+}
+
+static void sb_debug_log(const char *fmt, ...) {
+    sb_debug_log_init();
+    if (s_debug_log) {
+        va_list args;
+        va_start(args, fmt);
+        vfprintf(s_debug_log, fmt, args);
+        va_end(args);
+        fprintf(s_debug_log, "\n");
+        fflush(s_debug_log);
+    }
+}
 
 static ecs_entity_t g_sprite_bridge_system = 0;
 static ecs_query_t *g_sprite_query = NULL;
@@ -66,13 +87,13 @@ void sprite_bridge_set_world(game_world_t *world) {
 void sprite_bridge_init(void) {
     game_world_t *world = ecs_bridge_get_world();
     if (!world) {
-        fprintf(stderr, "Sprite Bridge: game world not set\n");
+        sb_debug_log("Sprite Bridge: game world not set");
         return;
     }
     
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(world);
     if (!ecs) {
-        fprintf(stderr, "Failed to get ECS world for sprite bridge\n");
+        sb_debug_log("Failed to get ECS world for sprite bridge");
         return;
     }
     
@@ -85,7 +106,7 @@ void sprite_bridge_init(void) {
     g_sprite_bridge_system = ecs_system_init(ecs, &sys_desc);
     
     if (g_sprite_bridge_system == 0) {
-        fprintf(stderr, "Failed to create sprite bridge system\n");
+        sb_debug_log("Failed to create sprite bridge system");
         return;
     }
     
@@ -159,18 +180,40 @@ void sprite_bridge_destroy_sprite(uint64_t entity) {
 }
 
 void sprite_bridge_render_all(void) {
+    static int debug_call = 0;
+    sb_debug_log("[sprite_bridge_render_all] called #%d", debug_call++);
+    
     game_world_t *world = ecs_bridge_get_world();
-    if (!world || !world->world) return;
+    if (!world) {
+        sb_debug_log("[sprite_bridge_render_all] world is NULL");
+        return;
+    }
+    if (!world->world) {
+        sb_debug_log("[sprite_bridge_render_all] world->world is NULL");
+        return;
+    }
     
     ecs_world_t *ecs = (ecs_world_t *)world->world;
     
-    if (!g_sprite_query) return;
+    static int debug_frame = 0;
     
-    ecs_iter_t it = ecs_query_iter(ecs, g_sprite_query);
+    ecs_query_desc_t qdesc = {0};
+    qdesc.terms[0].id = ecs_component_TransformPosition();
+    qdesc.terms[1].id = ecs_component_RenderSprite();
+    ecs_query_t *q = ecs_query_init(ecs, &qdesc);
+    if (!q) return;
+    
+    int total_entities = 0;
+    int created_sprites = 0;
+    int updated_sprites = 0;
+    
+    ecs_iter_t it = ecs_query_iter(ecs, q);
     
     while (ecs_query_next(&it)) {
         TransformPosition *pos = ecs_field(&it, TransformPosition, 0);
         RenderSprite *sprite = ecs_field(&it, RenderSprite, 1);
+        
+        total_entities += it.count;
         
         for (int i = 0; i < it.count; i++) {
             if (sprite[i].render_object == NULL && sprite[i].texture_path != NULL) {
@@ -181,6 +224,12 @@ void sprite_bridge_render_all(void) {
                                              sprite[i].src_width, sprite[i].src_height);
                 }
                 sprite[i].render_object = sr;
+                created_sprites++;
+                
+                if (debug_frame < 3) {
+                    sb_debug_log("  [sprite_bridge] Created sprite for entity %llu, pos=(%.1f, %.1f), tex=%s",
+                            (unsigned long long)it.entities[i], pos[i].x, pos[i].y, sprite[i].texture_path);
+                }
             }
             else if (sprite[i].render_object != NULL && sprite_renderer_is_valid(sprite[i].render_object)) {
                 sprite_renderer_t *sr = (sprite_renderer_t *)sprite[i].render_object;
@@ -195,10 +244,24 @@ void sprite_bridge_render_all(void) {
                         sprite_renderer_set_region(sr, sprite[i].region_x, sprite[i].region_y,
                                                  sprite[i].src_width, sprite[i].src_height);
                     }
+                    updated_sprites++;
+                    
+                    if (debug_frame < 3 && i < 3) {
+                        sb_debug_log("  [sprite_bridge] Updated sprite[%d] pos=(%.1f, %.1f)",
+                                i, pos[i].x, pos[i].y);
+                    }
                 }
             }
         }
     }
+    
+    ecs_query_fini(q);
+    
+    if (debug_frame < 3) {
+        sb_debug_log("[sprite_bridge_render_all] frame=%d entities=%d created=%d updated=%d total_sprites=%d",
+                debug_frame, total_entities, created_sprites, updated_sprites, sprite_renderer_count);
+    }
+    debug_frame++;
     
     sprite_renderer_sort_by_layer();
     

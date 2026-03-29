@@ -134,6 +134,20 @@ void component_set_field_ptr(uint64_t component_id, void *data, const char *fiel
     }
 }
 
+void component_set_field_bool(uint64_t component_id, void *data, const char *field_name, bool value) {
+    if (!data || !field_name) return;
+    void *field = ecs_dynamic_component_get_field(component_id, field_name, data);
+    if (field) {
+        *(bool *)field = value;
+    }
+}
+
+bool component_get_field_bool(uint64_t component_id, void *data, const char *field_name) {
+    if (!data || !field_name) return false;
+    void *field = ecs_dynamic_component_get_field(component_id, field_name, data);
+    return field ? *(bool *)field : false;
+}
+
 int32_t component_get_field_int(uint64_t component_id, void *data, const char *field_name) {
     if (!data || !field_name) return 0;
     void *field = ecs_dynamic_component_get_field(component_id, field_name, data);

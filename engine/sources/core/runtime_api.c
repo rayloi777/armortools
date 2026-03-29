@@ -290,14 +290,34 @@ static minic_val_t minic_dbg_entity_has_comp(minic_val_t *args, int argc) {
     printf("[dbg] entity_has_comp(%llu, %llu) = %d\n", (unsigned long long)entity, (unsigned long long)comp_id, result);
     return minic_val_int(result);
 }
+
+static float g_fps = 60.0f;
+static int g_fps_frames = 0;
+static float g_fps_time = 0.0f;
+
+static void update_fps(float delta) {
+    g_fps_frames++;
+    g_fps_time += delta;
+    if (g_fps_time >= 0.5f) {
+        g_fps = (float)g_fps_frames / g_fps_time;
+        g_fps_frames = 0;
+        g_fps_time = 0.0f;
+    }
+}
+
 static float minic_sys_delta(void) {
-    return game_loop_get_delta_time();
+    float delta = game_loop_get_delta_time();
+    update_fps(delta);
+    return delta;
 }
 static float minic_sys_time(void) {
     return game_loop_get_time();
 }
 static uint64_t minic_sys_frame(void) {
     return game_loop_get_frame_count();
+}
+static float minic_sys_fps(void) {
+    return g_fps;
 }
 static float minic_rand_float(void) {
     return (float)rand() / (float)RAND_MAX;
@@ -380,6 +400,15 @@ static minic_val_t minic_draw_set_font(minic_val_t *args, int argc) {
         draw_font_init(font);
         draw_set_font(font, size);
     }
+    return minic_val_void();
+}
+
+static minic_val_t minic_draw_fps(minic_val_t *args, int argc) {
+    float x = (argc > 0) ? (float)minic_val_to_d(args[0]) : 10.0f;
+    float y = (argc > 1) ? (float)minic_val_to_d(args[1]) : 50.0f;
+    char buf[32];
+    snprintf(buf, sizeof(buf), "FPS: %.1f", g_fps);
+    draw_string(buf, x, y);
     return minic_val_void();
 }
 
@@ -661,6 +690,7 @@ void runtime_api_register(void) {
     minic_register("sys_delta", "f()", (minic_ext_fn_raw_t)minic_sys_delta);
     minic_register("sys_time", "f()", (minic_ext_fn_raw_t)minic_sys_time);
     minic_register("sys_frame", "i()", (minic_ext_fn_raw_t)minic_sys_frame);
+    minic_register("sys_fps", "f()", (minic_ext_fn_raw_t)minic_sys_fps);
     minic_register("rand_float", "f()", (minic_ext_fn_raw_t)minic_rand_float);
     minic_register("rand_range", "f(ff)", (minic_ext_fn_raw_t)minic_rand_range);
     
@@ -674,6 +704,7 @@ void runtime_api_register(void) {
     minic_register_native("draw_line", minic_draw_line);
     minic_register_native("draw_filled_rect", minic_draw_filled_rect);
     minic_register_native("draw_rect", minic_draw_rect);
+    minic_register_native("draw_fps", minic_draw_fps);
     
     minic_register_native("dbg_entity_has_comp", minic_dbg_entity_has_comp);
     

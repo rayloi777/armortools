@@ -21,6 +21,12 @@
 #include "components/mesh_renderer.c"
 #include "components/camera.c"
 
+// 2D Systems
+#include "core/sprite_api.c"
+#include "core/camera2d.c"
+#include "ecs/sprite_bridge.c"
+#include "ecs/camera_bridge.c"
+
 // Base minic library
 #include "../../base/sources/libs/minic.c"
 #include "../../base/sources/libs/minic_ext.c"
