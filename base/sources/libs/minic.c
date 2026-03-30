@@ -2692,3 +2692,376 @@ minic_val_t minic_ctx_call_fn(minic_ctx_t *ctx, void *fn_ptr, minic_val_t *args,
 	minic_active_mem_used      = prev_mem_used;
 	return r;
 }
+
+// ============================================================
+// M15: BYTECODE VM — Register-based virtual machine
+// ============================================================
+
+// --- Opcodes ---
+typedef enum {
+	// Constants
+	OP_CONSTANT,    // R(A) = const_pool[BX]
+	OP_CONST_INT,   // R(A) = (minic_val_t){.type=MINIC_T_INT, .i = (int)(int16_t)BX}
+	OP_CONST_ZERO,  // R(A) = int(0)
+	OP_CONST_ONE,   // R(A) = int(1)
+	OP_CONST_FZERO, // R(A) = float(0.0)
+	OP_CONST_NULL,  // R(A) = ptr(NULL)
+	// Arithmetic
+	OP_ADD, // R(A) = R(B) + R(C)
+	OP_SUB, // R(A) = R(B) - R(C)
+	OP_MUL, // R(A) = R(B) * R(C)
+	OP_DIV, // R(A) = R(B) / R(C)
+	OP_MOD, // R(A) = R(B) % R(C)
+	OP_NEG, // R(A) = -R(B)
+	OP_NOT, // R(A) = !R(B)
+	// Comparison
+	OP_EQ,  // R(A) = (R(B) == R(C)) ? 1 : 0
+	OP_NEQ, // R(A) = (R(B) != R(C)) ? 1 : 0
+	OP_LT,  // R(A) = (R(B) <  R(C)) ? 1 : 0
+	OP_GT,  // R(A) = (R(B) >  R(C)) ? 1 : 0
+	OP_LE,  // R(A) = (R(B) <= R(C)) ? 1 : 0
+	OP_GE,  // R(A) = (R(B) >= R(C)) ? 1 : 0
+	// Control flow
+	OP_JMP,       // pc += BX (signed)
+	OP_JMP_FALSE, // if (!R(A)) pc += BX
+	OP_JMP_TRUE,  // if (R(A)) pc += BX
+	OP_LOOP,      // pc -= BX (backward jump)
+	// Load/Store globals (by index)
+	OP_LOAD_GLOBAL,  // R(A) = vm_globals[BX]
+	OP_STORE_GLOBAL, // vm_globals[BX] = R(A)
+	// Function calls
+	OP_CALL,        // call user func R(A), argc=B, result in C
+	OP_CALL_EXT,    // call ext func index BX, argc from A..A+B-1
+	OP_RETURN,      // return R(A)
+	OP_RETURN_VOID, // return
+	// Misc
+	OP_HALT,
+	OP_INC, // R(A).i++
+	OP_DEC, // R(A).i--
+	// Compound assign
+	OP_ADD_ASSIGN, // R(A) += R(B)
+	OP_SUB_ASSIGN, // R(A) -= R(B)
+	OP_MUL_ASSIGN, // R(A) *= R(B)
+	OP_DIV_ASSIGN, // R(A) /= R(B)
+	OP_MOD_ASSIGN, // R(A) %= R(B)
+	OP_COUNT
+} minic_opcode_t;
+
+// --- Instruction encoding ---
+// Format: [8:op][8:A][8:B][8:C] or [8:op][8:A][16:BX]
+#define VM_OP(i)                 ((i) >> 24)
+#define VM_A(i)                  (((i) >> 16) & 0xFF)
+#define VM_B(i)                  (((i) >> 8) & 0xFF)
+#define VM_C(i)                  ((i) & 0xFF)
+#define VM_BX(i)                 ((int16_t)((i) & 0xFFFF))
+#define VM_MAKE_ABC(op, a, b, c) (((uint32_t)(op) << 24) | ((uint32_t)(a) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(c))
+#define VM_MAKE_ABX(op, a, bx)   (((uint32_t)(op) << 24) | ((uint32_t)(a) << 16) | ((uint32_t)((bx) & 0xFFFF)))
+
+// --- Compiled function prototype ---
+typedef struct {
+	uint32_t    *code;
+	int          code_count;
+	int          num_regs;
+	minic_val_t *constants;
+	int          const_count;
+} minic_proto_t;
+
+// --- VM call frame ---
+#define VM_MAX_FRAMES 256
+#define VM_STACK_SIZE (64 * 1024)
+
+typedef struct {
+	minic_val_t   *regs; // points into vm_stack
+	uint32_t      *code;
+	int            pc;
+	int            reg_base;
+	int            num_regs;
+	int            return_reg;
+	minic_proto_t *proto;
+} minic_frame_t;
+
+// --- VM globals table ---
+#define VM_MAX_GLOBALS 256
+static minic_val_t vm_globals[VM_MAX_GLOBALS];
+static int         vm_global_count = 0;
+static int         vm_global_find_or_add(const char *name) {
+    uint32_t h = minic_name_hash(name);
+    // We store names alongside globals using a parallel array
+    static char     vm_global_names[VM_MAX_GLOBALS][64];
+    static uint32_t vm_global_hashes[VM_MAX_GLOBALS];
+    for (int i = 0; i < vm_global_count; i++) {
+        if (vm_global_hashes[i] == h && strcmp(vm_global_names[i], name) == 0)
+            return i;
+    }
+    if (vm_global_count >= VM_MAX_GLOBALS)
+        return 0;
+    int idx = vm_global_count++;
+    strncpy(vm_global_names[idx], name, 63);
+    vm_global_names[idx][63] = '\0';
+    vm_global_hashes[idx]    = h;
+    vm_globals[idx]          = minic_val_int(0);
+    return idx;
+}
+
+// --- VM helpers ---
+static inline minic_val_t vm_val_to_d_val(minic_val_t v) {
+	switch (v.type) {
+	case MINIC_T_INT:
+		return minic_val_float((float)v.i);
+	case MINIC_T_FLOAT:
+		return v;
+	default:
+		return minic_val_float(0.0f);
+	}
+}
+
+// --- VM execution engine ---
+static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc) {
+	static minic_val_t   vm_stack[VM_STACK_SIZE];
+	static minic_frame_t vm_frames[VM_MAX_FRAMES];
+	int                  frame_top = 0;
+
+	// Init frame 0
+	minic_frame_t *frame = &vm_frames[0];
+	frame->proto         = proto;
+	frame->code          = proto->code;
+	frame->pc            = 0;
+	frame->reg_base      = 0;
+	frame->num_regs      = proto->num_regs;
+	frame->regs          = vm_stack;
+	frame->return_reg    = 0;
+
+	// Bind arguments
+	for (int i = 0; i < argc && i < frame->num_regs; i++) {
+		frame->regs[i] = args[i];
+	}
+
+	// Init globals from existing context vars
+	// (done lazily on first access)
+
+	for (;;) {
+		uint32_t inst = frame->code[frame->pc++];
+		uint32_t op   = VM_OP(inst);
+		int      a    = VM_A(inst);
+		int      b    = VM_B(inst);
+		int      c    = VM_C(inst);
+		int      bx   = VM_BX(inst);
+
+		minic_val_t *ra = &frame->regs[a];
+		minic_val_t *rb = &frame->regs[b];
+		minic_val_t *rc = &frame->regs[c];
+
+		switch (op) {
+		// Constants
+		case OP_CONSTANT:
+			*ra = frame->proto->constants[bx];
+			break;
+		case OP_CONST_INT:
+			*ra = minic_val_int((int)(int16_t)bx);
+			break;
+		case OP_CONST_ZERO:
+			*ra = minic_val_int(0);
+			break;
+		case OP_CONST_ONE:
+			*ra = minic_val_int(1);
+			break;
+		case OP_CONST_FZERO:
+			*ra = minic_val_float(0.0f);
+			break;
+		case OP_CONST_NULL:
+			*ra = minic_val_ptr(NULL);
+			break;
+
+		// Arithmetic — type-specialized INT fast path
+		case OP_ADD:
+			if (ra->type == MINIC_T_INT && rb->type == MINIC_T_INT) {
+				ra->type = MINIC_T_INT;
+				ra->i    = rb->i + rc->i;
+			}
+			else if (ra->type == MINIC_T_FLOAT || rb->type == MINIC_T_FLOAT || rc->type == MINIC_T_FLOAT) {
+				ra->type = MINIC_T_FLOAT;
+				ra->f    = (float)(minic_val_to_d(*rb) + minic_val_to_d(*rc));
+			}
+			else {
+				*ra = minic_arith(*rb, *rc, '+');
+			}
+			break;
+		case OP_SUB:
+			if (rb->type == MINIC_T_INT && rc->type == MINIC_T_INT) {
+				ra->type = MINIC_T_INT;
+				ra->i    = rb->i - rc->i;
+			}
+			else {
+				*ra = minic_arith(*rb, *rc, '-');
+			}
+			break;
+		case OP_MUL:
+			if (rb->type == MINIC_T_INT && rc->type == MINIC_T_INT) {
+				ra->type = MINIC_T_INT;
+				ra->i    = rb->i * rc->i;
+			}
+			else {
+				*ra = minic_arith(*rb, *rc, '*');
+			}
+			break;
+		case OP_DIV:
+			if (rb->type == MINIC_T_INT && rc->type == MINIC_T_INT && rc->i != 0) {
+				ra->type = MINIC_T_INT;
+				ra->i    = rb->i / rc->i;
+			}
+			else {
+				*ra = minic_arith(*rb, *rc, '/');
+			}
+			break;
+		case OP_MOD:
+			if (rb->type == MINIC_T_INT && rc->type == MINIC_T_INT && rc->i != 0) {
+				ra->type = MINIC_T_INT;
+				ra->i    = rb->i % rc->i;
+			}
+			else {
+				*ra = minic_arith(*rb, *rc, '%');
+			}
+			break;
+		case OP_NEG:
+			*ra = minic_val_coerce(-minic_val_to_d(*rb), rb->type);
+			break;
+		case OP_NOT:
+			*ra = minic_val_int(!minic_val_is_true(*rb));
+			break;
+
+		// Comparison
+		case OP_EQ:
+			*ra = minic_val_int(minic_val_to_d(*rb) == minic_val_to_d(*rc) ? 1 : 0);
+			break;
+		case OP_NEQ:
+			*ra = minic_val_int(minic_val_to_d(*rb) != minic_val_to_d(*rc) ? 1 : 0);
+			break;
+		case OP_LT:
+			*ra = minic_val_int(minic_val_to_d(*rb) < minic_val_to_d(*rc) ? 1 : 0);
+			break;
+		case OP_GT:
+			*ra = minic_val_int(minic_val_to_d(*rb) > minic_val_to_d(*rc) ? 1 : 0);
+			break;
+		case OP_LE:
+			*ra = minic_val_int(minic_val_to_d(*rb) <= minic_val_to_d(*rc) ? 1 : 0);
+			break;
+		case OP_GE:
+			*ra = minic_val_int(minic_val_to_d(*rb) >= minic_val_to_d(*rc) ? 1 : 0);
+			break;
+
+		// Control flow
+		case OP_JMP:
+			frame->pc += bx;
+			break;
+		case OP_JMP_FALSE:
+			if (!minic_val_is_true(*ra))
+				frame->pc += bx;
+			break;
+		case OP_JMP_TRUE:
+			if (minic_val_is_true(*ra))
+				frame->pc += bx;
+			break;
+		case OP_LOOP:
+			frame->pc -= bx;
+			break;
+
+		// Load/Store globals
+		case OP_LOAD_GLOBAL:
+			*ra = vm_globals[bx];
+			break;
+		case OP_STORE_GLOBAL:
+			vm_globals[bx] = *ra;
+			break;
+
+		// Inc/Dec
+		case OP_INC:
+			ra->i++;
+			break;
+		case OP_DEC:
+			ra->i++;
+			break;
+
+		// Compound assign
+		case OP_ADD_ASSIGN:
+			if (ra->type == MINIC_T_INT && rb->type == MINIC_T_INT) {
+				ra->i += rb->i;
+			}
+			else {
+				*ra = minic_arith(*ra, *rb, '+');
+			}
+			break;
+		case OP_SUB_ASSIGN:
+			if (ra->type == MINIC_T_INT && rb->type == MINIC_T_INT) {
+				ra->i -= rb->i;
+			}
+			else {
+				*ra = minic_arith(*ra, *rb, '-');
+			}
+			break;
+		case OP_MUL_ASSIGN:
+			if (ra->type == MINIC_T_INT && rb->type == MINIC_T_INT) {
+				ra->i *= rb->i;
+			}
+			else {
+				*ra = minic_arith(*ra, *rb, '*');
+			}
+			break;
+		case OP_DIV_ASSIGN:
+			if (ra->type == MINIC_T_INT && rb->type == MINIC_T_INT && rb->i != 0) {
+				ra->i /= rb->i;
+			}
+			else {
+				*ra = minic_arith(*ra, *rb, '/');
+			}
+			break;
+		case OP_MOD_ASSIGN:
+			if (ra->type == MINIC_T_INT && rb->type == MINIC_T_INT && rb->i != 0) {
+				ra->i %= rb->i;
+			}
+			else {
+				*ra = minic_arith(*ra, *rb, '%');
+			}
+			break;
+
+			// Function calls
+		case OP_CALL_EXT: {
+			// BX = ext func index, A = start of args, B = argc
+			// TODO: ext func dispatch by index
+			(void)bx;
+			(void)a;
+			(void)b;
+			break;
+		}
+		case OP_CALL: {
+			// R(A) = function proto ptr (as int), B = argc, C = dest reg
+			// For now, fall back to tree-walking for user calls
+			// TODO: implement user function calls
+			break;
+		}
+		case OP_RETURN:
+			if (frame_top > 0) {
+				minic_val_t ret = *ra;
+				frame_top--;
+				frame                          = &vm_frames[frame_top];
+				frame->regs[frame->return_reg] = ret;
+			}
+			else {
+				return *ra;
+			}
+			break;
+		case OP_RETURN_VOID:
+			if (frame_top > 0) {
+				frame_top--;
+				frame = &vm_frames[frame_top];
+			}
+			else {
+				return minic_val_int(0);
+			}
+			break;
+		case OP_HALT:
+			return *ra;
+		default:
+			return minic_val_int(0);
+		}
+	}
+}
