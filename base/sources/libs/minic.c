@@ -845,6 +845,24 @@ static void minic_var_set(minic_env_t *e, const char *name, minic_val_t val) {
 	}
 }
 
+static minic_val_t *minic_var_get_ptr(minic_env_t *e, const char *name) {
+	uint32_t h = minic_name_hash(name);
+	for (int i = e->var_count - 1; i >= 0; --i) {
+		if (e->vars[i].name_hash == h && strcmp(e->vars[i].name, name) == 0) {
+			return &e->vars[i].val;
+		}
+	}
+	if (e->global_env != NULL) {
+		minic_env_t *g = e->global_env;
+		for (int i = g->var_count - 1; i >= 0; --i) {
+			if (g->vars[i].name_hash == h && strcmp(g->vars[i].name, name) == 0) {
+				return &g->vars[i].val;
+			}
+		}
+	}
+	return NULL;
+}
+
 static void minic_var_decl(minic_env_t *e, const char *name, minic_type_t type, minic_val_t init) {
 	// Coerce init to declared type
 	minic_val_t v = minic_val_cast(init, type);
@@ -1229,6 +1247,25 @@ minic_val_t minic_call_fn(void *fn_ptr, minic_val_t *args, int argc) {
 }
 
 static minic_val_t minic_arith(minic_val_t a, minic_val_t b, char op) {
+	// Fast path: both INT, skip double conversion
+	if (a.type == MINIC_T_INT && b.type == MINIC_T_INT) {
+		int ia = a.i, ib = b.i;
+		switch (op) {
+		case '+':
+			return minic_val_int(ia + ib);
+		case '-':
+			return minic_val_int(ia - ib);
+		case '*':
+			return minic_val_int(ia * ib);
+		case '/':
+			return minic_val_int(ib != 0 ? ia / ib : 0);
+		case '%':
+			return minic_val_int(ib != 0 ? ia % ib : 0);
+		default:
+			return minic_val_int(0);
+		}
+	}
+
 	// Determine result type (widening: int < float < ptr)
 	minic_type_t rt;
 	if (a.type == MINIC_T_PTR || b.type == MINIC_T_PTR)
@@ -1990,17 +2027,29 @@ static void minic_parse_stmt(minic_env_t *e) {
 				minic_lex_next(&e->lex);
 				char iname[64];
 				strncpy(iname, e->lex.cur.text, 63);
-				minic_val_t ov = minic_var_get(e, iname);
-				minic_var_set(e, iname, minic_val_coerce(minic_val_to_d(ov) + delta, ov.type));
+				minic_val_t *vp = minic_var_get_ptr(e, iname);
+				if (vp && vp->type == MINIC_T_INT) {
+					vp->i += (int)delta;
+				}
+				else {
+					minic_val_t ov = *vp;
+					minic_var_set(e, iname, minic_val_coerce(minic_val_to_d(ov) + delta, ov.type));
+				}
 			}
 			else if (e->lex.cur.type == TOK_IDENT) {
 				char iname[64];
 				strncpy(iname, e->lex.cur.text, 63);
 				minic_lex_next(&e->lex);
 				if (e->lex.cur.type == TOK_INC || e->lex.cur.type == TOK_DEC) {
-					double      delta = MINIC_INC_DELTA(&e->lex);
-					minic_val_t ov    = minic_var_get(e, iname);
-					minic_var_set(e, iname, minic_val_coerce(minic_val_to_d(ov) + delta, ov.type));
+					double       delta = MINIC_INC_DELTA(&e->lex);
+					minic_val_t *vp    = minic_var_get_ptr(e, iname);
+					if (vp && vp->type == MINIC_T_INT) {
+						vp->i += (int)delta;
+					}
+					else {
+						minic_val_t ov = minic_var_get(e, iname);
+						minic_var_set(e, iname, minic_val_coerce(minic_val_to_d(ov) + delta, ov.type));
+					}
 				}
 				else if (e->lex.cur.type == TOK_PLUS_ASSIGN || e->lex.cur.type == TOK_MINUS_ASSIGN || e->lex.cur.type == TOK_MUL_ASSIGN ||
 				         e->lex.cur.type == TOK_DIV_ASSIGN || e->lex.cur.type == TOK_MOD_ASSIGN) {
