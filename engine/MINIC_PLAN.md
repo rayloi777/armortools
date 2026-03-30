@@ -53,6 +53,7 @@ Minic is a tree-walking interpreter (~2500 lines). Every loop iteration re-token
 | M3 | Arena save/restore in `minic_call()` | `minic.c` | **Done** |
 | M4 | Function body token cache | `minic.c` | **Done** |
 | M6 | Struct field cache | `minic.c` (`minic_struct_def_t`) | **Done** |
+| M7 | Lexer keyword switch | `minic.c` | **Done** |
 
 #### M1: Ext Function Dispatch Hash
 
@@ -142,13 +143,9 @@ Post-M4 (100000 iters x 3 runs, Apple M1 Pro):
 
 Added `field_hashes[16]` to `minic_struct_def_t`. Hashes computed at struct registration and context snapshot. `minic_struct_field_idx()` compares hash before `strcmp`.
 
-#### Phase M7: Lexer Keyword Switch (1.5-2x)
+#### ~~Phase M7: Lexer Keyword Switch~~ — **Done**
 
-**File**: `base/sources/libs/minic.c`
-
-**Current**: 15+ consecutive `strcmp()` for keyword matching in `minic_lex_next()`.
-
-**Implementation**: Replace with length + first-letter switch dispatch.
+Replaced 17 consecutive `strcmp()` calls with `switch` dispatch by first letter + length filter. Only matching candidates call `strcmp()`.
 
 #### Phase M8: String Interning (1.5x)
 
@@ -183,10 +180,11 @@ Added `field_hashes[16]` to `minic_struct_def_t`. Hashes computed at struct regi
 1. ~~**M4**: Function body cache in `minic.c`~~ — **Done** (2.9x speedup)
 2. ~~**Native struct fix**~~ — **Done** (fallback in `minic_struct_get()`)
 3. ~~**M6**: Struct field cache in `minic.c`~~ — **Done**
-4. **M5**: For-loop pre-scan in `minic.c` — 1.5-2x
-5. **M7-M8**: Lexer keyword switch, string interning (incremental)
-6. **M9-M15**: Enum hash, NaN-boxing, arena, etc.
-7. **M15**: Bytecode VM — ultimate goal (long-term)
+4. ~~**M7**: Lexer keyword switch~~ — **Done** (first-letter + length switch)
+5. **M5**: For-loop pre-scan in `minic.c` — 1.5-2x
+6. **M8**: String interning (incremental)
+7. **M9-M15**: Enum hash, NaN-boxing, arena, etc.
+8. **M15**: Bytecode VM — ultimate goal (long-term)
 
 ---
 

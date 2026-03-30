@@ -298,79 +298,105 @@ static void minic_lex_next(minic_lexer_t *l) {
 		}
 		l->cur.text[i] = '\0';
 
-		if (strcmp(l->cur.text, "int") == 0) {
-			l->cur.type = TOK_INT;
-			return;
-		}
-		if (strcmp(l->cur.text, "float") == 0) {
-			l->cur.type = TOK_FLOAT;
-			return;
-		}
-		if (strcmp(l->cur.text, "char") == 0) {
-			l->cur.type = TOK_CHAR;
-			return;
-		}
-		if (strcmp(l->cur.text, "double") == 0) {
-			l->cur.type = TOK_DOUBLE;
-			return;
-		}
-		if (strcmp(l->cur.text, "bool") == 0) {
-			l->cur.type = TOK_BOOL;
-			return;
-		}
-		if (strcmp(l->cur.text, "true") == 0) {
-			l->cur.type = TOK_NUMBER;
-			l->cur.val  = minic_val_int(1);
-			return;
-		}
-		if (strcmp(l->cur.text, "false") == 0) {
-			l->cur.type = TOK_NUMBER;
-			l->cur.val  = minic_val_int(0);
-			return;
-		}
-		if (strcmp(l->cur.text, "return") == 0) {
-			l->cur.type = TOK_RETURN;
-			return;
-		}
-		if (strcmp(l->cur.text, "if") == 0) {
-			l->cur.type = TOK_IF;
-			return;
-		}
-		if (strcmp(l->cur.text, "else") == 0) {
-			l->cur.type = TOK_ELSE;
-			return;
-		}
-		if (strcmp(l->cur.text, "while") == 0) {
-			l->cur.type = TOK_WHILE;
-			return;
-		}
-		if (strcmp(l->cur.text, "for") == 0) {
-			l->cur.type = TOK_FOR;
-			return;
-		}
-		if (strcmp(l->cur.text, "break") == 0) {
-			l->cur.type = TOK_BREAK;
-			return;
-		}
-		if (strcmp(l->cur.text, "continue") == 0) {
-			l->cur.type = TOK_CONTINUE;
-			return;
-		}
-		if (strcmp(l->cur.text, "struct") == 0) {
-			l->cur.type = TOK_STRUCT;
-			return;
-		}
-		if (strcmp(l->cur.text, "typedef") == 0) {
-			l->cur.type = TOK_TYPEDEF;
-			return;
-		}
-		if (strcmp(l->cur.text, "enum") == 0) {
-			l->cur.type = TOK_ENUM;
-			return;
-		}
-		if (strcmp(l->cur.text, "void") == 0) {
-			l->cur.type = TOK_VOID;
-			return;
+		// M7: keyword dispatch by first letter + length
+		int len = i;
+		switch (l->cur.text[0]) {
+		case 'b':
+			if (len == 4 && strcmp(l->cur.text, "bool") == 0) {
+				l->cur.type = TOK_BOOL;
+				return;
+			}
+			if (len == 5 && strcmp(l->cur.text, "break") == 0) {
+				l->cur.type = TOK_BREAK;
+				return;
+			}
+			break;
+		case 'c':
+			if (len == 4 && strcmp(l->cur.text, "char") == 0) {
+				l->cur.type = TOK_CHAR;
+				return;
+			}
+			if (len == 8 && strcmp(l->cur.text, "continue") == 0) {
+				l->cur.type = TOK_CONTINUE;
+				return;
+			}
+			break;
+		case 'd':
+			if (len == 6 && strcmp(l->cur.text, "double") == 0) {
+				l->cur.type = TOK_DOUBLE;
+				return;
+			}
+			break;
+		case 'e':
+			if (len == 4 && strcmp(l->cur.text, "else") == 0) {
+				l->cur.type = TOK_ELSE;
+				return;
+			}
+			if (len == 4 && strcmp(l->cur.text, "enum") == 0) {
+				l->cur.type = TOK_ENUM;
+				return;
+			}
+			break;
+		case 'f':
+			if (len == 3 && strcmp(l->cur.text, "for") == 0) {
+				l->cur.type = TOK_FOR;
+				return;
+			}
+			if (len == 5 && strcmp(l->cur.text, "float") == 0) {
+				l->cur.type = TOK_FLOAT;
+				return;
+			}
+			if (len == 5 && strcmp(l->cur.text, "false") == 0) {
+				l->cur.type = TOK_NUMBER;
+				l->cur.val  = minic_val_int(0);
+				return;
+			}
+			break;
+		case 'i':
+			if (len == 2 && strcmp(l->cur.text, "if") == 0) {
+				l->cur.type = TOK_IF;
+				return;
+			}
+			if (len == 3 && strcmp(l->cur.text, "int") == 0) {
+				l->cur.type = TOK_INT;
+				return;
+			}
+			break;
+		case 'r':
+			if (len == 6 && strcmp(l->cur.text, "return") == 0) {
+				l->cur.type = TOK_RETURN;
+				return;
+			}
+			break;
+		case 's':
+			if (len == 6 && strcmp(l->cur.text, "struct") == 0) {
+				l->cur.type = TOK_STRUCT;
+				return;
+			}
+			break;
+		case 't':
+			if (len == 4 && strcmp(l->cur.text, "true") == 0) {
+				l->cur.type = TOK_NUMBER;
+				l->cur.val  = minic_val_int(1);
+				return;
+			}
+			if (len == 7 && strcmp(l->cur.text, "typedef") == 0) {
+				l->cur.type = TOK_TYPEDEF;
+				return;
+			}
+			break;
+		case 'v':
+			if (len == 4 && strcmp(l->cur.text, "void") == 0) {
+				l->cur.type = TOK_VOID;
+				return;
+			}
+			break;
+		case 'w':
+			if (len == 5 && strcmp(l->cur.text, "while") == 0) {
+				l->cur.type = TOK_WHILE;
+				return;
+			}
+			break;
 		}
 		l->cur.type = TOK_IDENT;
 		return;
