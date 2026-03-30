@@ -556,6 +556,15 @@ void *minic_alloc(int size) {
 	return &minic_active_mem[aligned];
 }
 
+// --- M15: Compiled function prototype (forward for minic_func_t) ---
+typedef struct {
+	uint32_t     *code;
+	int           code_count;
+	int           num_regs;
+	minic_val_t  *constants;
+	int           const_count;
+} minic_proto_t;
+
 typedef struct {
 	char        name[64];
 	uint32_t    name_hash;
@@ -582,9 +591,12 @@ typedef struct {
 	// M4: body token cache
 	minic_token_t *body_tokens; // NULL = not cached yet, malloc'd
 	int            body_token_count;
+	// M15: compiled bytecode
+	minic_proto_t *proto; // NULL = not compiled yet
 } minic_func_t;
 
 #define MINIC_INC_DELTA(l) ((l)->cur.type == TOK_INC ? 1.0 : -1.0)
+
 
 typedef struct {
 	char         name[64];
@@ -645,6 +657,8 @@ struct minic_ctx_s {
 
 static minic_env_t *minic_active_env = NULL;
 
+static minic_proto_t *vm_compile_body(const char *src, int body_pos, minic_env_t *env);
+static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc);
 static minic_val_t minic_parse_expr(minic_env_t *e);
 static minic_val_t minic_parse_cond(minic_env_t *e);
 static void        minic_skip_block(minic_env_t *e);
@@ -1180,6 +1194,11 @@ static minic_token_t *minic_lex_body_tokens(const char *src, int body_pos, int *
 }
 
 static minic_val_t minic_call(minic_env_t *e, minic_func_t *fn, minic_val_t *args, int argc) {
+	// M15: fast path — execute compiled bytecode via VM
+		// DISABLED: if (fn->proto != NULL && fn->ctx != NULL) {
+		// DISABLED: return minic_vm_exec(fn->ctx, fn->proto, args, argc);
+		// DISABLED: }
+
 	int saved_mem_used = *minic_active_mem_used;
 
 	// M4: lazy body token cache
@@ -2604,6 +2623,15 @@ minic_ctx_t *minic_ctx_create(const char *src) {
 		e->funcs[i].ctx = ctx;
 	}
 
+	// M15: compile function bodies to bytecode — DISABLED until compiler is fully debugged
+	// for (int i = 0; i < e->func_count; ++i) {
+	// 	minic_func_t *fn = &e->funcs[i];
+	// 	if (fn->body_tokens == NULL) {
+	// 		fn->body_tokens = minic_lex_body_tokens(e->lex.src, fn->body_pos, &fn->body_token_count);
+	// 	}
+	// 	fn->proto = vm_compile_body(e->lex.src, fn->body_pos, e);
+	// }
+
 	if (e->lex.cur.type == TOK_RPAREN) {
 		minic_lex_next(&e->lex);
 	}
@@ -2738,6 +2766,7 @@ typedef enum {
 	OP_HALT,
 	OP_INC, // R(A).i++
 	OP_DEC, // R(A).i--
+		OP_MOV, // R(A) = R(B)
 	// Compound assign
 	OP_ADD_ASSIGN, // R(A) += R(B)
 	OP_SUB_ASSIGN, // R(A) -= R(B)
@@ -2757,15 +2786,6 @@ typedef enum {
 #define VM_MAKE_ABC(op, a, b, c) (((uint32_t)(op) << 24) | ((uint32_t)(a) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(c))
 #define VM_MAKE_ABX(op, a, bx)   (((uint32_t)(op) << 24) | ((uint32_t)(a) << 16) | ((uint32_t)((bx) & 0xFFFF)))
 
-// --- Compiled function prototype ---
-typedef struct {
-	uint32_t    *code;
-	int          code_count;
-	int          num_regs;
-	minic_val_t *constants;
-	int          const_count;
-} minic_proto_t;
-
 // --- VM call frame ---
 #define VM_MAX_FRAMES 256
 #define VM_STACK_SIZE (64 * 1024)
@@ -2783,12 +2803,11 @@ typedef struct {
 // --- VM globals table ---
 #define VM_MAX_GLOBALS 256
 static minic_val_t vm_globals[VM_MAX_GLOBALS];
+static char        vm_global_names[VM_MAX_GLOBALS][64];
+static uint32_t    vm_global_hashes[VM_MAX_GLOBALS];
 static int         vm_global_count = 0;
 static int         vm_global_find_or_add(const char *name) {
     uint32_t h = minic_name_hash(name);
-    // We store names alongside globals using a parallel array
-    static char     vm_global_names[VM_MAX_GLOBALS][64];
-    static uint32_t vm_global_hashes[VM_MAX_GLOBALS];
     for (int i = 0; i < vm_global_count; i++) {
         if (vm_global_hashes[i] == h && strcmp(vm_global_names[i], name) == 0)
             return i;
@@ -2801,6 +2820,40 @@ static int         vm_global_find_or_add(const char *name) {
     vm_global_hashes[idx]    = h;
     vm_globals[idx]          = minic_val_int(0);
     return idx;
+}
+
+// Sync context vars -> vm_globals (before VM execution)
+static void vm_globals_load(minic_env_t *e) {
+    for (int i = 0; i < vm_global_count; i++) {
+        uint32_t h = vm_global_hashes[i];
+        for (int j = e->var_count - 1; j >= 0; --j) {
+            if (e->vars[j].name_hash == h && strcmp(e->vars[j].name, vm_global_names[i]) == 0) {
+                vm_globals[i] = e->vars[j].val;
+                break;
+            }
+        }
+    }
+}
+
+// Sync vm_globals -> context vars (after VM execution)
+static void vm_globals_store(minic_env_t *e) {
+    for (int i = 0; i < vm_global_count; i++) {
+        uint32_t h = vm_global_hashes[i];
+        bool found = false;
+        for (int j = e->var_count - 1; j >= 0; --j) {
+            if (e->vars[j].name_hash == h && strcmp(e->vars[j].name, vm_global_names[i]) == 0) {
+                e->vars[j].val = vm_globals[i];
+                found = true;
+                break;
+            }
+        }
+        if (!found && e->var_count < e->var_cap) {
+            strncpy(e->vars[e->var_count].name, vm_global_names[i], 63);
+            e->vars[e->var_count].name_hash = h;
+            e->vars[e->var_count].val = vm_globals[i];
+            e->var_count++;
+        }
+    }
 }
 
 // --- VM helpers ---
@@ -2816,7 +2869,7 @@ static inline minic_val_t vm_val_to_d_val(minic_val_t v) {
 }
 
 // --- VM execution engine ---
-static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc) {
+static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc) {
 	static minic_val_t   vm_stack[VM_STACK_SIZE];
 	static minic_frame_t vm_frames[VM_MAX_FRAMES];
 	int                  frame_top = 0;
@@ -2835,9 +2888,6 @@ static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_v
 	for (int i = 0; i < argc && i < frame->num_regs; i++) {
 		frame->regs[i] = args[i];
 	}
-
-	// Init globals from existing context vars
-	// (done lazily on first access)
 
 	for (;;) {
 		uint32_t inst = frame->code[frame->pc++];
@@ -2978,8 +3028,11 @@ static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_v
 			ra->i++;
 			break;
 		case OP_DEC:
-			ra->i++;
+			ra->i--;
 			break;
+			case OP_MOV:
+				*ra = *rb;
+				break;
 
 		// Compound assign
 		case OP_ADD_ASSIGN:
@@ -3024,20 +3077,29 @@ static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_v
 			break;
 
 			// Function calls
-		case OP_CALL_EXT: {
-			// BX = ext func index, A = start of args, B = argc
-			// TODO: ext func dispatch by index
-			(void)bx;
-			(void)a;
-			(void)b;
-			break;
-		}
-		case OP_CALL: {
-			// R(A) = function proto ptr (as int), B = argc, C = dest reg
-			// For now, fall back to tree-walking for user calls
-			// TODO: implement user function calls
-			break;
-		}
+			case OP_CALL_EXT: {
+				// A=dest, BX=(argc<<8)|arg_base, next word=const_idx
+				int ext_argc  = (bx >> 8) & 0xFF;
+				int ext_base  = bx & 0xFF;
+				int ext_cidx  = (int)frame->code[frame->pc++];
+				minic_ext_func_t *ef = (minic_ext_func_t *)frame->proto->constants[ext_cidx].p;
+				minic_val_t call_args[MINIC_MAX_PARAMS];
+				for (int ai = 0; ai < ext_argc && ai < MINIC_MAX_PARAMS; ai++)
+					call_args[ai] = frame->regs[ext_base + ai];
+				frame->regs[a] = minic_dispatch(ef, call_args, ext_argc);
+				break;
+			}
+			case OP_CALL: {
+				// A=dest, B=func_index, C=argc, next word=arg_base
+				int call_base = (int)frame->code[frame->pc++];
+				minic_func_t *fn = &ctx->e.funcs[b];
+				minic_val_t call_args[MINIC_MAX_PARAMS];
+				for (int ai = 0; ai < c && ai < MINIC_MAX_PARAMS; ai++)
+					call_args[ai] = frame->regs[call_base + ai];
+				minic_val_t r = minic_call(&ctx->e, fn, call_args, c);
+				frame->regs[a] = r;
+				break;
+			}
 		case OP_RETURN:
 			if (frame_top > 0) {
 				minic_val_t ret = *ra;
@@ -3066,4 +3128,13 @@ static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_v
 	}
 }
 
+
+static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc) {
+	vm_globals_load(&ctx->e);
+	minic_val_t r = minic_vm_exec_inner(ctx, proto, args, argc);
+	vm_globals_store(&ctx->e);
+	return r;
+}
+
 #include "minic_vm_compiler.c"
+
