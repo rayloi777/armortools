@@ -214,7 +214,7 @@ static void minic_lex_next(minic_lexer_t *l) {
 					ch = '\n';
 					break;
 				case 't':
-					ch = '\t';
+					ch = '	';
 					break;
 				case '0':
 					ch = '\0';
@@ -266,7 +266,7 @@ static void minic_lex_next(minic_lexer_t *l) {
 				v = '\n';
 				break;
 			case 't':
-				v = '\t';
+				v = '	';
 				break;
 			case '0':
 				v = '\0';
@@ -564,6 +564,7 @@ typedef struct {
 	char         name[64];
 	char         fields[MINIC_MAX_STRUCT_FIELDS][64];
 	char         field_struct_names[MINIC_MAX_STRUCT_FIELDS][64]; // struct type name for PTR fields, or ""
+	uint32_t     field_hashes[MINIC_MAX_STRUCT_FIELDS];           // pre-computed name hash for fast lookup
 	int          field_count;
 	int          size; // sizeof the native C struct, 0 if unknown
 	bool         has_native_layout;
@@ -1000,6 +1001,7 @@ static minic_struct_def_t *minic_struct_get(minic_env_t *e, const char *name) {
 				for (int j = 0; j < dst->field_count; j++) {
 					strncpy(dst->fields[j], src->fields[j], 63);
 					strncpy(dst->field_struct_names[j], src->field_struct_names[j], 63);
+					dst->field_hashes[j]       = minic_name_hash(src->fields[j]);
 					dst->field_offsets[j]      = src->field_offsets[j];
 					dst->field_native_types[j] = src->field_native_types[j];
 					dst->field_deref_types[j]  = src->field_deref_types[j];
@@ -1013,8 +1015,9 @@ static minic_struct_def_t *minic_struct_get(minic_env_t *e, const char *name) {
 }
 
 static int minic_struct_field_idx(minic_struct_def_t *def, const char *field) {
+	uint32_t h = minic_name_hash(field);
 	for (int i = 0; i < def->field_count; ++i) {
-		if (strcmp(def->fields[i], field) == 0) {
+		if (def->field_hashes[i] == h && strcmp(def->fields[i], field) == 0) {
 			return i;
 		}
 	}
@@ -2294,7 +2297,9 @@ static void minic_register_structs(minic_env_t *e) {
 				minic_lex_next(&l);
 			}
 			if (l.cur.type == TOK_IDENT && def->field_count < MINIC_MAX_STRUCT_FIELDS) {
-				strncpy(def->fields[def->field_count++], l.cur.text, 63);
+				strncpy(def->fields[def->field_count], l.cur.text, 63);
+				def->field_hashes[def->field_count] = minic_name_hash(l.cur.text);
+				def->field_count++;
 				minic_lex_next(&l);
 			}
 			while (l.cur.type != TOK_SEMICOLON && l.cur.type != TOK_RBRACE && l.cur.type != TOK_EOF) {
@@ -2510,6 +2515,7 @@ minic_ctx_t *minic_ctx_create(const char *src) {
 		for (int j = 0; j < dst->field_count; j++) {
 			strncpy(dst->fields[j], minic_global_structs[i].fields[j], 63);
 			strncpy(dst->field_struct_names[j], minic_global_structs[i].field_struct_names[j], 63);
+			dst->field_hashes[j]       = minic_name_hash(minic_global_structs[i].fields[j]);
 			dst->field_offsets[j]      = minic_global_structs[i].field_offsets[j];
 			dst->field_native_types[j] = minic_global_structs[i].field_native_types[j];
 			dst->field_deref_types[j]  = minic_global_structs[i].field_deref_types[j];
