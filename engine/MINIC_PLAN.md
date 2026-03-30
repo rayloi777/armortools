@@ -12,7 +12,7 @@ Flecs ECS (engine/sources/ecs/)
 Iron Engine (base/)
 ```
 
-Minic is a tree-walking interpreter (~2500 lines). Every loop iteration re-tokenizes + re-parses from source. Every function call re-parses the body from source.
+Minic is a tree-walking interpreter (~3100 lines). Every loop iteration re-tokenizes + re-parses from source. Every function call re-parses the body from source.
 
 **Minic source files `base/sources/libs/minic*` are modifiable.**
 
@@ -54,116 +54,96 @@ Minic is a tree-walking interpreter (~2500 lines). Every loop iteration re-token
 | M4 | Function body token cache | `minic.c` | **Done** |
 | M6 | Struct field cache | `minic.c` (`minic_struct_def_t`) | **Done** |
 | M7 | Lexer keyword switch | `minic.c` | **Done** |
+| Hot-path | INT fast-path in `minic_arith()`, `minic_var_get_ptr()` for in-place ops | `minic.c` | **Done** |
 
-#### M1: Ext Function Dispatch Hash
-
-**Before**: `minic_ext_func_get()` did linear `strcmp` over ~1024 registered functions — O(n) per ext call,**After**: Open-addressed hash table (1024 slots). Hash computed at registration time (`name_hash` field in `minic_ext_func_t`). Lookup by hash with `strcmp` collision resolution — O(1) amortized.
-
-**Files**:
-- `minic.h`: Added `uint32_t name_hash` to `minic_ext_func_t`
-- `minic_ext.c`: Added hash table + `minic_ext_name_hash()`, `minic_ext_hash_insert()`, `minic_ext_func_hash_init()`. Updated `minic_register()`, `minic_register_native()`, `minic_ext_func_get()` to use hash lookup.
-
-#### M2: Variable Lookup Hash
-
-**Before**: `minic_var_get()`, `minic_var_set()`, `minic_var_addr()`, `minic_var_struct()` all did linear `strcmp` over local + global scope — O(n) per variable access.
-
-**After**: Added `uint32_t name_hash` to `minic_var_t` and `minic_vartype_t`. All lookup loops compare hash first (`name_hash == h`), then `strcmp` only on hash match. Eliminates `strcmp` for non-matching entries.
-
-**Files**: `minic.c` — added `minic_name_hash()`, updated `minic_var_get`, `minic_var_set`, `minic_var_decl`, `minic_var_addr`, `minic_var_struct`, `minic_vartype_set`.
-
-#### M3: Arena Save/Restore in `minic_call()`
-
-**Before**: `minic_call()` allocated child env vars/arrs/vartypes from the 8MB bump allocator but never restored the arena pointer on return. Repeated function calls in loops exhausted the arena → SIGSEGV.
-
-**After**: `minic_call()` saves `*minic_active_mem_used` before allocations and restores it on return. Arena memory is properly reclaimed for each function call.
-
-**Files**: `minic.c` — added `saved_mem_used` save/restore in `minic_call()`.
-
-#### M4: Function Body Token Cache
-
-**Before**: `minic_call()` re-lexed + re-parsed function body from source on every call. Every `minic_lex_next()` call scanned source characters, skipped whitespace/comments, matched keywords — all repeated for every call.
-
-**After**: On first call, `minic_lex_body_tokens()` pre-lexes the body `{`..`}` into a malloc'd token array stored in `minic_func_t.body_tokens`. On subsequent calls, `minic_lex_next()` replays from the cached array (token-stream mode). The lexer's `pos` field is repurposed as a token index in stream mode, so existing for-loop/while-loop position-save/restore code works without changes. String literals are stored in `token.text[]` during pre-lex and re-allocated into the current arena on replay.
-
-**Files**: `minic.c` — added `src_pos` to `minic_token_t`, `tokens`/`token_count` to `minic_lexer_t`, `body_tokens`/`body_token_count` to `minic_func_t`. Added `minic_lex_body_tokens()` helper. Modified `minic_lex_next()` (stream-mode fast path), `minic_call()` (lazy cache + stream-mode setup), `minic_current_line()` (use `src_pos`), for-loop temp lexer (inherit token array), `minic_ctx_free()` (free cached tokens).
-
-### MinicBench Baseline (100K iters x 3 runs)
-
-Interpreter micro-benchmarks measuring minic overhead. Located at `engine/assets/systems/minic_bench.minic`.
+### MinicBench Results (100K iters x 3 runs, Apple M4 Pro)
 
 ```
-Pre-M1 Baseline (100000 iters x 3 runs, Apple M1 Pro):
-  P1  Variable get/set:   150 ms
-  P2  Ext dispatch 12/i:  205 ms
-  P3  Function call:      83 ms
-  P4  Float math:          155 ms
-  P5  Loop overhead:       39 ms
-  P3-P5 (call overhead):  43 ms
-  P2/P5 (dispatch/loop):  5.2 x
-  P3/P5 (call/loop):      2.1 x
-  P4/P5 (math/loop):      3.9 x
-
-Post-M4 (100000 iters x 3 runs, Apple M1 Pro):
+Post-M4 + hot-path optimizations (current baseline):
   P1  Variable get/set:   65 ms
-  P2  Ext dispatch 12/i:  80 ms
-  P3  Function call:      29 ms     (was 83 ms → 2.9x faster)
-  P4  Float math:          63 ms
-  P5  Loop overhead:       16 ms
-  P3-P5 (call overhead):  13 ms     (was 43 ms → 3.3x faster)
-  P2/P5 (dispatch/loop):  5.0 x
-  P3/P5 (call/loop):      1.9 x    (was 2.1 x)
-  P4/P5 (math/loop):      4.0 x
+  P2  Ext dispatch 12/i:  91 ms
+  P3  Function call:      35 ms
+  P4  Float math:          70 ms
+  P5  Loop overhead:       18 ms
+  P3-P5 (call overhead):  16 ms
+  P2/P5 (dispatch/loop):  5.1 x
+  P3/P5 (call/loop):      1.9 x
+  P4/P5 (math/loop):      3.9 x
+```
+
+---
+
+## M15: Bytecode VM — In Progress
+
+### Status: Infrastructure complete, execution disabled
+
+The register-based bytecode VM is implemented but **disabled** — all execution falls back to the stable tree-walking interpreter. The VM fast path in `minic_call()` and the compilation step in `minic_ctx_create()` are commented out.
+
+### What's built
+
+| Component | File | Status |
+|-----------|------|--------|
+| Opcode enum (55 opcodes) | `minic.c` | **Done** |
+| 32-bit instruction encoding | `minic.c` | **Done** |
+| VM dispatch loop | `minic.c` (`minic_vm_exec_inner`) | **Done** |
+| Register allocator | `minic_vm_compiler.c` (`vc_reg`) | **Done** |
+| Expression compiler | `minic_vm_compiler.c` | **Done** |
+| Statement compiler | `minic_vm_compiler.c` | **Done** |
+| Globals sync | `minic.c` (`vm_globals_load/store`) | **Done** |
+| Constant pool | `minic_vm_compiler.c` | **Done** |
+| Call frame stack | `minic.c` (`minic_frame_t`) | **Done** |
+
+### Known bugs blocking activation
+
+1. **Ext function dispatch passes NULL pointers**: The compiled ext call (`OP_CALL_EXT`) generates incorrect register assignments. String literal arguments (e.g. `"font.ttf"` passed to `draw_string`) arrive as NULL pointers, causing SIGSEGV in `draw_string`.
+
+2. **For-loop increment not compiled**: The compiler skips over the increment expression tokens but doesn't emit bytecode for it. `i = i + 1` increments are lost.
+
+3. **Argument register allocation**: Args are compiled left-to-right but may not land in consecutive registers as expected by the `OP_CALL_EXT` encoding.
+
+### To re-enable
+
+1. Add a bytecode disassembler (`vm_disasm()`) to debug what the compiler emits
+2. Fix ext func argument passing — ensure string literals are loaded into correct registers before the call
+3. Implement for-loop increment compilation
+4. Uncomment the fast path in `minic_call()` and the compilation step in `minic_ctx_create()`
+5. Run MinicBench to measure speedup
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `base/sources/libs/minic.c` | VM dispatch, opcodes, globals, frame stack |
+| `base/sources/libs/minic_vm_compiler.c` | Bytecode compiler (included at end of minic.c) |
+
+### Opcodes
+
+```
+Constants:    OP_CONSTANT OP_CONST_INT OP_CONST_ZERO OP_CONST_ONE OP_CONST_FZERO OP_CONST_NULL
+Arithmetic:   OP_ADD OP_SUB OP_MUL OP_DIV OP_MOD OP_NEG OP_NOT
+Comparison:   OP_EQ OP_NEQ OP_LT OP_GT OP_LE OP_GE
+Control:      OP_JMP OP_JMP_FALSE OP_JMP_TRUE OP_LOOP
+Globals:      OP_LOAD_GLOBAL OP_STORE_GLOBAL
+Calls:        OP_CALL OP_CALL_EXT OP_RETURN OP_RETURN_VOID
+Misc:         OP_HALT OP_INC OP_DEC OP_MOV
+Compound:     OP_ADD_ASSIGN OP_SUB_ASSIGN OP_MUL_ASSIGN OP_DIV_ASSIGN OP_MOD_ASSIGN
 ```
 
 ---
 
 ## Remaining Minic Optimizations (by priority)
 
-### Hot-Path Bottlenecks (remaining)
-
-| Function | File:Line | Problem | Complexity |
-|----------|-----------|---------|------------|
-| Lexer keyword matching | `minic.c` | 15+ consecutive `strcmp()` calls | O(15) |
-
-### Implementation Plan (by priority)
-
-#### ~~Phase M4: Function Body Cache~~ — **Done** (2.9x function call speedup)
-
-#### ~~Phase M6: Struct Field Cache~~ — **Done** (hash pre-comparison in `minic_struct_field_idx()`)
-
-#### Phase M5: For-loop Pre-scan (1.5-2x)
-
-**File**: `base/sources/libs/minic.c`
-
-**Current**: For-loop condition is re-lexed + re-parsed every iteration.
-
-**Implementation**: Cache `cond_pos` and `incr_pos` at first parse. On subsequent iterations, jump directly to cached positions.
-
-#### ~~Phase M6: Struct Field Cache~~ — **Done**
-
-Added `field_hashes[16]` to `minic_struct_def_t`. Hashes computed at struct registration and context snapshot. `minic_struct_field_idx()` compares hash before `strcmp`.
-
-#### ~~Phase M7: Lexer Keyword Switch~~ — **Done**
-
-Replaced 17 consecutive `strcmp()` calls with `switch` dispatch by first letter + length filter. Only matching candidates call `strcmp()`.
-
-#### Phase M8: String Interning (1.5x)
-
-**Files**: `base/sources/libs/minic.c`, `base/sources/libs/minic_ext.c`
-
-**Current**: All name comparisons use `strcmp()`. Replace with `==` on interned integer IDs.
-
-#### Phase M9-M15: Lower Priority Items
-
-| Phase | Item | Impact |
-|-------|------|--------|
-| M9 | Enum constant hash | 1.5x |
-| M10 | NaN-boxing | cache |
-| M11 | Line number pre-compute | minor |
-| M12 | Reduce memcpy | minor |
-| M13 | Struct native layout | memory |
-| M14 | Arena allocator | memory |
-| M15 | Bytecode VM | 10-100x (ultimate goal) |
+| Priority | Phase | Item | Impact | Status |
+|----------|-------|------|--------|--------|
+| 1 | M15 | Bytecode VM — debug and activate | 15-50x | **In Progress** |
+| 2 | M5 | For-loop pre-scan (tree-walker) | 1.5-2x | Pending |
+| 3 | M8 | String interning | 1.5x | Pending |
+| 4 | M9 | Enum constant hash | 1.5x | Pending |
+| 5 | M10 | NaN-boxing | cache | Pending |
+| 6 | M11 | Line number pre-compute | minor | Pending |
+| 7 | M12 | Reduce memcpy | minor | Pending |
+| 8 | M13 | Struct native layout | memory | Pending |
+| 9 | M14 | Arena allocator | memory | Pending |
 
 ---
 
@@ -171,20 +151,7 @@ Replaced 17 consecutive `strcmp()` calls with `switch` dispatch by first letter 
 
 `component_finalize()` calls `minic_register_struct_native()` but registered struct layout was not visible to running contexts. Contexts snapshot global struct array at creation time. Dynamic components register after context creation.
 
-**Fix**: Modified `minic_struct_get()` to fall back to the global registry when a struct isn't found in the context-local array. On first access, copies the global struct into the context for fast future lookups. No new API needed.
-
----
-
-## Next Steps (Prioritized)
-
-1. ~~**M4**: Function body cache in `minic.c`~~ — **Done** (2.9x speedup)
-2. ~~**Native struct fix**~~ — **Done** (fallback in `minic_struct_get()`)
-3. ~~**M6**: Struct field cache in `minic.c`~~ — **Done**
-4. ~~**M7**: Lexer keyword switch~~ — **Done** (first-letter + length switch)
-5. **M5**: For-loop pre-scan in `minic.c` — 1.5-2x
-6. **M8**: String interning (incremental)
-7. **M9-M15**: Enum hash, NaN-boxing, arena, etc.
-8. **M15**: Bytecode VM — ultimate goal (long-term)
+**Fix**: Modified `minic_struct_get()` to fall back to the global registry when a struct isn't found in the context-local array. On first access, copies the global struct into the context for fast future lookups.
 
 ---
 
