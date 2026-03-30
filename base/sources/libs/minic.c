@@ -986,6 +986,29 @@ static minic_struct_def_t *minic_struct_get(minic_env_t *e, const char *name) {
 			return &e->structs[i];
 		}
 	}
+	// Fall back to global registry (e.g. runtime-registered native structs)
+	for (int i = 0; i < minic_global_struct_count; ++i) {
+		if (strcmp(minic_global_structs[i].name, name) == 0) {
+			// Copy into context for fast future lookups
+			if (e->struct_count < e->struct_cap) {
+				minic_struct_def_t    *dst = &e->structs[e->struct_count++];
+				minic_global_struct_t *src = &minic_global_structs[i];
+				strncpy(dst->name, src->name, 63);
+				dst->field_count       = src->field_count;
+				dst->size              = src->size;
+				dst->has_native_layout = src->has_native_layout;
+				for (int j = 0; j < dst->field_count; j++) {
+					strncpy(dst->fields[j], src->fields[j], 63);
+					strncpy(dst->field_struct_names[j], src->field_struct_names[j], 63);
+					dst->field_offsets[j]      = src->field_offsets[j];
+					dst->field_native_types[j] = src->field_native_types[j];
+					dst->field_deref_types[j]  = src->field_deref_types[j];
+				}
+				return dst;
+			}
+			return NULL;
+		}
+	}
 	return NULL;
 }
 

@@ -172,23 +172,23 @@ Post-M4 (100000 iters x 3 runs, Apple M1 Pro):
 
 ---
 
-## Native Struct `->field` Fix
+## Native Struct `->field` Fix — **Done**
 
-`component_finalize()` calls `minic_register_struct_native()` but registered struct layout is not visible to running contexts. Contexts snapshot global struct array at creation time. Dynamic components register after context creation.
+`component_finalize()` calls `minic_register_struct_native()` but registered struct layout was not visible to running contexts. Contexts snapshot global struct array at creation time. Dynamic components register after context creation.
 
-**Fix**: Add `minic_reload_structs()` to `minic.c`. Called after `component_finalize()`.
+**Fix**: Modified `minic_struct_get()` to fall back to the global registry when a struct isn't found in the context-local array. On first access, copies the global struct into the context for fast future lookups. No new API needed.
 
 ---
 
 ## Next Steps (Prioritized)
 
 1. ~~**M4**: Function body cache in `minic.c`~~ — **Done** (2.9x speedup)
-2. **M5**: For-loop pre-scan in `minic.c` — 1.5-2x
-3. **M6**: Struct field cache in `minic.c` — quick win
-4. **M7-M8**: Lexer keyword switch, string interning (incremental)
-5. **M9-M15**: Enum hash, NaN-boxing, arena, etc.
-6. **M15**: Bytecode VM — ultimate goal (long-term)
-7. **Native struct fix**: `minic_reload_structs()` in `minic.c`
+2. ~~**Native struct fix**~~ — **Done** (fallback in `minic_struct_get()`)
+3. **M5**: For-loop pre-scan in `minic.c` — 1.5-2x
+4. **M6**: Struct field cache in `minic.c` — quick win
+5. **M7-M8**: Lexer keyword switch, string interning (incremental)
+6. **M9-M15**: Enum hash, NaN-boxing, arena, etc.
+7. **M15**: Bytecode VM — ultimate goal (long-term)
 
 ---
 
