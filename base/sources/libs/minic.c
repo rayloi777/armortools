@@ -1194,10 +1194,10 @@ static minic_token_t *minic_lex_body_tokens(const char *src, int body_pos, int *
 }
 
 static minic_val_t minic_call(minic_env_t *e, minic_func_t *fn, minic_val_t *args, int argc) {
-	// M15: fast path — execute compiled bytecode via VM
-		// DISABLED: if (fn->proto != NULL && fn->ctx != NULL) {
-		// DISABLED: return minic_vm_exec(fn->ctx, fn->proto, args, argc);
-		// DISABLED: }
+	// M15: fast path â execute compiled bytecode via VM
+	if (fn->proto != NULL && fn->ctx != NULL) {
+		return minic_vm_exec(fn->ctx, fn->proto, args, argc);
+	}
 
 	int saved_mem_used = *minic_active_mem_used;
 
@@ -2623,14 +2623,11 @@ minic_ctx_t *minic_ctx_create(const char *src) {
 		e->funcs[i].ctx = ctx;
 	}
 
-	// M15: compile function bodies to bytecode — DISABLED until compiler is fully debugged
-	// for (int i = 0; i < e->func_count; ++i) {
-	// 	minic_func_t *fn = &e->funcs[i];
-	// 	if (fn->body_tokens == NULL) {
-	// 		fn->body_tokens = minic_lex_body_tokens(e->lex.src, fn->body_pos, &fn->body_token_count);
-	// 	}
-	// 	fn->proto = vm_compile_body(e->lex.src, fn->body_pos, e);
-	// }
+	// M15: compile function bodies to bytecode
+	for (int i = 0; i < e->func_count; ++i) {
+		minic_func_t *fn = &e->funcs[i];
+		fn->proto = vm_compile_body(e->lex.src, fn->body_pos, e);
+	}
 
 	if (e->lex.cur.type == TOK_RPAREN) {
 		minic_lex_next(&e->lex);
@@ -2868,6 +2865,7 @@ static inline minic_val_t vm_val_to_d_val(minic_val_t v) {
 	}
 }
 
+
 // --- VM execution engine ---
 static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc) {
 	static minic_val_t   vm_stack[VM_STACK_SIZE];
@@ -3091,26 +3089,45 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 			}
 			case OP_CALL: {
 				// A=dest, B=func_index, C=argc, next word=arg_base
-				int call_base = (int)frame->code[frame->pc++];
+				int call_base2 = (int)frame->code[frame->pc++];
 				minic_func_t *fn = &ctx->e.funcs[b];
-				minic_val_t call_args[MINIC_MAX_PARAMS];
-				for (int ai = 0; ai < c && ai < MINIC_MAX_PARAMS; ai++)
-					call_args[ai] = frame->regs[call_base + ai];
-				minic_val_t r = minic_call(&ctx->e, fn, call_args, c);
-				frame->regs[a] = r;
+				if (fn->proto != NULL && frame_top + 1 < VM_MAX_FRAMES) {
+					// Push a new frame — stay in the same VM execution
+					int new_top = frame_top + 1;
+					minic_frame_t *nf = &vm_frames[new_top];
+					nf->proto     = fn->proto;
+					nf->code       = fn->proto->code;
+					nf->pc         = 0;
+					nf->reg_base   = frame->reg_base + frame->num_regs;
+					nf->num_regs   = fn->proto->num_regs;
+					nf->regs       = &vm_stack[nf->reg_base];
+					nf->return_reg = a;
+					for (int ai = 0; ai < c && ai < nf->num_regs; ai++)
+						nf->regs[ai] = frame->regs[call_base2 + ai];
+					frame_top = new_top;
+					frame = nf;
+				} else {
+					minic_val_t call_args[MINIC_MAX_PARAMS];
+					for (int ai = 0; ai < c && ai < MINIC_MAX_PARAMS; ai++)
+						call_args[ai] = frame->regs[call_base2 + ai];
+					minic_val_t r = minic_call(&ctx->e, fn, call_args, c);
+					frame->regs[a] = r;
+				}
 				break;
 			}
-		case OP_RETURN:
-			if (frame_top > 0) {
-				minic_val_t ret = *ra;
-				frame_top--;
-				frame                          = &vm_frames[frame_top];
-				frame->regs[frame->return_reg] = ret;
-			}
-			else {
-				return *ra;
-			}
-			break;
+				case OP_RETURN: {
+					minic_val_t ret = *ra;
+					if (frame_top > 0) {
+						int ret_reg = frame->return_reg;
+						frame_top--;
+						frame = &vm_frames[frame_top];
+						frame->regs[ret_reg] = ret;
+					}
+					else {
+						return ret;
+					}
+					break;
+				}
 		case OP_RETURN_VOID:
 			if (frame_top > 0) {
 				frame_top--;

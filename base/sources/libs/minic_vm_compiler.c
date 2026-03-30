@@ -165,20 +165,24 @@ static int vc_primary(vc_t *c) {
 			int arg_base = c->free_reg;
 			int argc     = 0;
 			if (!vc_check(c, TOK_RPAREN)) {
-				vc_reg(c); // allocate arg slot
+				c->free_reg++; // reserve arg slot 0
 				int ar = vc_expr(c);
 				if (ar != arg_base + argc)
 					vc_emit(c, VM_MAKE_ABC(OP_MOV, arg_base + argc, ar, 0));
+				c->free_reg = arg_base + argc + 1; // collapse free_reg
 				argc++;
 				while (vc_check(c, TOK_COMMA)) {
 					vc_advance(c);
-					vc_reg(c);
+					c->free_reg++; // reserve next arg slot
 					ar = vc_expr(c);
 					if (ar != arg_base + argc)
 						vc_emit(c, VM_MAKE_ABC(OP_MOV, arg_base + argc, ar, 0));
+					c->free_reg = arg_base + argc + 1;
 					argc++;
 				}
 			}
+			if (arg_base + argc > c->max_reg)
+				c->max_reg = arg_base + argc;
 			vc_expect(c, TOK_RPAREN);
 
 			int dest = vc_reg(c);
@@ -473,12 +477,12 @@ static void vc_stmt(vc_t *c) {
 		if (vc_check(c, TOK_ELSE)) {
 			vc_advance(c);
 			int jmp_else = vc_emit_jmp(c, VM_MAKE_ABX(OP_JMP, 0, 0));
-			vc_patch(c, jmp_then, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_then));
+			vc_patch(c, jmp_then, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_then - 1));
 			vc_block(c);
-			vc_patch(c, jmp_else, VM_MAKE_ABX(OP_JMP, 0, c->code_count - jmp_else));
+			vc_patch(c, jmp_else, VM_MAKE_ABX(OP_JMP, 0, c->code_count - jmp_else - 1));
 		}
 		else {
-			vc_patch(c, jmp_then, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_then));
+			vc_patch(c, jmp_then, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_then - 1));
 		}
 		return;
 	}
@@ -496,11 +500,11 @@ static void vc_stmt(vc_t *c) {
 		int jmp_out        = vc_emit_jmp(c, VM_MAKE_ABX(OP_JMP_FALSE, cr, 0));
 		c->loop_top        = loop_top;
 		vc_block(c);
-		vc_emit(c, VM_MAKE_ABX(OP_LOOP, 0, c->code_count - loop_top + 1));
-		vc_patch(c, jmp_out, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_out));
+		vc_emit(c, VM_MAKE_ABX(OP_LOOP, 0, c->code_count - loop_top));
+		vc_patch(c, jmp_out, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_out - 1));
 		// Patch breaks
 		for (int i = saved_break; i < c->break_count; i++)
-			vc_patch(c, c->break_addrs[i], VM_MAKE_ABX(OP_JMP, 0, c->code_count - c->break_addrs[i]));
+			vc_patch(c, c->break_addrs[i], VM_MAKE_ABX(OP_JMP, 0, c->code_count - c->break_addrs[i] - 1));
 		// Patch continues
 		for (int i = saved_continue; i < c->continue_count; i++)
 			vc_patch(c, c->continue_addrs[i], VM_MAKE_ABX(OP_LOOP, 0, c->code_count - c->continue_addrs[i]));
@@ -569,17 +573,18 @@ static void vc_stmt(vc_t *c) {
 		int jmp_cond = vc_emit_jmp(c, VM_MAKE_ABX(OP_JMP_FALSE, cr, 0));
 		vc_free(c, cr);
 
-		// Increment (compile later, skip for now)
-		int incr_start = c->code_count;
-		// Skip increment tokens
+		// Increment: save position, skip tokens, compile later
+		int incr_lex_pos = c->lex.pos;
 		{
 			minic_lexer_t tmp = {0};
 			tmp.src           = c->lex.src;
 			tmp.pos           = c->lex.pos;
 			minic_lex_next(&tmp);
+			int incr_end_pos = tmp.pos; // position after increment
 			while (tmp.cur.type != TOK_RPAREN && tmp.cur.type != TOK_EOF)
 				minic_lex_next(&tmp);
-			c->lex.pos = tmp.pos;
+			c->lex.pos = tmp.pos; // skip past increment
+			(void)incr_end_pos; // used below via incr_lex_pos
 		}
 
 		// Body
@@ -587,27 +592,73 @@ static void vc_stmt(vc_t *c) {
 		c->loop_top = cond_pos;
 		vc_block(c);
 
-		// Increment (now compile it)
-		// Re-parse increment from saved position
-		// We already skipped past it above. For simple i++/i+=n cases,
-		// let's emit the increment inline.
-		// For now, emit a simple placeholder — handle common cases:
+		// Increment: compile now (after body, before loop-back)
 		int incr_pos = c->code_count;
-		// We need to re-lex the increment... This is tricky.
-		// Let's use a simpler approach: save/restore lexer position
+		{
+			int saved_pos = c->lex.pos;
+			c->lex.pos = incr_lex_pos;
+			minic_lex_next(&c->lex); // prime the lexer
+			// Compile increment — like vc_stmt but without trailing semicolon
+			if (vc_check(c, TOK_IDENT)) {
+				char iname[64];
+				strncpy(iname, c->lex.cur.text, 63);
+				iname[63] = '\0';
+				vc_advance(c);
+				// i++ / i--
+				if (vc_check(c, TOK_INC) || vc_check(c, TOK_DEC)) {
+					minic_opcode_t op = vc_check(c, TOK_INC) ? OP_INC : OP_DEC;
+					vc_advance(c);
+					int slot = vc_find_local(c, iname);
+					if (slot >= 0)
+						vc_emit(c, VM_MAKE_ABC(op, slot, 0, 0));
+				}
+				// i += expr, etc.
+				else if (vc_check(c, TOK_PLUS_ASSIGN) || vc_check(c, TOK_MINUS_ASSIGN) ||
+				         vc_check(c, TOK_MUL_ASSIGN) || vc_check(c, TOK_DIV_ASSIGN) || vc_check(c, TOK_MOD_ASSIGN)) {
+					minic_opcode_t op = (vc_check(c, TOK_PLUS_ASSIGN)) ? OP_ADD_ASSIGN
+					                    : (vc_check(c, TOK_MINUS_ASSIGN)) ? OP_SUB_ASSIGN
+					                    : (vc_check(c, TOK_MUL_ASSIGN)) ? OP_MUL_ASSIGN
+					                    : (vc_check(c, TOK_DIV_ASSIGN)) ? OP_DIV_ASSIGN
+					                                                      : OP_MOD_ASSIGN;
+					vc_advance(c);
+					int val = vc_expr(c);
+					int slot = vc_find_local(c, iname);
+					if (slot >= 0)
+						vc_emit(c, VM_MAKE_ABC(op, slot, slot, val));
+					vc_free(c, val);
+				}
+				// i = expr
+				else if (vc_check(c, TOK_ASSIGN)) {
+					vc_advance(c);
+					int val = vc_expr(c);
+					int slot = vc_find_local(c, iname);
+					if (slot >= 0) {
+						if (val != slot)
+							vc_emit(c, VM_MAKE_ABC(OP_MOV, slot, val, 0));
+					}
+					vc_free(c, val);
+				}
+			}
+			else {
+				// Bare expression increment
+				int v = vc_expr(c);
+					vc_free(c, v);
+			}
+			c->lex.pos = saved_pos; // restore to after increment
+		}
 
 		// Loop back to condition
 		vc_emit(c, VM_MAKE_ABX(OP_LOOP, 0, c->code_count - cond_pos + 1));
 
 		// Patch condition jump
-		vc_patch(c, jmp_cond, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_cond));
+		vc_patch(c, jmp_cond, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_cond - 1));
 
 		// Patch breaks
 		for (int i = saved_break; i < c->break_count; i++)
-			vc_patch(c, c->break_addrs[i], VM_MAKE_ABX(OP_JMP, 0, c->code_count - c->break_addrs[i]));
+			vc_patch(c, c->break_addrs[i], VM_MAKE_ABX(OP_JMP, 0, c->code_count - c->break_addrs[i] - 1));
 		// Patch continues
 		for (int i = saved_continue; i < c->continue_count; i++)
-			vc_patch(c, c->continue_addrs[i], VM_MAKE_ABX(OP_LOOP, 0, incr_pos - c->continue_addrs[i] + 1));
+			vc_patch(c, c->continue_addrs[i], VM_MAKE_ABX(OP_LOOP, 0, c->continue_addrs[i] + 1 - incr_pos));
 
 		c->break_count    = saved_break;
 		c->continue_count = saved_continue;
@@ -728,17 +779,19 @@ static void vc_stmt(vc_t *c) {
 			int arg_base = c->free_reg;
 			int argc     = 0;
 			if (!vc_check(c, TOK_RPAREN)) {
-				vc_reg(c);
+				c->free_reg++; // reserve arg slot 0
 				int ar = vc_expr(c);
 				if (ar != arg_base + argc)
 					vc_emit(c, VM_MAKE_ABC(OP_MOV, arg_base + argc, ar, 0));
+				c->free_reg = arg_base + argc + 1;
 				argc++;
 				while (vc_check(c, TOK_COMMA)) {
 					vc_advance(c);
-					vc_reg(c);
+					c->free_reg++;
 					ar = vc_expr(c);
 					if (ar != arg_base + argc)
 						vc_emit(c, VM_MAKE_ABC(OP_MOV, arg_base + argc, ar, 0));
+					c->free_reg = arg_base + argc + 1;
 					argc++;
 				}
 			}
