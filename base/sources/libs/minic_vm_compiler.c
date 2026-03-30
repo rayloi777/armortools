@@ -500,14 +500,14 @@ static void vc_stmt(vc_t *c) {
 		int jmp_out        = vc_emit_jmp(c, VM_MAKE_ABX(OP_JMP_FALSE, cr, 0));
 		c->loop_top        = loop_top;
 		vc_block(c);
-		vc_emit(c, VM_MAKE_ABX(OP_LOOP, 0, c->code_count - loop_top));
+		vc_emit(c, VM_MAKE_ABX(OP_LOOP, 0, c->code_count - loop_top + 1));
 		vc_patch(c, jmp_out, VM_MAKE_ABX(OP_JMP_FALSE, cr, c->code_count - jmp_out - 1));
 		// Patch breaks
 		for (int i = saved_break; i < c->break_count; i++)
 			vc_patch(c, c->break_addrs[i], VM_MAKE_ABX(OP_JMP, 0, c->code_count - c->break_addrs[i] - 1));
 		// Patch continues
 		for (int i = saved_continue; i < c->continue_count; i++)
-			vc_patch(c, c->continue_addrs[i], VM_MAKE_ABX(OP_LOOP, 0, c->code_count - c->continue_addrs[i]));
+			vc_patch(c, c->continue_addrs[i], VM_MAKE_ABX(OP_LOOP, 0, c->continue_addrs[i] + 1 - loop_top));
 		c->break_count    = saved_break;
 		c->continue_count = saved_continue;
 		return;
@@ -861,12 +861,18 @@ static void vc_block(vc_t *c) {
 }
 
 // --- Public: compile a function body ---
-static minic_proto_t *vm_compile_body(const char *src, int body_pos, minic_env_t *env) {
+static minic_proto_t *vm_compile_body(const char *src, int body_pos, minic_env_t *env, minic_func_t *fn) {
 	vc_t c          = {0};
 	c.lex.src       = src;
 	c.lex.pos       = body_pos;
 	c.env           = env;
 	c.loop_top      = -1;
+
+	// Bind parameters as locals at consecutive registers starting from 0
+	for (int pi = 0; pi < fn->param_count; pi++) {
+		vc_decl_local(&c, fn->params[pi]);
+	}
+
 	minic_lex_next(&c.lex);
 	vc_block(&c);
 	vc_emit(&c, VM_MAKE_ABC(OP_HALT, 0, 0, 0));

@@ -657,7 +657,7 @@ struct minic_ctx_s {
 
 static minic_env_t *minic_active_env = NULL;
 
-static minic_proto_t *vm_compile_body(const char *src, int body_pos, minic_env_t *env);
+static minic_proto_t *vm_compile_body(const char *src, int body_pos, minic_env_t *env, minic_func_t *fn);
 static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc);
 static minic_val_t minic_parse_expr(minic_env_t *e);
 static minic_val_t minic_parse_cond(minic_env_t *e);
@@ -2626,7 +2626,7 @@ minic_ctx_t *minic_ctx_create(const char *src) {
 	// M15: compile function bodies to bytecode
 	for (int i = 0; i < e->func_count; ++i) {
 		minic_func_t *fn = &e->funcs[i];
-		fn->proto = vm_compile_body(e->lex.src, fn->body_pos, e);
+		fn->proto = vm_compile_body(e->lex.src, fn->body_pos, e, fn);
 	}
 
 	if (e->lex.cur.type == TOK_RPAREN) {
