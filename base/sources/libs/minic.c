@@ -83,19 +83,42 @@ typedef enum {
 typedef struct {
 	minic_tok_type_t type;
 	char             text[64];
-	minic_val_t      val; // TOK_NUMBER, TOK_CHAR_LIT, TOK_STR_LIT
+	minic_val_t      val;     // TOK_NUMBER, TOK_CHAR_LIT, TOK_STR_LIT
+	int              src_pos; // source char position (for error reporting)
 } minic_token_t;
 
 typedef struct {
-	const char   *src;
-	int           pos;
-	minic_token_t cur;
+	const char    *src;
+	int            pos; // source char index OR token index (stream mode)
+	minic_token_t  cur;
+	minic_token_t *tokens; // NULL = source mode, non-NULL = token stream mode
+	int            token_count;
 } minic_lexer_t;
 
 static minic_u8 *minic_active_mem      = NULL;
 static int      *minic_active_mem_used = NULL;
 
 static void minic_lex_next(minic_lexer_t *l) {
+	// Token-stream mode: replay cached tokens
+	if (l->tokens != NULL) {
+		if (l->pos < l->token_count) {
+			l->cur = l->tokens[l->pos++];
+		}
+		else {
+			l->cur.type = TOK_EOF;
+		}
+		// Re-allocate string literals into current arena
+		if (l->cur.type == TOK_STR_LIT && l->cur.text[0] != '\0') {
+			int len     = (int)strlen(l->cur.text) + 1;
+			int aligned = (*minic_active_mem_used + 7) & ~7;
+			memcpy(&minic_active_mem[aligned], l->cur.text, len);
+			*minic_active_mem_used = (aligned + len + 7) & ~7;
+			l->cur.val             = minic_val_ptr((void *)&minic_active_mem[aligned]);
+		}
+		return;
+	}
+
+	// Source mode: lex from source string
 	// Skip whitespace and comments
 	for (;;) {
 		while (l->src[l->pos] != '\0' && isspace((unsigned char)l->src[l->pos])) {
@@ -126,6 +149,7 @@ static void minic_lex_next(minic_lexer_t *l) {
 		}
 		break;
 	}
+	l->cur.src_pos = l->pos;
 
 	if (l->src[l->pos] == '\0') {
 		l->cur.type = TOK_EOF;
@@ -399,15 +423,15 @@ static void minic_lex_next(minic_lexer_t *l) {
 			l->cur.type = TOK_SLASH;
 		}
 		return;
-		case '%':
-			if (l->src[l->pos] == '=') {
-				l->pos++;
-				l->cur.type = TOK_MOD_ASSIGN;
-			}
-			else {
-				l->cur.type = TOK_MOD;
-			}
-			return;
+	case '%':
+		if (l->src[l->pos] == '=') {
+			l->pos++;
+			l->cur.type = TOK_MOD_ASSIGN;
+		}
+		else {
+			l->cur.type = TOK_MOD;
+		}
+		return;
 	case '+':
 		if (l->src[l->pos] == '+') {
 			l->pos++;
@@ -529,6 +553,9 @@ typedef struct {
 	int          body_pos; // lexer position of '{' that starts the body
 	minic_type_t ret_type;
 	minic_ctx_t *ctx; // owning context, set at parse time
+	// M4: body token cache
+	minic_token_t *body_tokens; // NULL = not cached yet, malloc'd
+	int            body_token_count;
 } minic_func_t;
 
 #define MINIC_INC_DELTA(l) ((l)->cur.type == TOK_INC ? 1.0 : -1.0)
@@ -547,9 +574,9 @@ typedef struct {
 
 // Maps a variable name to its struct type name
 typedef struct {
-	char      var_name[64];
-	char      struct_name[64];
-	uint32_t  var_name_hash;
+	char     var_name[64];
+	char     struct_name[64];
+	uint32_t var_name_hash;
 } minic_vartype_t;
 
 typedef struct minic_env_s {
@@ -708,8 +735,10 @@ static const char *minic_tok_name(minic_tok_type_t t) {
 
 static int minic_current_line(minic_env_t *e) {
 	int line = 1;
-	for (int i = 0; i < e->lex.pos; i++) {
-		if (e->lex.src[i] == '\n') line++;
+	int pos  = e->lex.cur.src_pos;
+	for (int i = 0; i < pos; i++) {
+		if (e->lex.src[i] == '\n')
+			line++;
 	}
 	return line;
 }
@@ -784,7 +813,7 @@ static void minic_var_set(minic_env_t *e, const char *name, minic_val_t val) {
 	if (e->var_count < e->var_cap) {
 		strncpy(e->vars[e->var_count].name, name, 63);
 		e->vars[e->var_count].name_hash = h;
-		e->vars[e->var_count].val = val;
+		e->vars[e->var_count].val       = val;
 		e->var_count++;
 	}
 }
@@ -799,7 +828,7 @@ static void minic_var_decl(minic_env_t *e, const char *name, minic_type_t type, 
 	if (e->var_count < e->var_cap) {
 		strncpy(e->vars[e->var_count].name, name, 63);
 		e->vars[e->var_count].name_hash = minic_name_hash(name);
-		e->vars[e->var_count].val = v;
+		e->vars[e->var_count].val       = v;
 		e->var_count++;
 	}
 }
@@ -829,9 +858,9 @@ static minic_val_t minic_var_addr(minic_env_t *e, const char *name) {
 	if (e->var_count < e->var_cap) {
 		strncpy(e->vars[e->var_count].name, name, 63);
 		e->vars[e->var_count].name_hash = h;
-		e->vars[e->var_count].val = minic_val_int(0);
-		minic_val_t addr          = minic_val_ptr(&e->vars[e->var_count].val);
-		addr.deref_type           = MINIC_T_PTR;
+		e->vars[e->var_count].val       = minic_val_int(0);
+		minic_val_t addr                = minic_val_ptr(&e->vars[e->var_count].val);
+		addr.deref_type                 = MINIC_T_PTR;
 		e->var_count++;
 		return addr;
 	}
@@ -1031,27 +1060,84 @@ static void minic_struct_field_set(minic_env_t *e, const char *var_name, minic_s
 	minic_struct_field_set_base(e, base, def, field, val);
 }
 
+// Pre-lex a function body from source, producing a token array.
+// body_pos points at the '{' character in source.
+// Returns malloc'd array; sets *out_count.
+static minic_token_t *minic_lex_body_tokens(const char *src, int body_pos, int *out_count) {
+	minic_lexer_t tmp = {0};
+	tmp.src           = src;
+	tmp.pos           = body_pos;
+	tmp.tokens        = NULL; // source mode
+
+	int            cap    = 128;
+	int            count  = 0;
+	minic_token_t *tokens = (minic_token_t *)malloc(cap * sizeof(minic_token_t));
+
+	minic_lex_next(&tmp);
+	int depth = 0;
+	do {
+		if (count >= cap) {
+			cap *= 2;
+			tokens = (minic_token_t *)realloc(tokens, cap * sizeof(minic_token_t));
+		}
+		tokens[count] = tmp.cur;
+		// For string literals, copy string data into text[] for persistence
+		// (arena pointer in val.p will be stale after arena reset)
+		if (tmp.cur.type == TOK_STR_LIT) {
+			const char *s = (const char *)tmp.cur.val.p;
+			if (s != NULL) {
+				strncpy(tokens[count].text, s, 63);
+				tokens[count].text[63] = '\0';
+			}
+			else {
+				tokens[count].text[0] = '\0';
+			}
+		}
+		count++;
+
+		if (tmp.cur.type == TOK_LBRACE)
+			depth++;
+		if (tmp.cur.type == TOK_RBRACE)
+			depth--;
+		if (depth == 0 || tmp.cur.type == TOK_EOF)
+			break;
+
+		minic_lex_next(&tmp);
+	} while (1);
+
+	*out_count = count;
+	return tokens;
+}
+
 static minic_val_t minic_call(minic_env_t *e, minic_func_t *fn, minic_val_t *args, int argc) {
 	int saved_mem_used = *minic_active_mem_used;
-	minic_env_t child   = {0};
-	child.lex.src       = e->lex.src;
-	child.lex.pos       = fn->body_pos;
-	child.filename      = e->filename;
-	child.var_cap       = 64;
-	child.vars          = minic_alloc(child.var_cap * sizeof(minic_var_t));
-	child.global_env    = e->global_env != NULL ? e->global_env : e;
-	child.arr_cap       = 32;
-	child.arrs          = minic_alloc(child.arr_cap * sizeof(minic_arr_t));
-	child.arr_data      = e->arr_data;
-	child.arr_data_used = e->arr_data_used;
-	child.func_count    = e->func_count;
-	child.func_cap      = e->func_cap;
-	child.funcs         = e->funcs;
-	child.struct_count  = e->struct_count;
-	child.struct_cap    = e->struct_cap;
-	child.structs       = e->structs;
-	child.vartype_cap   = 32;
-	child.vartypes      = minic_alloc(child.vartype_cap * sizeof(minic_vartype_t));
+
+	// M4: lazy body token cache
+	if (fn->body_tokens == NULL) {
+		fn->body_tokens = minic_lex_body_tokens(e->lex.src, fn->body_pos, &fn->body_token_count);
+	}
+
+	minic_env_t child     = {0};
+	child.lex.src         = e->lex.src;
+	child.lex.tokens      = fn->body_tokens;
+	child.lex.token_count = fn->body_token_count;
+	child.lex.pos         = 0; // start of token array
+	child.filename        = e->filename;
+	child.var_cap         = 64;
+	child.vars            = minic_alloc(child.var_cap * sizeof(minic_var_t));
+	child.global_env      = e->global_env != NULL ? e->global_env : e;
+	child.arr_cap         = 32;
+	child.arrs            = minic_alloc(child.arr_cap * sizeof(minic_arr_t));
+	child.arr_data        = e->arr_data;
+	child.arr_data_used   = e->arr_data_used;
+	child.func_count      = e->func_count;
+	child.func_cap        = e->func_cap;
+	child.funcs           = e->funcs;
+	child.struct_count    = e->struct_count;
+	child.struct_cap      = e->struct_cap;
+	child.structs         = e->structs;
+	child.vartype_cap     = 32;
+	child.vartypes        = minic_alloc(child.vartype_cap * sizeof(minic_vartype_t));
 	// Bind parameters
 	for (int i = 0; i < argc && i < fn->param_count; ++i) {
 		minic_val_t v = minic_val_cast(args[i], fn->param_types[i]);
@@ -1116,9 +1202,9 @@ static minic_val_t minic_arith(minic_val_t a, minic_val_t b, char op) {
 	case '/':
 		r = (db != 0.0) ? da / db : 0.0;
 		break;
-		case '%':
-			r = (db != 0.0) ? fmod(da, db) : 0.0;
-			break;
+	case '%':
+		r = (db != 0.0) ? fmod(da, db) : 0.0;
+		break;
 	default:
 		r = 0.0;
 	}
@@ -1209,7 +1295,7 @@ static minic_val_t minic_parse_primary(minic_env_t *e) {
 			minic_expect(e, TOK_LPAREN); // checks and consumes '('
 			char type_name[64];
 			strncpy(type_name, e->lex.cur.text, 63);
-			minic_lex_next(&e->lex); // Consume type name
+			minic_lex_next(&e->lex);     // Consume type name
 			minic_expect(e, TOK_RPAREN); // checks and consumes ')'
 			minic_struct_def_t *def = minic_struct_get(e, type_name);
 			return minic_val_int(def != NULL ? def->size : 0);
@@ -1278,9 +1364,11 @@ static minic_val_t minic_parse_primary(minic_env_t *e) {
 			// Handle chained -> or . access (e.g. node->inputs->buffer)
 			while ((e->lex.cur.type == TOK_ARROW || e->lex.cur.type == TOK_DOT) && !e->error) {
 				int fidx = minic_struct_field_idx(def, field);
-				if (fidx < 0 || def->field_struct_names[fidx][0] == '\0') break;
+				if (fidx < 0 || def->field_struct_names[fidx][0] == '\0')
+					break;
 				minic_struct_def_t *next_def = minic_struct_get(e, def->field_struct_names[fidx]);
-				if (next_def == NULL) break;
+				if (next_def == NULL)
+					break;
 				minic_lex_next(&e->lex); // Consume '->' or '.'
 				strncpy(field, e->lex.cur.text, 63);
 				minic_lex_next(&e->lex);
@@ -1332,8 +1420,8 @@ static minic_val_t minic_parse_primary(minic_env_t *e) {
 // term: primary (('*' | '/') primary)*
 static minic_val_t minic_parse_term(minic_env_t *e) {
 	minic_val_t v = minic_parse_primary(e);
-		while (e->lex.cur.type == TOK_STAR || e->lex.cur.type == TOK_SLASH || e->lex.cur.type == TOK_MOD) {
-			char op = (e->lex.cur.type == TOK_STAR) ? '*' : (e->lex.cur.type == TOK_SLASH) ? '/' : '%';
+	while (e->lex.cur.type == TOK_STAR || e->lex.cur.type == TOK_SLASH || e->lex.cur.type == TOK_MOD) {
+		char op = (e->lex.cur.type == TOK_STAR) ? '*' : (e->lex.cur.type == TOK_SLASH) ? '/' : '%';
 		minic_lex_next(&e->lex);
 		minic_val_t r = minic_parse_primary(e);
 		v             = minic_arith(v, r, op);
@@ -1706,14 +1794,17 @@ static void minic_parse_stmt(minic_env_t *e) {
 		}
 
 		if (e->lex.cur.type == TOK_PLUS_ASSIGN || e->lex.cur.type == TOK_MINUS_ASSIGN || e->lex.cur.type == TOK_MUL_ASSIGN ||
-			    e->lex.cur.type == TOK_DIV_ASSIGN ||
-			    e->lex.cur.type == TOK_MOD_ASSIGN) {
+		    e->lex.cur.type == TOK_DIV_ASSIGN || e->lex.cur.type == TOK_MOD_ASSIGN) {
 			minic_tok_type_t op = e->lex.cur.type;
 			minic_lex_next(&e->lex);
 			minic_val_t dv = minic_parse_expr(e);
 			minic_val_t ov = minic_var_get(e, name);
 			double      a = minic_val_to_d(ov), b = minic_val_to_d(dv);
-			double      r = (op == TOK_PLUS_ASSIGN) ? a + b : (op == TOK_MINUS_ASSIGN) ? a - b : (op == TOK_MUL_ASSIGN) ? a * b : (op == TOK_DIV_ASSIGN) ? (b != 0.0 ? a / b : 0.0) : (b != 0.0 ? fmod(a, b) : 0.0);
+			double      r = (op == TOK_PLUS_ASSIGN)    ? a + b
+			                : (op == TOK_MINUS_ASSIGN) ? a - b
+			                : (op == TOK_MUL_ASSIGN)   ? a * b
+			                : (op == TOK_DIV_ASSIGN)   ? (b != 0.0 ? a / b : 0.0)
+			                                           : (b != 0.0 ? fmod(a, b) : 0.0);
 			minic_var_set(e, name, minic_val_coerce(r, ov.type));
 			minic_expect(e, TOK_SEMICOLON);
 			return;
@@ -1805,6 +1896,8 @@ static void minic_parse_stmt(minic_env_t *e) {
 		{
 			minic_lexer_t tmp = {0};
 			tmp.src           = e->lex.src;
+			tmp.tokens        = e->lex.tokens;
+			tmp.token_count   = e->lex.token_count;
 			tmp.pos           = cond_pos;
 			minic_lex_next(&tmp);
 			while (tmp.cur.type != TOK_SEMICOLON && tmp.cur.type != TOK_EOF) {
@@ -1858,14 +1951,17 @@ static void minic_parse_stmt(minic_env_t *e) {
 					minic_var_set(e, iname, minic_val_coerce(minic_val_to_d(ov) + delta, ov.type));
 				}
 				else if (e->lex.cur.type == TOK_PLUS_ASSIGN || e->lex.cur.type == TOK_MINUS_ASSIGN || e->lex.cur.type == TOK_MUL_ASSIGN ||
-					         e->lex.cur.type == TOK_DIV_ASSIGN ||
-					         e->lex.cur.type == TOK_MOD_ASSIGN) {
+				         e->lex.cur.type == TOK_DIV_ASSIGN || e->lex.cur.type == TOK_MOD_ASSIGN) {
 					minic_tok_type_t op = e->lex.cur.type;
 					minic_lex_next(&e->lex);
 					minic_val_t dv = minic_parse_expr(e);
 					minic_val_t ov = minic_var_get(e, iname);
 					double      a = minic_val_to_d(ov), b = minic_val_to_d(dv);
-					double r = (op == TOK_PLUS_ASSIGN) ? a + b : (op == TOK_MINUS_ASSIGN) ? a - b : (op == TOK_MUL_ASSIGN) ? a * b : (op == TOK_DIV_ASSIGN) ? (b != 0.0 ? a / b : 0.0) : (b != 0.0 ? fmod(a, b) : 0.0);
+					double      r = (op == TOK_PLUS_ASSIGN)    ? a + b
+					                : (op == TOK_MINUS_ASSIGN) ? a - b
+					                : (op == TOK_MUL_ASSIGN)   ? a * b
+					                : (op == TOK_DIV_ASSIGN)   ? (b != 0.0 ? a / b : 0.0)
+					                                           : (b != 0.0 ? fmod(a, b) : 0.0);
 					minic_var_set(e, iname, minic_val_coerce(r, ov.type));
 				}
 				else if (e->lex.cur.type == TOK_ASSIGN) {
@@ -2355,8 +2451,8 @@ minic_ctx_t *minic_ctx_create(const char *src) {
 	ctx->src_copy = (char *)malloc(src_len + 1);
 	memcpy(ctx->src_copy, src, src_len + 1);
 
-	minic_active_mem        = ctx->mem;
-	minic_active_mem_used   = &ctx->mem_used;
+	minic_active_mem      = ctx->mem;
+	minic_active_mem_used = &ctx->mem_used;
 
 	int var_cap      = 64;
 	int arr_cap      = 32;
@@ -2412,16 +2508,17 @@ minic_ctx_t *minic_ctx_create(const char *src) {
 }
 
 void minic_ctx_run(minic_ctx_t *ctx) {
-	if (!ctx) return;
+	if (!ctx)
+		return;
 
-	minic_u8 *prev_mem      = minic_active_mem;
-	int      *prev_mem_used = minic_active_mem_used;
-	minic_env_t *prev_env   = minic_active_env;
+	minic_u8    *prev_mem      = minic_active_mem;
+	int         *prev_mem_used = minic_active_mem_used;
+	minic_env_t *prev_env      = minic_active_env;
 
-	minic_active_mem        = ctx->mem;
-	minic_active_mem_used   = &ctx->mem_used;
-	minic_env_t *e = &ctx->e;
-	minic_active_env = e;
+	minic_active_mem      = ctx->mem;
+	minic_active_mem_used = &ctx->mem_used;
+	minic_env_t *e        = &ctx->e;
+	minic_active_env      = e;
 
 	if (e->lex.cur.type != TOK_EOF) {
 		minic_parse_block(e);
@@ -2447,6 +2544,11 @@ minic_ctx_t *minic_eval(const char *src) {
 
 void minic_ctx_free(minic_ctx_t *ctx) {
 	if (ctx) {
+		for (int i = 0; i < ctx->e.func_count; i++) {
+			if (ctx->e.funcs[i].body_tokens != NULL) {
+				free(ctx->e.funcs[i].body_tokens);
+			}
+		}
 		free(ctx->mem);
 		free(ctx->src_copy);
 		free(ctx);
@@ -2458,13 +2560,14 @@ float minic_ctx_result(minic_ctx_t *ctx) {
 }
 
 void *minic_ctx_get_fn(minic_ctx_t *ctx, const char *name) {
-    if (!ctx || !name) return NULL;
-    for (int i = 0; i < ctx->e.func_count; i++) {
-        if (strcmp(ctx->e.funcs[i].name, name) == 0) {
-            return &ctx->e.funcs[i];
-        }
-    }
-    return NULL;
+	if (!ctx || !name)
+		return NULL;
+	for (int i = 0; i < ctx->e.func_count; i++) {
+		if (strcmp(ctx->e.funcs[i].name, name) == 0) {
+			return &ctx->e.funcs[i];
+		}
+	}
+	return NULL;
 }
 
 minic_val_t minic_ctx_call_fn(minic_ctx_t *ctx, void *fn_ptr, minic_val_t *args, int argc) {

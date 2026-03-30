@@ -51,6 +51,7 @@ Minic is a tree-walking interpreter (~2500 lines). Every loop iteration re-token
 | M1 | Ext function dispatch hash | `minic_ext.c`, `minic.h` | **Done** |
 | M2 | Variable lookup hash | `minic.c` (`minic_var_t`, `minic_vartype_t`) | **Done** |
 | M3 | Arena save/restore in `minic_call()` | `minic.c` | **Done** |
+| M4 | Function body token cache | `minic.c` | **Done** |
 
 #### M1: Ext Function Dispatch Hash
 
@@ -76,13 +77,20 @@ Minic is a tree-walking interpreter (~2500 lines). Every loop iteration re-token
 
 **Files**: `minic.c` — added `saved_mem_used` save/restore in `minic_call()`.
 
+#### M4: Function Body Token Cache
+
+**Before**: `minic_call()` re-lexed + re-parsed function body from source on every call. Every `minic_lex_next()` call scanned source characters, skipped whitespace/comments, matched keywords — all repeated for every call.
+
+**After**: On first call, `minic_lex_body_tokens()` pre-lexes the body `{`..`}` into a malloc'd token array stored in `minic_func_t.body_tokens`. On subsequent calls, `minic_lex_next()` replays from the cached array (token-stream mode). The lexer's `pos` field is repurposed as a token index in stream mode, so existing for-loop/while-loop position-save/restore code works without changes. String literals are stored in `token.text[]` during pre-lex and re-allocated into the current arena on replay.
+
+**Files**: `minic.c` — added `src_pos` to `minic_token_t`, `tokens`/`token_count` to `minic_lexer_t`, `body_tokens`/`body_token_count` to `minic_func_t`. Added `minic_lex_body_tokens()` helper. Modified `minic_lex_next()` (stream-mode fast path), `minic_call()` (lazy cache + stream-mode setup), `minic_current_line()` (use `src_pos`), for-loop temp lexer (inherit token array), `minic_ctx_free()` (free cached tokens).
+
 ### MinicBench Baseline (100K iters x 3 runs)
 
 Interpreter micro-benchmarks measuring minic overhead. Located at `engine/assets/systems/minic_bench.minic`.
 
 ```
-Load: MinicBench
-Results (100000 iters x 3 runs, Apple M1 Pro):
+Pre-M1 Baseline (100000 iters x 3 runs, Apple M1 Pro):
   P1  Variable get/set:   150 ms
   P2  Ext dispatch 12/i:  205 ms
   P3  Function call:      83 ms
@@ -92,6 +100,17 @@ Results (100000 iters x 3 runs, Apple M1 Pro):
   P2/P5 (dispatch/loop):  5.2 x
   P3/P5 (call/loop):      2.1 x
   P4/P5 (math/loop):      3.9 x
+
+Post-M4 (100000 iters x 3 runs, Apple M1 Pro):
+  P1  Variable get/set:   65 ms
+  P2  Ext dispatch 12/i:  80 ms
+  P3  Function call:      29 ms     (was 83 ms → 2.9x faster)
+  P4  Float math:          63 ms
+  P5  Loop overhead:       16 ms
+  P3-P5 (call overhead):  13 ms     (was 43 ms → 3.3x faster)
+  P2/P5 (dispatch/loop):  5.0 x
+  P3/P5 (call/loop):      1.9 x    (was 2.1 x)
+  P4/P5 (math/loop):      4.0 x
 ```
 
 ---
@@ -102,20 +121,12 @@ Results (100000 iters x 3 runs, Apple M1 Pro):
 
 | Function | File:Line | Problem | Complexity |
 |----------|-----------|---------|------------|
-| `minic_call()` | `minic.c` | Re-lexes + re-parse function body from source every call | O(body_size) |
-| For-loop condition | `minic.c` | Re-lexes + re-parse condition every iteration | O(cond_size) |
 | `minic_struct_field_idx()` | `minic.c` | Linear `strcmp` over 16 fields | O(16) |
 | Lexer keyword matching | `minic.c` | 15+ consecutive `strcmp()` calls | O(15) |
 
 ### Implementation Plan (by priority)
 
-#### Phase M4: Function Body Cache (3-5x loop speedup)
-
-**File**: `base/sources/libs/minic.c`
-
-**Current**: `minic_call()` re-lexes + re-parses function body from source on every call. This is the biggest remaining bottleneck.
-
-**Implementation**: On first call, cache the tokenized body. Store token array in `minic_func_t`. On subsequent calls, replay cached tokens instead of re-lexing from source. Estimated 3-5x loop speedup.
+#### ~~Phase M4: Function Body Cache~~ — **Done** (2.9x function call speedup)
 
 #### Phase M5: For-loop Pre-scan (1.5-2x)
 
@@ -171,12 +182,11 @@ Results (100000 iters x 3 runs, Apple M1 Pro):
 
 ## Next Steps (Prioritized)
 
-1. **M4**: Function body cache in `minic.c` — highest remaining impact (3-5x)
+1. ~~**M4**: Function body cache in `minic.c`~~ — **Done** (2.9x speedup)
 2. **M5**: For-loop pre-scan in `minic.c` — 1.5-2x
 3. **M6**: Struct field cache in `minic.c` — quick win
 4. **M7-M8**: Lexer keyword switch, string interning (incremental)
-5. **M9-M15**: Enum hash, NaN-boxing
- arena, etc.
+5. **M9-M15**: Enum hash, NaN-boxing, arena, etc.
 6. **M15**: Bytecode VM — ultimate goal (long-term)
 7. **Native struct fix**: `minic_reload_structs()` in `minic.c`
 
