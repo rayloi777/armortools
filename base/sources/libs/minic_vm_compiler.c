@@ -286,6 +286,15 @@ static int vc_primary(vc_t *c) {
 	}
 	case TOK_LPAREN: {
 		vc_advance(c);
+		// Cast: (int)expr, (float)expr, etc.
+		if (vc_check(c, TOK_INT) || vc_check(c, TOK_FLOAT) || vc_check(c, TOK_CHAR) ||
+		    vc_check(c, TOK_DOUBLE) || vc_check(c, TOK_BOOL) || vc_check(c, TOK_VOID)) {
+			vc_advance(c);  // skip type keyword
+			vc_expect(c, TOK_RPAREN);
+			// Compile the sub-expression (cast is a no-op at VM level;
+			// type coercion happens naturally via minic_val_to_d)
+			return vc_primary(c);
+		}
 		int r = vc_expr(c);
 		vc_expect(c, TOK_RPAREN);
 		return r;

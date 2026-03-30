@@ -2829,26 +2829,20 @@ static void vm_globals_load(minic_env_t *e) {
                 break;
             }
         }
+        // Don't touch vm_globals[i] for globals not in this context
     }
 }
 
 // Sync vm_globals -> context vars (after VM execution)
+// Only writes back globals that the current context owns (has in its var table)
 static void vm_globals_store(minic_env_t *e) {
     for (int i = 0; i < vm_global_count; i++) {
         uint32_t h = vm_global_hashes[i];
-        bool found = false;
         for (int j = e->var_count - 1; j >= 0; --j) {
             if (e->vars[j].name_hash == h && strcmp(e->vars[j].name, vm_global_names[i]) == 0) {
                 e->vars[j].val = vm_globals[i];
-                found = true;
                 break;
             }
-        }
-        if (!found && e->var_count < e->var_cap) {
-            strncpy(e->vars[e->var_count].name, vm_global_names[i], 63);
-            e->vars[e->var_count].name_hash = h;
-            e->vars[e->var_count].val = vm_globals[i];
-            e->var_count++;
         }
     }
 }
@@ -3119,6 +3113,7 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 					minic_val_t ret = *ra;
 					if (frame_top > 0) {
 						int ret_reg = frame->return_reg;
+							fprintf(stderr, "  [RET] depth=%d val=%.0f ret_reg=%d\n", frame_top, minic_val_to_d(ret), ret_reg);
 						frame_top--;
 						frame = &vm_frames[frame_top];
 						frame->regs[ret_reg] = ret;
@@ -3138,6 +3133,13 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 			}
 			break;
 		case OP_HALT:
+			if (frame_top > 0) {
+				// Return from inner frame back to caller
+				frame_top--;
+				frame = &vm_frames[frame_top];
+				frame->regs[frame->return_reg] = minic_val_int(0);
+				break;
+			}
 			return *ra;
 		default:
 			return minic_val_int(0);

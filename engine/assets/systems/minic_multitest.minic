@@ -1,0 +1,132 @@
+// MinicMultiTest - Multi-script concurrent execution test
+// Runs alongside MinicTest and MinicBench to verify VM isolation
+
+int mt_pass = 0;
+int mt_fail = 0;
+int mt_counter = 0;
+float mt_accum = 0.0;
+int mt_frame = 0;
+
+int mt_fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return mt_fib(n - 1) + mt_fib(n - 2);
+}
+
+int mt_add(int a, int b) {
+    return a + b;
+}
+
+void mt_check(char *label, int actual, int expected) {
+    if (actual == expected) {
+        mt_pass = mt_pass + 1;
+    }
+    else {
+        mt_fail = mt_fail + 1;
+        printf("  MT FAIL: %s = %d (expected %d)\n", label, actual, expected);
+    }
+}
+
+int init(void) {
+    printf("\n========================================\n");
+    printf("  MinicMultiTest: Concurrent Script Test\n");
+    printf("========================================\n");
+
+    // Test 1: Arithmetic
+    printf("\n--- MT: Arithmetic ---\n");
+    mt_check("2+3", 2 + 3, 5);
+    mt_check("10-4", 10 - 4, 6);
+    mt_check("3*7", 3 * 7, 21);
+    mt_check("15/4", 15 / 4, 3);
+    mt_check("17%5", 17 % 5, 2);
+
+    // Test 2: Function calls
+    printf("\n--- MT: Function calls ---\n");
+    mt_check("mt_add(3,4)", mt_add(3, 4), 7);
+    mt_check("mt_add(0,0)", mt_add(0, 0), 0);
+    mt_check("mt_add(-1,1)", mt_add(-1, 1), 0);
+    mt_check("mt_fib(0)", mt_fib(0), 0);
+    mt_check("mt_fib(1)", mt_fib(1), 1);
+    mt_check("mt_fib(6)", mt_fib(6), 8);
+    mt_check("mt_fib(10)", mt_fib(10), 55);
+
+    // Test 3: While loop
+    printf("\n--- MT: While loop ---\n");
+    int sum = 0;
+    int i = 1;
+    while (i <= 100) {
+        sum = sum + i;
+        i = i + 1;
+    }
+    mt_check("sum 1..100", sum, 5050);
+
+    // Test 4: Nested loops
+    printf("\n--- MT: Nested loops ---\n");
+    int count = 0;
+    i = 0;
+    while (i < 10) {
+        int j = 0;
+        while (j < 10) {
+            count = count + 1;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    mt_check("10x10 loop", count, 100);
+
+    // Test 5: Float arithmetic (avoid cast syntax for now)
+    printf("\n--- MT: Float arithmetic ---\n");
+    float fa = 1.5;
+    float fb = 2.5;
+    float fc = fa + fb;
+    mt_check("float add", fa + fb, fc);
+
+    // Test 6: For loop
+    printf("\n--- MT: For loop ---\n");
+    int for_sum = 0;
+    for (int k = 1; k <= 10; k = k + 1) {
+        for_sum = for_sum + k;
+    }
+    mt_check("for sum 1..10", for_sum, 55);
+
+    // Test 7: Globals persistence
+    printf("\n--- MT: Globals ---\n");
+    mt_counter = 42;
+    mt_accum = 3.14;
+    mt_check("mt_counter", mt_counter, 42);
+
+    // Summary
+    printf("\n========================================\n");
+    int total = mt_pass + mt_fail;
+    printf("  MinicMultiTest: %d / %d passed", mt_pass, total);
+    if (mt_fail > 0) {
+        printf(" (%d FAILED)", mt_fail);
+    }
+    printf("\n========================================\n\n");
+
+    return 0;
+}
+
+int step(void) {
+    mt_frame = mt_frame + 1;
+    mt_counter = mt_counter + 1;
+    mt_accum = mt_accum + 0.01;
+
+    // Verify globals are isolated every 60 frames
+    if (mt_frame % 60 == 0) {
+        int diff = mt_counter - mt_frame;
+        if (diff != 42) {
+            printf("  MT WARNING: drift at frame %d (counter=%d, diff=%d)\n", mt_frame, mt_counter, diff);
+        }
+    }
+
+    return 0;
+}
+
+int draw(void) {
+    draw_set_font("font.ttf", 16);
+    draw_set_color(0xffccccff);
+    draw_string("MinicMultiTest", 10.0, 54.0);
+    return 0;
+}

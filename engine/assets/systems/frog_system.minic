@@ -133,8 +133,6 @@ int init(void) {
         comp_set_int(g_sprite_comp, spr, "layer", 20 + fi);
         comp_set_bool(g_sprite_comp, spr, "visible", 1);
 
-        sprite_create(e);
-
         fi = fi + 1;
     }
 
