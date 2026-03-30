@@ -3065,3 +3065,5 @@ static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_v
 		}
 	}
 }
+
+#include "minic_vm_compiler.c"
