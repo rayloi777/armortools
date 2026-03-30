@@ -7,6 +7,7 @@
 4. [Dynamic ECS & Minic](#dynamic-ecs--minic)
 5. [2D Feature Plans](#2d-feature-plans)
 6. [Implementation Order](#implementation-order)
+7. [Deep Architecture Analysis](#deep-architecture-analysis)
 
 ---
 
@@ -552,3 +553,219 @@ void ecs_add_pair(ecs_world_t *world, ecs_entity_t entity, ecs_entity_t relation
 void *ecs_field(ecs_iter_t *it, size_t size, int32_t index);
 bool ecs_query_next(ecs_iter_t *it);
 ```
+
+---
+
+# Deep Architecture Analysis
+
+> 基於程式碼的深入架構分析，記錄各層實際實作細節。
+
+## Five-Layer Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Minic Scripts (.minic)                              │  ← 遊戲邏輯
+│  frog_system / movement / health / gamepad / mouse   │
+├─────────────────────────────────────────────────────┤
+│  Core API (engine/sources/core/)                     │  ← C API 註冊層
+│  runtime_api → entity/component/system/query/sprite  │
+├─────────────────────────────────────────────────────┤
+│  Flecs ECS (engine/sources/ecs/)                     │  ← 實體組件系統
+│  ecs_world / ecs_dynamic / ecs_components            │
+├─────────────────────────────────────────────────────┤
+│  Bridge Systems (engine/sources/ecs/*_bridge.c)      │  ← 同步到 Iron 引擎
+│  ecs_bridge / sprite_bridge / render2d / camera      │
+├─────────────────────────────────────────────────────┤
+│  Iron Engine (base/)                                 │  ← 渲染 / 平台 / UI（不可修改）
+└─────────────────────────────────────────────────────┘
+```
+
+## Startup Flow (`game_engine.c`)
+
+`_kickstart()` 是程式入口（line 194-220），按以下順序初始化：
+
+1. **`game_engine_init()`**（line 112-149）：
+   - System API init
+   - 建立遊戲世界（`game_world_create()`）
+   - 設定 ECS Bridge、Sprite Bridge、Camera Bridge、Render2D Bridge
+   - 建立動態組件欄位快取 & ID 快取
+   - 註冊 Runtime API（`runtime_api_register()`）
+   - 輸入系統（鍵盤、滑鼠、Gamepad）
+   - 遊戲迴圈初始化
+
+2. **載入 Minic 腳本**：
+   ```c
+   minic_system_load("MinicTest", "data/systems/minic_test.minic");
+   minic_system_load("MinicBench", "data/systems/minic_bench.minic");
+   ```
+
+3. **`game_engine_start()`** — 啟動 Iron 主迴圈
+
+## Game Loop (`game_loop.c`)
+
+每幀執行順序：
+
+```
+game_loop_update() (line 28)
+  ├── 計算 delta_time
+  ├── game_world_progress()        // 推進 Flecs ECS
+  ├── minic_system_call_step()     // 執行所有 Minic step() 函數
+  ├── render frame:
+  │   ├── draw_begin()             // Iron 清屏 (0xff1a1a2e)
+  │   ├── camera2d_apply()         // 套用 2D 相機變換
+  │   ├── sys_2d_draw()            // 批次 2D 渲染（render2d_bridge）
+  │   ├── minic_system_call_draw() // 執行 Minic draw() 函數
+  │   └── draw_end()
+  └── 更新 frame_count / time
+```
+
+## Core API Layer (`engine/sources/core/`)
+
+### runtime_api.c — 統一註冊入口（line 987-1115）
+
+調用順序：
+1. `component_api_register()` → 18 個 API
+2. `entity_api_register()` → 12 個 API
+3. `system_api_register()` → 7 個 API
+4. `query_api_register()` → 6 個 API
+5. 直接註冊 ~100+ 個額外 API（輸入、繪圖、相機等）
+
+**註冊模式**：
+- `minic_register("name", "i(p,i)", func_ptr)` — 帶型別簽名
+- `minic_register_native("name", native_func)` — 直接 C 函數（更快，跳過型別分派）
+
+### API Modules
+
+| 模組 | 檔案 | 功能 |
+|------|------|------|
+| Entity API | `entity_api.c` | create/destroy/add_component/remove_component/has/get/set_data |
+| Component API | `component_api.c` | register/lookup/add_field/set-get_float/int/ptr/bool |
+| System API | `system_api.c` | create(enable/disable)/phase 管理/最多 64 系統 |
+| Query API | `query_api.c` | query_new/with/find/iter/foreach/foreach_batch |
+| Sprite API | `sprite_api.c` | 紋理載入 + 快取 |
+| Minic System | `minic_system.c` | 腳本載入/管理/step/draw 調用 |
+
+## ECS Layer (`engine/sources/ecs/`)
+
+### ecs_world.c — Flecs 世界管理
+- `game_world_create()` — 建立 Flecs world（line 8）
+- `game_world_progress()` — 每幀推進 ECS，傳入 delta_time（line 40）
+- 全域狀態：`delta_time`, `time`, `frame_count`
+
+### ecs_dynamic.c — 執行期動態組件
+- **最大 64 個動態組件**（`MAX_DYNAMIC_COMPONENTS`）
+- 組件 ID 雜湊表 — O(1) 查找
+- 欄位快取（`field_cache`）— 加速欄位存取
+- Minic 建構子/解構子掛勾
+
+### ecs_components.c/h — 內建組件定義
+
+**2D Transform**：`comp_2d_position` (x,y,z) / `comp_2d_rotation` (四元數) / `comp_2d_scale` (x,y,z)
+
+**2D Rendering**：`comp_2d_sprite` / `comp_2d_rect` / `comp_2d_circle` / `comp_2d_line` / `comp_2d_text`
+
+**2D Camera**：`comp_2d_camera` (x,y,zoom,rotation,smoothing,target,bounds)
+
+**Generic**：`EntityName` / `EntityActive` / `EntityScript` / `RenderObject` / `RenderMesh`
+
+## Bridge Systems (ECS ↔ Iron)
+
+所有 Bridge 遵循統一模式：**偵測 ECS 組件變化 → 同步到 Iron 引擎物件**。
+
+### ecs_bridge.c — 3D 變換同步
+- 以 Flecs 系統運行（`EcsPreStore` 階段）
+- `bridge_system()` — 更新 Transform → `transform_build_matrix()`
+- Iron API：`mesh_object_create()`, `object_set_parent()`, `data_get_mesh()`
+
+### sprite_bridge.c — 精靈圖生命週期
+- `sprite_bridge_create_sprite()` — 載入紋理（`data_get_image()`）→ 設定 render_object
+- `sprite_bridge_destroy_sprite()` — 清理 Iron 物件
+
+### render2d_bridge.c — 批次 2D 渲染（核心）
+- `sys_2d_draw()` — 主渲染函數（line 116-307）
+- **流程**：
+  1. 為每種 2D 原型（sprite/rect/circle/line/text）建立 Flecs query
+  2. 收集所有可見實體到 render items 陣列
+  3. **Insertion sort 按 layer 排序**（穩定 O(n)，適合幾乎有序的幀資料）
+  4. 按排序順序發出 Iron 繪圖呼叫
+- **動態緩衝區**：render items 陣列動態增長，每幀重用
+- Iron 繪圖 API：
+  - `draw_scaled_sub_image()` — 精靈
+  - `draw_filled_rect()` / `draw_rect()` — 矩形
+  - `draw_filled_circle()` / `draw_circle()` — 圓形
+  - `draw_line()` — 線段
+  - `draw_string()` — 文字
+
+### camera_bridge.c — 2D 相機
+- `camera_bridge_init()` — 建立 640×360 相機（`camera2d_create()`）
+- `camera_bridge_get_camera()` — 返回活躍相機
+
+## Minic Script System
+
+### 載入機制（`minic_system.c`）
+1. `minic_system_load(name, path)` — 讀取檔案 → 建立 context → 執行腳本
+2. 查找 `init()`、`step()`、`draw()` 標準函數
+3. 最多 16 個系統（`MAX_MINIC_SYSTEMS`）
+4. 每幀：`minic_system_call_step()` → `minic_system_call_draw()`
+
+### 腳本範例
+
+**frog_system.minic** — 2D ECS 效能測試：
+- 動態組件註冊：`component_register("FrogVelocity", 8)`
+- 批次欄位操作：`comp_set_floats()`, `comp_add_floats()`
+- C 端迭代：`query_foreach(query, "comp_set_float(id, ...)")`
+
+**movement_system.minic** — WASD 移動 + Query：
+- `query_new()` / `query_with(q, "comp_2d_position")`
+- `keyboard_down("w")` → 修改 position
+
+### Minic 解釋器（`base/sources/libs/minic.c`）
+- **Tree-walking interpreter** — 78K 行 C
+- **值系統**：`minic_val_t` — type(i32/f32/ptr/bool/char) + union
+- **效能優化**：雜湊函數分派(M1)、雜湊變數查找(M2)、Arena save/restore(M3)、函數體 token 快取(M4, 2.9x)
+
+## Performance Optimizations
+
+| 優化 | 位置 | 效果 |
+|------|------|------|
+| 函數分派雜湊表 | `minic_ext.c` M1 | O(1) 函數查找 |
+| 變數查找雜湊 | `minic_ext.c` M2 | O(1) 變數存取 |
+| Arena save/restore | `minic_ext.c` M3 | 正確記憶體管理 |
+| 函數體 token 快取 | `minic.c` M4 | 2.9x 函數呼叫加速 |
+| 欄位快取 | `ecs_dynamic.c` | 快速組件欄位存取 |
+| 組件 ID 快取 | `ecs_dynamic.c` | flecs_id → component O(1) 映射 |
+| 批次 API | `runtime_api.c` | `comp_set_floats()` 批次處理 |
+| C 端迭代 | `query_api.c` | `query_foreach()` 避免 Minic 迴圈開銷 |
+| Insertion sort | `render2d_bridge.c` | 穩定 O(n) 幀排序 |
+| 紋理快取 | `sprite_api.c` | 避免重複載入 |
+
+## Key File Index
+
+| 類別 | 檔案 | 說明 |
+|------|------|------|
+| 入口 | `engine/sources/game_engine.c` | init/shutdown/start/kickstart |
+| 遊戲迴圈 | `engine/sources/core/game_loop.c` | 每幀 update + render |
+| API 註冊 | `engine/sources/core/runtime_api.c` | 100+ Minic API 綁定 |
+| Entity API | `engine/sources/core/entity_api.c` | 實體 CRUD |
+| Component API | `engine/sources/core/component_api.c` | 組件註冊/存取 |
+| System API | `engine/sources/core/system_api.c` | 系統管理 |
+| Query API | `engine/sources/core/query_api.c` | 查詢引擎 |
+| ECS 世界 | `engine/sources/ecs/ecs_world.c` | Flecs 生命週期 |
+| 動態組件 | `engine/sources/ecs/ecs_dynamic.c` | 執行期組件 |
+| 內建組件 | `engine/sources/ecs/ecs_components.c/h` | 所有組件定義 |
+| 3D Bridge | `engine/sources/ecs/ecs_bridge.c` | Transform → Iron |
+| Sprite Bridge | `engine/sources/ecs/sprite_bridge.c` | 精靈圖生命週期 |
+| 2D 渲染 | `engine/sources/ecs/render2d_bridge.c` | 批次 2D 繪圖 |
+| 相機 Bridge | `engine/sources/ecs/camera_bridge.c` | 2D 相機 |
+| Minic 載入 | `engine/sources/core/minic_system.c` | 腳本管理 |
+| Sprite API | `engine/sources/core/sprite_api.c` | 紋理快取 |
+| Minic 解釋器 | `base/sources/libs/minic.c/h` | Tree-walking interpreter |
+| Minic 擴展 | `base/sources/libs/minic_ext.c` | 效能優化 |
+
+## Current Limitations
+
+1. **無熱載入**：腳本僅在啟動時載入，無檔案監視機制
+2. **最大 64 動態組件 / 16 Minic 系統** — 有固定上限
+3. **2D 相機固定 640×360** — 寫死在 `camera_bridge_init()`
+4. **Layer 排序用 Insertion sort** — 適合幾乎有序場景，大量新增實體時可能退化
+5. **2D 無批次合批** — 每個 render item 獨立發出 draw call（未使用 instancing）
