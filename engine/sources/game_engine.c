@@ -218,5 +218,10 @@ void _kickstart(void) {
     minic_system_load("FrogTest", "data/systems/frog_system.minic");
     minic_system_call_init();
 
+    // Rebuild caches — dynamic components and fields registered during script
+    // init() are not in the caches that were built earlier in game_engine_init()
+    ecs_dynamic_field_cache_build();
+    ecs_dynamic_comp_id_cache_build();
+
     game_engine_start();
 }

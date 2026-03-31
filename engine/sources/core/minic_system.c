@@ -97,9 +97,12 @@ void minic_system_unload_all(void) {
 }
 
 void minic_system_call_step(void) {
+    static int step_count = 0;
     for (int i = 0; i < g_minic_system_count; i++) {
         if (g_minic_systems[i].step_fn) {
             minic_call_fn(g_minic_systems[i].step_fn, NULL, 0);
+            step_count++;
+            if (step_count <= 3) fprintf(stderr, "[C] step call #%d done\n", step_count);
         }
     }
 }

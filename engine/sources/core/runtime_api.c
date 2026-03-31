@@ -1043,7 +1043,7 @@ void runtime_api_register(void) {
     minic_register_native("comp_get_ptr", minic_comp_get_ptr_native);
     minic_register_native("comp_get_bool", minic_comp_get_bool_native);
     
-    minic_register("sys_delta", "f()", (minic_ext_fn_raw_t)minic_sys_delta);
+    minic_register("sys_delta_time", "f()", (minic_ext_fn_raw_t)minic_sys_delta);
     minic_register("sys_time", "f()", (minic_ext_fn_raw_t)minic_sys_time);
     minic_register("sys_frame", "i()", (minic_ext_fn_raw_t)minic_sys_frame);
     minic_register("sys_fps", "f()", (minic_ext_fn_raw_t)minic_sys_fps);

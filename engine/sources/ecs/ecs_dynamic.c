@@ -177,7 +177,19 @@ uint64_t ecs_dynamic_component_create(struct game_world_t *world, const char *na
     dc->type_info = type_info;
     
     g_component_count++;
-    
+
+    // Incrementally add to component ID hash table
+    {
+        uint32_t bucket = (uint32_t)(comp_id & (COMP_ID_BUCKETS - 1));
+        if (g_comp_id_bucket_sizes[bucket] == 0) {
+            g_comp_id_buckets[bucket] = g_comp_id_entry_count;
+        }
+        g_comp_id_bucket_sizes[bucket]++;
+        g_comp_id_entries[g_comp_id_entry_count].flecs_id = comp_id;
+        g_comp_id_entries[g_comp_id_entry_count].index = g_component_count - 1;
+        g_comp_id_entry_count++;
+    }
+
     return comp_id;
 }
 
@@ -195,6 +207,22 @@ int ecs_dynamic_component_add_field(uint64_t component_id, const char *name, int
             field->count = 1;
             
             dc->field_count++;
+
+            // Incrementally add to field cache
+            if (g_field_cache_count < MAX_FIELD_CACHE) {
+                uint32_t h = field_name_hash(name);
+                uint32_t fbucket = h & (FIELD_CACHE_BUCKETS - 1);
+                if (g_field_cache_bucket_sizes[fbucket] == 0) {
+                    g_field_cache_buckets[fbucket] = g_field_cache_count;
+                }
+                g_field_cache_bucket_sizes[fbucket]++;
+                field_cache_entry_t *entry = &g_field_cache[g_field_cache_count++];
+                entry->component_id = component_id;
+                entry->field_name_hash = h;
+                entry->field_offset = offset;
+                entry->field_type = type;
+            }
+
             return 0;
         }
     }

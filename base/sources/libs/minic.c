@@ -2576,7 +2576,7 @@ minic_ctx_t *minic_ctx_create(const char *src) {
 	minic_active_mem      = ctx->mem;
 	minic_active_mem_used = &ctx->mem_used;
 
-	int var_cap      = 64;
+	int var_cap      = 256;
 	int arr_cap      = 32;
 	int arr_data_cap = 512;
 	int func_cap     = 32;

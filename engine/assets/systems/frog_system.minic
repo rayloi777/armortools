@@ -1,211 +1,436 @@
-// FrogSystem - 2D ECS bouncing frog test
+// FrogSystem - 1 player + 20 AI frogs
+// Stores velocity in script globals (avoids Flecs dynamic component write-back issue)
 
-int g_rect_comp = -1;
-int g_circle_comp = -1;
-int g_line_comp = -1;
-int g_sprite_comp = -1;
+float GRAVITY = 2200.0;
+float GROUND_Y = 560.0;
+float JUMP_VEL = 600.0;
+float PLAYER_SPEED = 250.0;
+
 int g_pos_comp = -1;
-int g_vel_comp = -1;
-int g_entities[8];
+int g_sprite_comp = -1;
+int g_line_comp = -1;
+int g_frog_comp = -1;
 int g_frame = 0;
-int g_pos_query = -1;
+
+// Entities
+int g_player = -1;
+int g_ai0 = -1;  int g_ai1 = -1;  int g_ai2 = -1;  int g_ai3 = -1;  int g_ai4 = -1;
+int g_ai5 = -1;  int g_ai6 = -1;  int g_ai7 = -1;  int g_ai8 = -1;  int g_ai9 = -1;
+int g_ai10 = -1; int g_ai11 = -1; int g_ai12 = -1; int g_ai13 = -1; int g_ai14 = -1;
+int g_ai15 = -1; int g_ai16 = -1; int g_ai17 = -1; int g_ai18 = -1; int g_ai19 = -1;
+
+// Velocity stored in script globals (bypass Flecs dynamic comp write-back issue)
+float g_pv_x = 0.0; float g_pv_y = 0.0; int g_pground = 1;
+float g_v0x = 0.0;  float g_v0y = 0.0;  int g_g0 = 1;
+float g_v1x = 0.0;  float g_v1y = 0.0;  int g_g1 = 1;
+float g_v2x = 0.0;  float g_v2y = 0.0;  int g_g2 = 1;
+float g_v3x = 0.0;  float g_v3y = 0.0;  int g_g3 = 1;
+float g_v4x = 0.0;  float g_v4y = 0.0;  int g_g4 = 1;
+float g_v5x = 0.0;  float g_v5y = 0.0;  int g_g5 = 1;
+float g_v6x = 0.0;  float g_v6y = 0.0;  int g_g6 = 1;
+float g_v7x = 0.0;  float g_v7y = 0.0;  int g_g7 = 1;
+float g_v8x = 0.0;  float g_v8y = 0.0;  int g_g8 = 1;
+float g_v9x = 0.0;  float g_v9y = 0.0;  int g_g9 = 1;
+float g_v10x = 0.0; float g_v10y = 0.0; int g_g10 = 1;
+float g_v11x = 0.0; float g_v11y = 0.0; int g_g11 = 1;
+float g_v12x = 0.0; float g_v12y = 0.0; int g_g12 = 1;
+float g_v13x = 0.0; float g_v13y = 0.0; int g_g13 = 1;
+float g_v14x = 0.0; float g_v14y = 0.0; int g_g14 = 1;
+float g_v15x = 0.0; float g_v15y = 0.0; int g_g15 = 1;
+float g_v16x = 0.0; float g_v16y = 0.0; int g_g16 = 1;
+float g_v17x = 0.0; float g_v17y = 0.0; int g_g17 = 1;
+float g_v18x = 0.0; float g_v18y = 0.0; int g_g18 = 1;
+float g_v19x = 0.0; float g_v19y = 0.0; int g_g19 = 1;
+
+// AI hop state
+float g_ht0 = 1.0;  float g_hi0 = 1.0;  float g_sp0 = 1.0;
+float g_ht1 = 1.12; float g_hi1 = 1.12; float g_sp1 = 1.08;
+float g_ht2 = 1.24; float g_hi2 = 1.24; float g_sp2 = 1.16;
+float g_ht3 = 1.36; float g_hi3 = 1.36; float g_sp3 = 1.24;
+float g_ht4 = 1.48; float g_hi4 = 1.48; float g_sp4 = 1.32;
+float g_ht5 = 1.6;  float g_hi5 = 1.6;  float g_sp5 = 1.4;
+float g_ht6 = 1.72; float g_hi6 = 1.72; float g_sp6 = 1.48;
+float g_ht7 = 1.84; float g_hi7 = 1.84; float g_sp7 = 1.56;
+float g_ht8 = 1.96; float g_hi8 = 1.96; float g_sp8 = 1.64;
+float g_ht9 = 2.08; float g_hi9 = 2.08; float g_sp9 = 1.72;
+float g_ht10 = 2.2; float g_hi10 = 2.2; float g_sp10 = 1.8;
+float g_ht11 = 2.32; float g_hi11 = 2.32; float g_sp11 = 1.88;
+float g_ht12 = 2.44; float g_hi12 = 2.44; float g_sp12 = 1.96;
+float g_ht13 = 2.56; float g_hi13 = 2.56; float g_sp13 = 2.04;
+float g_ht14 = 2.68; float g_hi14 = 2.68; float g_sp14 = 2.12;
+float g_ht15 = 2.8;  float g_hi15 = 2.8;  float g_sp15 = 2.2;
+float g_ht16 = 2.92; float g_hi16 = 2.92; float g_sp16 = 2.28;
+float g_ht17 = 3.04; float g_hi17 = 3.04; float g_sp17 = 2.36;
+float g_ht18 = 3.16; float g_hi18 = 3.16; float g_sp18 = 2.44;
+float g_ht19 = 3.28; float g_hi19 = 3.28; float g_sp19 = 2.52;
+
+int g_jump_pressed = 0;
+
+int create_frog(float x, float y, float scale, int layer) {
+    int e = entity_create();
+    entity_add(e, g_pos_comp);
+    entity_add(e, g_sprite_comp);
+    void *pos = entity_get(e, g_pos_comp);
+    comp_set_float(g_pos_comp, pos, "x", x);
+    comp_set_float(g_pos_comp, pos, "y", y);
+    void *spr = entity_get(e, g_sprite_comp);
+    comp_set_float(g_sprite_comp, spr, "scale_x", scale);
+    comp_set_float(g_sprite_comp, spr, "scale_y", scale);
+    comp_set_bool(g_sprite_comp, spr, "visible", 1);
+    comp_set_int(g_sprite_comp, spr, "layer", layer);
+    sprite_create(e, "frog_idle.k");
+    return e;
+}
 
 int init(void) {
     printf("FrogSystem: Init\n");
-
-    g_rect_comp = component_lookup("comp_2d_rect");
-    g_circle_comp = component_lookup("comp_2d_circle");
-    g_line_comp = component_lookup("comp_2d_line");
-    g_sprite_comp = component_lookup("comp_2d_sprite");
     g_pos_comp = component_lookup("comp_2d_position");
+    g_sprite_comp = component_lookup("comp_2d_sprite");
+    g_line_comp = component_lookup("comp_2d_line");
+    printf("  pos=%d sprite=%d line=%d\n", g_pos_comp, g_sprite_comp, g_line_comp);
 
-    if (g_rect_comp < 0) { printf("FrogSystem: no rect comp\n"); return 0; }
-    if (g_sprite_comp < 0) { printf("FrogSystem: no sprite comp\n"); return 0; }
-    if (g_pos_comp < 0) { printf("FrogSystem: no pos comp\n"); return 0; }
-
-    // Register dynamic FrogVelocity component
-    g_vel_comp = component_register("FrogVelocity", 8);
-    component_add_field(g_vel_comp, "vx", TYPE_FLOAT, 0);
-    component_add_field(g_vel_comp, "vy", TYPE_FLOAT, 4);
-
-    printf("Components: rect=%d circle=%d sprite=%d pos=%d vel=%d\n",
-           g_rect_comp, g_circle_comp, g_sprite_comp, g_pos_comp, g_vel_comp);
-
-    // Create 4 animated rectangles
-    int i = 0;
-    while (i < 4) {
-        int e = entity_create();
-        entity_add(e, g_rect_comp);
-
-        void *rect = entity_get(e, g_rect_comp);
-        comp_set_float(g_rect_comp, rect, "x", 100.0 + i * 200.0);
-        comp_set_float(g_rect_comp, rect, "y", 100.0 + i * 50.0);
-        comp_set_float(g_rect_comp, rect, "width", 80.0);
-        comp_set_float(g_rect_comp, rect, "height", 60.0);
-        comp_set_int(g_rect_comp, rect, "color", 0xff3366ff);
-        comp_set_int(g_rect_comp, rect, "layer", i);
-        comp_set_bool(g_rect_comp, rect, "filled", 1);
-        comp_set_float(g_rect_comp, rect, "strength", 1.0);
-        comp_set_bool(g_rect_comp, rect, "visible", 1);
-
-        g_entities[i] = e;
-        i = i + 1;
-    }
-
-    // Create 3 animated circles
-    i = 0;
-    while (i < 3) {
-        int e = entity_create();
-        entity_add(e, g_circle_comp);
-
-        void *circle = entity_get(e, g_circle_comp);
-        comp_set_float(g_circle_comp, circle, "cx", 200.0 + i * 300.0);
-        comp_set_float(g_circle_comp, circle, "cy", 400.0);
-        comp_set_float(g_circle_comp, circle, "radius", 40.0 + i * 10.0);
-        comp_set_int(g_circle_comp, circle, "segments", 32);
-        comp_set_int(g_circle_comp, circle, "color", 0xff66ff33);
-        comp_set_int(g_circle_comp, circle, "layer", 4 + i);
-        comp_set_bool(g_circle_comp, circle, "filled", 1);
-        comp_set_float(g_circle_comp, circle, "strength", 1.0);
-        comp_set_bool(g_circle_comp, circle, "visible", 1);
-
-        g_entities[4 + i] = e;
-        i = i + 1;
-    }
-
-    // Create a decorative line
-    int line_e = entity_create();
-    entity_add(line_e, g_line_comp);
-    void *line = entity_get(line_e, g_line_comp);
-    comp_set_float(g_line_comp, line, "x0", 50.0);
-    comp_set_float(g_line_comp, line, "y0", 300.0);
-    comp_set_float(g_line_comp, line, "x1", 1230.0);
-    comp_set_float(g_line_comp, line, "y1", 300.0);
-    comp_set_float(g_line_comp, line, "strength", 2.0);
-    comp_set_int(g_line_comp, line, "color", 0xffffffff);
-    comp_set_int(g_line_comp, line, "layer", 10);
+    // Ground line
+    int ge = entity_create();
+    entity_add(ge, g_line_comp);
+    void *line = entity_get(ge, g_line_comp);
+    comp_set_float(g_line_comp, line, "x0", -2000.0);
+    comp_set_float(g_line_comp, line, "y0", GROUND_Y);
+    comp_set_float(g_line_comp, line, "x1", 4000.0);
+    comp_set_float(g_line_comp, line, "y1", GROUND_Y);
+    comp_set_float(g_line_comp, line, "strength", 3.0);
+    comp_set_int(g_line_comp, line, "color", 0xff4a752a);
+    comp_set_int(g_line_comp, line, "layer", 5);
     comp_set_bool(g_line_comp, line, "visible", 1);
 
-    // Create 10 bouncing frog sprites
-    int fi = 0;
-    while (fi < 10) {
-        int e = entity_create();
-        entity_add(e, g_pos_comp);
-        entity_add(e, g_sprite_comp);
-        entity_add(e, g_vel_comp);
+    // Player
+    g_player = create_frog(640.0, GROUND_Y, 2.5, 30);
 
-        float start_x = 100.0 + fi * 120.0;
-        float start_y = 200.0 + (fi / 5) * 150.0;
-        int facing = 1;
-        if (fi / 2 * 2 == fi) facing = 0 - 1;
+    // AI frogs at various positions
+    g_ai0 = create_frog(100.0, GROUND_Y, 1.5, 10);
+    g_ai1 = create_frog(200.0, GROUND_Y, 1.8, 10);
+    g_ai2 = create_frog(300.0, GROUND_Y, 1.3, 10);
+    g_ai3 = create_frog(400.0, GROUND_Y, 2.0, 10);
+    g_ai4 = create_frog(500.0, GROUND_Y, 1.6, 10);
+    g_ai5 = create_frog(600.0, GROUND_Y, 1.4, 10);
+    g_ai6 = create_frog(700.0, GROUND_Y, 1.7, 10);
+    g_ai7 = create_frog(800.0, GROUND_Y, 2.2, 10);
+    g_ai8 = create_frog(900.0, GROUND_Y, 1.2, 10);
+    g_ai9 = create_frog(1000.0, GROUND_Y, 1.9, 10);
+    g_ai10 = create_frog(150.0, GROUND_Y, 1.5, 10);
+    g_ai11 = create_frog(250.0, GROUND_Y, 2.1, 10);
+    g_ai12 = create_frog(350.0, GROUND_Y, 1.4, 10);
+    g_ai13 = create_frog(450.0, GROUND_Y, 1.8, 10);
+    g_ai14 = create_frog(550.0, GROUND_Y, 1.6, 10);
+    g_ai15 = create_frog(650.0, GROUND_Y, 2.0, 10);
+    g_ai16 = create_frog(750.0, GROUND_Y, 1.3, 10);
+    g_ai17 = create_frog(850.0, GROUND_Y, 1.7, 10);
+    g_ai18 = create_frog(950.0, GROUND_Y, 2.3, 10);
+    g_ai19 = create_frog(1050.0, GROUND_Y, 1.1, 10);
 
-        void *pos = entity_get(e, g_pos_comp);
-        comp_set_float(g_pos_comp, pos, "x", start_x);
-        comp_set_float(g_pos_comp, pos, "y", start_y);
-        comp_set_float(g_pos_comp, pos, "z", 0.0);
-
-        void *vel = entity_get(e, g_vel_comp);
-        comp_set_float(g_vel_comp, vel, "vx", (60.0 + fi * 8.0) * facing);
-        comp_set_float(g_vel_comp, vel, "vy", 40.0 + fi * 5.0);
-
-        void *spr = entity_get(e, g_sprite_comp);
-        comp_set_float(g_sprite_comp, spr, "scale_x", 2.0);
-        comp_set_float(g_sprite_comp, spr, "scale_y", 2.0);
-        comp_set_bool(g_sprite_comp, spr, "flip_x", facing < 0);
-        comp_set_int(g_sprite_comp, spr, "layer", 20 + fi);
-        comp_set_bool(g_sprite_comp, spr, "visible", 1);
-
-        sprite_create(e, "frog_idle.k");
-
-        fi = fi + 1;
-    }
-
-    // Query for all entities with FrogVelocity
-    g_pos_query = query_create("FrogVelocity");
-
-    printf("FrogSystem: 4 rects + 3 circles + 1 line + 10 frogs (query=%d)\n", g_pos_query);
+    printf("FrogSystem: ready (1 player + 20 AI)\n");
     return 0;
 }
 
-// query_foreach callback: apply gravity + move frog
-int frog_step(int entity, void *vel) {
-    // Apply gravity (80.0 * 0.016 ≈ 1.3 per frame at 60fps)
-    comp_add_float(g_vel_comp, vel, "vy", 1.3);
+void update_player(float dt) {
+    void *pos = entity_get(g_player, g_pos_comp);
+    if (!pos) return;
+    float px = comp_get_float(g_pos_comp, pos, "x");
+    float py = comp_get_float(g_pos_comp, pos, "y");
+    float vx = g_pv_x;
+    float vy = g_pv_y;
 
-    // Get velocity
-    float vx = comp_get_float(g_vel_comp, vel, "vx");
-    float vy = comp_get_float(g_vel_comp, vel, "vy");
+    // Input
+    vx = 0.0;
+    if (keyboard_down("left")) vx = -PLAYER_SPEED;
+    if (keyboard_down("right")) vx = PLAYER_SPEED;
+    int space = keyboard_down("space");
+    if (space && g_pground && g_jump_pressed == 0) {
+        vy = -JUMP_VEL;
+    }
+    g_jump_pressed = space;
 
-    // Get position
+    // Physics
+    vy = vy + GRAVITY * dt;
+    px = px + vx * dt;
+    py = py + vy * dt;
+
+    // Ground
+    if (py >= GROUND_Y) {
+        py = GROUND_Y;
+        vy = 0.0;
+        g_pground = 1;
+    } else {
+        g_pground = 0;
+    }
+
+    // Bounds
+    if (px < 20.0) { px = 20.0; vx = 0.0; }
+    if (px > 1260.0) { px = 1260.0; vx = 0.0; }
+
+    comp_set_float(g_pos_comp, pos, "x", px);
+    comp_set_float(g_pos_comp, pos, "y", py);
+    g_pv_x = vx;
+    g_pv_y = vy;
+}
+
+void update_ai(int entity, float vx_ptr, float vy_ptr, int ground_ptr,
+               float ht_ptr, float hi_ptr, float sp_ptr, float dt) {
     void *pos = entity_get(entity, g_pos_comp);
+    if (!pos) return;
+
     float px = comp_get_float(g_pos_comp, pos, "x");
     float py = comp_get_float(g_pos_comp, pos, "y");
 
-    // Bounce off screen edges
-    float bounce = 0 - 0.8;
-    if (px < 0.0) { px = 0.0; vx = vx * bounce; }
-    if (px > 1200.0) { px = 1200.0; vx = vx * bounce; }
-    if (py < 0.0) { py = 0.0; vy = vy * bounce; }
-    if (py > 700.0) { py = 700.0; vy = vy * bounce; }
+    // These are passed by value in minic, so we use globals directly
+    // This function is not used - inline the AI update instead
+    py = py + 1.0; // placeholder
+}
 
-    // Write back position + velocity
-    comp_set_float(g_pos_comp, pos, "x", px);
-    comp_set_float(g_pos_comp, pos, "y", py);
-    comp_set_float(g_vel_comp, vel, "vx", vx);
-    comp_set_float(g_vel_comp, vel, "vy", vy);
+int step(void) {
+    float dt = sys_delta_time();
+    g_frame = g_frame + 1;
+    if (g_frame <= 3) printf("step() frame=%d dt=%g\n", g_frame, dt);
+    if (dt <= 0.0) dt = 0.016;
+    if (dt > 0.05) dt = 0.05;
 
-    // Flip sprite based on horizontal direction
-    if (vx > 0.5) {
-        void *spr = entity_get(entity, g_sprite_comp);
-        comp_set_bool(g_sprite_comp, spr, "flip_x", 0);
-    } else if (vx < -0.5) {
-        void *spr = entity_get(entity, g_sprite_comp);
-        comp_set_bool(g_sprite_comp, spr, "flip_x", 1);
+    // === Player ===
+    update_player(dt);
+
+    // === AI frogs (inline physics for each) ===
+
+    // AI 0
+    {
+        g_ht0 = g_ht0 - dt;
+        if (g_ht0 <= 0.0 && g_g0) {
+            g_v0y = -(400.0 + g_sp0 * 200.0);
+            float r = rand_float();
+            if (r < 0.33) g_v0x = -g_sp0 * 100.0;
+            else if (r < 0.66) g_v0x = g_sp0 * 100.0;
+            g_ht0 = g_hi0;
+        }
+        g_v0y = g_v0y + GRAVITY * dt;
+        void *p = entity_get(g_ai0, g_pos_comp);
+        if (p) {
+            float px = comp_get_float(g_pos_comp, p, "x");
+            float py = comp_get_float(g_pos_comp, p, "y");
+            px = px + g_v0x * dt;
+            py = py + g_v0y * dt;
+            if (py >= GROUND_Y) { py = GROUND_Y; g_v0y = 0.0; g_g0 = 1; } else { g_g0 = 0; }
+            if (px < 20.0) { px = 20.0; g_v0x = -g_v0x; }
+            if (px > 1260.0) { px = 1260.0; g_v0x = -g_v0x; }
+            comp_set_float(g_pos_comp, p, "x", px);
+            comp_set_float(g_pos_comp, p, "y", py);
+        }
     }
+
+    // AI 1
+    {
+        g_ht1 = g_ht1 - dt;
+        if (g_ht1 <= 0.0 && g_g1) {
+            g_v1y = -(400.0 + g_sp1 * 200.0);
+            float r = rand_float();
+            if (r < 0.33) g_v1x = -g_sp1 * 100.0;
+            else if (r < 0.66) g_v1x = g_sp1 * 100.0;
+            g_ht1 = g_hi1;
+        }
+        g_v1y = g_v1y + GRAVITY * dt;
+        void *p = entity_get(g_ai1, g_pos_comp);
+        if (p) {
+            float px = comp_get_float(g_pos_comp, p, "x");
+            float py = comp_get_float(g_pos_comp, p, "y");
+            px = px + g_v1x * dt;
+            py = py + g_v1y * dt;
+            if (py >= GROUND_Y) { py = GROUND_Y; g_v1y = 0.0; g_g1 = 1; } else { g_g1 = 0; }
+            if (px < 20.0) { px = 20.0; g_v1x = -g_v1x; }
+            if (px > 1260.0) { px = 1260.0; g_v1x = -g_v1x; }
+            comp_set_float(g_pos_comp, p, "x", px);
+            comp_set_float(g_pos_comp, p, "y", py);
+        }
+    }
+
+    // AI 2
+    {
+        g_ht2 = g_ht2 - dt;
+        if (g_ht2 <= 0.0 && g_g2) {
+            g_v2y = -(400.0 + g_sp2 * 200.0);
+            float r = rand_float();
+            if (r < 0.33) g_v2x = -g_sp2 * 100.0;
+            else if (r < 0.66) g_v2x = g_sp2 * 100.0;
+            g_ht2 = g_hi2;
+        }
+        g_v2y = g_v2y + GRAVITY * dt;
+        void *p = entity_get(g_ai2, g_pos_comp);
+        if (p) {
+            float px = comp_get_float(g_pos_comp, p, "x");
+            float py = comp_get_float(g_pos_comp, p, "y");
+            px = px + g_v2x * dt;
+            py = py + g_v2y * dt;
+            if (py >= GROUND_Y) { py = GROUND_Y; g_v2y = 0.0; g_g2 = 1; } else { g_g2 = 0; }
+            if (px < 20.0) { px = 20.0; g_v2x = -g_v2x; }
+            if (px > 1260.0) { px = 1260.0; g_v2x = -g_v2x; }
+            comp_set_float(g_pos_comp, p, "x", px);
+            comp_set_float(g_pos_comp, p, "y", py);
+        }
+    }
+
+    // AI 3
+    {
+        g_ht3 = g_ht3 - dt;
+        if (g_ht3 <= 0.0 && g_g3) {
+            g_v3y = -(400.0 + g_sp3 * 200.0);
+            float r = rand_float();
+            if (r < 0.33) g_v3x = -g_sp3 * 100.0;
+            else if (r < 0.66) g_v3x = g_sp3 * 100.0;
+            g_ht3 = g_hi3;
+        }
+        g_v3y = g_v3y + GRAVITY * dt;
+        void *p = entity_get(g_ai3, g_pos_comp);
+        if (p) {
+            float px = comp_get_float(g_pos_comp, p, "x");
+            float py = comp_get_float(g_pos_comp, p, "y");
+            px = px + g_v3x * dt;
+            py = py + g_v3y * dt;
+            if (py >= GROUND_Y) { py = GROUND_Y; g_v3y = 0.0; g_g3 = 1; } else { g_g3 = 0; }
+            if (px < 20.0) { px = 20.0; g_v3x = -g_v3x; }
+            if (px > 1260.0) { px = 1260.0; g_v3x = -g_v3x; }
+            comp_set_float(g_pos_comp, p, "x", px);
+            comp_set_float(g_pos_comp, p, "y", py);
+        }
+    }
+
+    // AI 4
+    {
+        g_ht4 = g_ht4 - dt;
+        if (g_ht4 <= 0.0 && g_g4) {
+            g_v4y = -(400.0 + g_sp4 * 200.0);
+            float r = rand_float();
+            if (r < 0.33) g_v4x = -g_sp4 * 100.0;
+            else if (r < 0.66) g_v4x = g_sp4 * 100.0;
+            g_ht4 = g_hi4;
+        }
+        g_v4y = g_v4y + GRAVITY * dt;
+        void *p = entity_get(g_ai4, g_pos_comp);
+        if (p) {
+            float px = comp_get_float(g_pos_comp, p, "x");
+            float py = comp_get_float(g_pos_comp, p, "y");
+            px = px + g_v4x * dt;
+            py = py + g_v4y * dt;
+            if (py >= GROUND_Y) { py = GROUND_Y; g_v4y = 0.0; g_g4 = 1; } else { g_g4 = 0; }
+            if (px < 20.0) { px = 20.0; g_v4x = -g_v4x; }
+            if (px > 1260.0) { px = 1260.0; g_v4x = -g_v4x; }
+            comp_set_float(g_pos_comp, p, "x", px);
+            comp_set_float(g_pos_comp, p, "y", py);
+        }
+    }
+
+    // AI 5-19: same pattern, different globals
+    // For brevity, using the same inline pattern
+    g_ht5 = g_ht5 - dt;
+    if (g_ht5 <= 0.0 && g_g5) { g_v5y = -(400.0 + g_sp5 * 200.0); float r = rand_float(); if (r < 0.33) g_v5x = -g_sp5 * 100.0; else if (r < 0.66) g_v5x = g_sp5 * 100.0; g_ht5 = g_hi5; }
+    g_v5y = g_v5y + GRAVITY * dt;
+    { void *p = entity_get(g_ai5, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v5x * dt; py = py + g_v5y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v5y = 0.0; g_g5 = 1; } else { g_g5 = 0; } if (px < 20.0) { px = 20.0; g_v5x = -g_v5x; } if (px > 1260.0) { px = 1260.0; g_v5x = -g_v5x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht6 = g_ht6 - dt;
+    if (g_ht6 <= 0.0 && g_g6) { g_v6y = -(400.0 + g_sp6 * 200.0); float r = rand_float(); if (r < 0.33) g_v6x = -g_sp6 * 100.0; else if (r < 0.66) g_v6x = g_sp6 * 100.0; g_ht6 = g_hi6; }
+    g_v6y = g_v6y + GRAVITY * dt;
+    { void *p = entity_get(g_ai6, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v6x * dt; py = py + g_v6y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v6y = 0.0; g_g6 = 1; } else { g_g6 = 0; } if (px < 20.0) { px = 20.0; g_v6x = -g_v6x; } if (px > 1260.0) { px = 1260.0; g_v6x = -g_v6x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht7 = g_ht7 - dt;
+    if (g_ht7 <= 0.0 && g_g7) { g_v7y = -(400.0 + g_sp7 * 200.0); float r = rand_float(); if (r < 0.33) g_v7x = -g_sp7 * 100.0; else if (r < 0.66) g_v7x = g_sp7 * 100.0; g_ht7 = g_hi7; }
+    g_v7y = g_v7y + GRAVITY * dt;
+    { void *p = entity_get(g_ai7, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v7x * dt; py = py + g_v7y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v7y = 0.0; g_g7 = 1; } else { g_g7 = 0; } if (px < 20.0) { px = 20.0; g_v7x = -g_v7x; } if (px > 1260.0) { px = 1260.0; g_v7x = -g_v7x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht8 = g_ht8 - dt;
+    if (g_ht8 <= 0.0 && g_g8) { g_v8y = -(400.0 + g_sp8 * 200.0); float r = rand_float(); if (r < 0.33) g_v8x = -g_sp8 * 100.0; else if (r < 0.66) g_v8x = g_sp8 * 100.0; g_ht8 = g_hi8; }
+    g_v8y = g_v8y + GRAVITY * dt;
+    { void *p = entity_get(g_ai8, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v8x * dt; py = py + g_v8y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v8y = 0.0; g_g8 = 1; } else { g_g8 = 0; } if (px < 20.0) { px = 20.0; g_v8x = -g_v8x; } if (px > 1260.0) { px = 1260.0; g_v8x = -g_v8x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht9 = g_ht9 - dt;
+    if (g_ht9 <= 0.0 && g_g9) { g_v9y = -(400.0 + g_sp9 * 200.0); float r = rand_float(); if (r < 0.33) g_v9x = -g_sp9 * 100.0; else if (r < 0.66) g_v9x = g_sp9 * 100.0; g_ht9 = g_hi9; }
+    g_v9y = g_v9y + GRAVITY * dt;
+    { void *p = entity_get(g_ai9, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v9x * dt; py = py + g_v9y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v9y = 0.0; g_g9 = 1; } else { g_g9 = 0; } if (px < 20.0) { px = 20.0; g_v9x = -g_v9x; } if (px > 1260.0) { px = 1260.0; g_v9x = -g_v9x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht10 = g_ht10 - dt;
+    if (g_ht10 <= 0.0 && g_g10) { g_v10y = -(400.0 + g_sp10 * 200.0); float r = rand_float(); if (r < 0.33) g_v10x = -g_sp10 * 100.0; else if (r < 0.66) g_v10x = g_sp10 * 100.0; g_ht10 = g_hi10; }
+    g_v10y = g_v10y + GRAVITY * dt;
+    { void *p = entity_get(g_ai10, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v10x * dt; py = py + g_v10y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v10y = 0.0; g_g10 = 1; } else { g_g10 = 0; } if (px < 20.0) { px = 20.0; g_v10x = -g_v10x; } if (px > 1260.0) { px = 1260.0; g_v10x = -g_v10x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht11 = g_ht11 - dt;
+    if (g_ht11 <= 0.0 && g_g11) { g_v11y = -(400.0 + g_sp11 * 200.0); float r = rand_float(); if (r < 0.33) g_v11x = -g_sp11 * 100.0; else if (r < 0.66) g_v11x = g_sp11 * 100.0; g_ht11 = g_hi11; }
+    g_v11y = g_v11y + GRAVITY * dt;
+    { void *p = entity_get(g_ai11, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v11x * dt; py = py + g_v11y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v11y = 0.0; g_g11 = 1; } else { g_g11 = 0; } if (px < 20.0) { px = 20.0; g_v11x = -g_v11x; } if (px > 1260.0) { px = 1260.0; g_v11x = -g_v11x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht12 = g_ht12 - dt;
+    if (g_ht12 <= 0.0 && g_g12) { g_v12y = -(400.0 + g_sp12 * 200.0); float r = rand_float(); if (r < 0.33) g_v12x = -g_sp12 * 100.0; else if (r < 0.66) g_v12x = g_sp12 * 100.0; g_ht12 = g_hi12; }
+    g_v12y = g_v12y + GRAVITY * dt;
+    { void *p = entity_get(g_ai12, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v12x * dt; py = py + g_v12y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v12y = 0.0; g_g12 = 1; } else { g_g12 = 0; } if (px < 20.0) { px = 20.0; g_v12x = -g_v12x; } if (px > 1260.0) { px = 1260.0; g_v12x = -g_v12x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht13 = g_ht13 - dt;
+    if (g_ht13 <= 0.0 && g_g13) { g_v13y = -(400.0 + g_sp13 * 200.0); float r = rand_float(); if (r < 0.33) g_v13x = -g_sp13 * 100.0; else if (r < 0.66) g_v13x = g_sp13 * 100.0; g_ht13 = g_hi13; }
+    g_v13y = g_v13y + GRAVITY * dt;
+    { void *p = entity_get(g_ai13, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v13x * dt; py = py + g_v13y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v13y = 0.0; g_g13 = 1; } else { g_g13 = 0; } if (px < 20.0) { px = 20.0; g_v13x = -g_v13x; } if (px > 1260.0) { px = 1260.0; g_v13x = -g_v13x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht14 = g_ht14 - dt;
+    if (g_ht14 <= 0.0 && g_g14) { g_v14y = -(400.0 + g_sp14 * 200.0); float r = rand_float(); if (r < 0.33) g_v14x = -g_sp14 * 100.0; else if (r < 0.66) g_v14x = g_sp14 * 100.0; g_ht14 = g_hi14; }
+    g_v14y = g_v14y + GRAVITY * dt;
+    { void *p = entity_get(g_ai14, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v14x * dt; py = py + g_v14y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v14y = 0.0; g_g14 = 1; } else { g_g14 = 0; } if (px < 20.0) { px = 20.0; g_v14x = -g_v14x; } if (px > 1260.0) { px = 1260.0; g_v14x = -g_v14x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht15 = g_ht15 - dt;
+    if (g_ht15 <= 0.0 && g_g15) { g_v15y = -(400.0 + g_sp15 * 200.0); float r = rand_float(); if (r < 0.33) g_v15x = -g_sp15 * 100.0; else if (r < 0.66) g_v15x = g_sp15 * 100.0; g_ht15 = g_hi15; }
+    g_v15y = g_v15y + GRAVITY * dt;
+    { void *p = entity_get(g_ai15, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v15x * dt; py = py + g_v15y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v15y = 0.0; g_g15 = 1; } else { g_g15 = 0; } if (px < 20.0) { px = 20.0; g_v15x = -g_v15x; } if (px > 1260.0) { px = 1260.0; g_v15x = -g_v15x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht16 = g_ht16 - dt;
+    if (g_ht16 <= 0.0 && g_g16) { g_v16y = -(400.0 + g_sp16 * 200.0); float r = rand_float(); if (r < 0.33) g_v16x = -g_sp16 * 100.0; else if (r < 0.66) g_v16x = g_sp16 * 100.0; g_ht16 = g_hi16; }
+    g_v16y = g_v16y + GRAVITY * dt;
+    { void *p = entity_get(g_ai16, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v16x * dt; py = py + g_v16y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v16y = 0.0; g_g16 = 1; } else { g_g16 = 0; } if (px < 20.0) { px = 20.0; g_v16x = -g_v16x; } if (px > 1260.0) { px = 1260.0; g_v16x = -g_v16x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht17 = g_ht17 - dt;
+    if (g_ht17 <= 0.0 && g_g17) { g_v17y = -(400.0 + g_sp17 * 200.0); float r = rand_float(); if (r < 0.33) g_v17x = -g_sp17 * 100.0; else if (r < 0.66) g_v17x = g_sp17 * 100.0; g_ht17 = g_hi17; }
+    g_v17y = g_v17y + GRAVITY * dt;
+    { void *p = entity_get(g_ai17, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v17x * dt; py = py + g_v17y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v17y = 0.0; g_g17 = 1; } else { g_g17 = 0; } if (px < 20.0) { px = 20.0; g_v17x = -g_v17x; } if (px > 1260.0) { px = 1260.0; g_v17x = -g_v17x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht18 = g_ht18 - dt;
+    if (g_ht18 <= 0.0 && g_g18) { g_v18y = -(400.0 + g_sp18 * 200.0); float r = rand_float(); if (r < 0.33) g_v18x = -g_sp18 * 100.0; else if (r < 0.66) g_v18x = g_sp18 * 100.0; g_ht18 = g_hi18; }
+    g_v18y = g_v18y + GRAVITY * dt;
+    { void *p = entity_get(g_ai18, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v18x * dt; py = py + g_v18y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v18y = 0.0; g_g18 = 1; } else { g_g18 = 0; } if (px < 20.0) { px = 20.0; g_v18x = -g_v18x; } if (px > 1260.0) { px = 1260.0; g_v18x = -g_v18x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    g_ht19 = g_ht19 - dt;
+    if (g_ht19 <= 0.0 && g_g19) { g_v19y = -(400.0 + g_sp19 * 200.0); float r = rand_float(); if (r < 0.33) g_v19x = -g_sp19 * 100.0; else if (r < 0.66) g_v19x = g_sp19 * 100.0; g_ht19 = g_hi19; }
+    g_v19y = g_v19y + GRAVITY * dt;
+    { void *p = entity_get(g_ai19, g_pos_comp); if (p) { float px = comp_get_float(g_pos_comp, p, "x"); float py = comp_get_float(g_pos_comp, p, "y"); px = px + g_v19x * dt; py = py + g_v19y * dt; if (py >= GROUND_Y) { py = GROUND_Y; g_v19y = 0.0; g_g19 = 1; } else { g_g19 = 0; } if (px < 20.0) { px = 20.0; g_v19x = -g_v19x; } if (px > 1260.0) { px = 1260.0; g_v19x = -g_v19x; } comp_set_float(g_pos_comp, p, "x", px); comp_set_float(g_pos_comp, p, "y", py); } }
+
+    // Camera follow player
+    void *ppos = entity_get(g_player, g_pos_comp);
+    if (ppos) {
+        float px = comp_get_float(g_pos_comp, ppos, "x");
+        float py = comp_get_float(g_pos_comp, ppos, "y");
+        camera_follow(px, py);
+    }
+
+    // Periodic debug
+    if (g_frame % 180 == 1) {
+        void *ppos2 = entity_get(g_player, g_pos_comp);
+        if (ppos2) {
+            float px = comp_get_float(g_pos_comp, ppos2, "x");
+            float py = comp_get_float(g_pos_comp, ppos2, "y");
+            printf("frame=%d player: x=%g y=%g vy=%g gnd=%d\n", g_frame, px, py, g_pv_y, g_pground);
+        }
+        void *ap = entity_get(g_ai0, g_pos_comp);
+        if (ap) {
+            float ax = comp_get_float(g_pos_comp, ap, "x");
+            float ay = comp_get_float(g_pos_comp, ap, "y");
+            printf("frame=%d ai0: x=%g y=%g vy=%g gnd=%d\n", g_frame, ax, ay, g_v0y, g_g0);
+        }
+    }
+
     return 0;
 }
 
 int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("FrogSystem - 2D ECS Test (query_foreach)", 10, 10);
-    draw_fps(10, 32);
-    return 0;
-}
-
-int step(void) {
-    g_frame = g_frame + 1;
-    float delta = sys_delta();
-    if (delta <= 0.0) delta = 0.016;
-
-    // Animate rectangles: wave pattern
-    int i = 0;
-    while (i < 4) {
-        void *rect = entity_get(g_entities[i], g_rect_comp);
-        float fx = g_frame * 3 + i * 40;
-        float fy = g_frame * 2 + i * 30;
-        float rx = 100.0 + i * 200.0 + fx - (fx / 100.0) * 100.0 - 50.0;
-        float ry = 100.0 + i * 50.0 + fy - (fy / 80.0) * 80.0 - 40.0;
-        comp_set_float(g_rect_comp, rect, "x", rx);
-        comp_set_float(g_rect_comp, rect, "y", ry);
-        i = i + 1;
-    }
-
-    // Animate circles: wave pattern
-    i = 0;
-    while (i < 3) {
-        void *circle = entity_get(g_entities[4 + i], g_circle_comp);
-        float fx = g_frame * 6 + i * 40;
-        float fy = g_frame * 3 + i * 25;
-        float cx = 200.0 + i * 300.0 + fx - (fx / 120.0) * 120.0 - 60.0;
-        float cy = 400.0 + fy - (fy / 70.0) * 70.0 - 35.0;
-        comp_set_float(g_circle_comp, circle, "cx", cx);
-        comp_set_float(g_circle_comp, circle, "cy", cy);
-        i = i + 1;
-    }
-
-    // Move frogs using query_foreach
-    query_foreach(g_pos_query, frog_step);
-
+    draw_string("FrogSystem - Arrows + Space", 10.0, 10.0);
+    draw_fps(10.0, 32.0);
     return 0;
 }
