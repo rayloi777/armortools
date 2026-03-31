@@ -135,8 +135,8 @@ void sys_2d_draw(void) {
             for (int i = 0; i < it.count; i++) {
                 if (!spr[i].visible || !spr[i].render_object) continue;
                 gpu_texture_t *tex = (gpu_texture_t *)spr[i].render_object;
-                float src_w = spr[i].src_width > 0 ? spr[i].src_width : (float)tex->width;
-                float src_h = spr[i].src_height > 0 ? spr[i].src_height : (float)tex->height;
+                float src_w = spr[i].src_width >= 1.0f ? spr[i].src_width : (float)tex->width;
+                float src_h = spr[i].src_height >= 1.0f ? spr[i].src_height : (float)tex->height;
                 ensure_capacity(count);
                 r2d_item_t *item = &s_items[count++];
                 item->type = R2D_SPRITE;

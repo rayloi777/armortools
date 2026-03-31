@@ -34,6 +34,10 @@ ecs_entity_t ecs_component_comp_2d_circle(void) { return comp_2d_circle_entity; 
 ecs_entity_t ecs_component_comp_2d_line(void) { return comp_2d_line_entity; }
 ecs_entity_t ecs_component_comp_2d_text(void) { return comp_2d_text_entity; }
 
+static void zero_init_ctor(void *ptr, int32_t count, const ecs_type_info_t *ti) {
+    memset(ptr, 0, ti->size * count);
+}
+
 static ecs_entity_t register_component(ecs_world_t *ecs, const char *name, size_t size, size_t alignment) {
     ecs_component_desc_t desc = {0};
     desc.entity = 0;
@@ -41,7 +45,12 @@ static ecs_entity_t register_component(ecs_world_t *ecs, const char *name, size_
     desc.type.size = (ecs_size_t)size;
     desc.type.alignment = (ecs_size_t)alignment;
     uint64_t id = ecs_component_init(ecs, &desc);
-    
+
+    // Register zero-init ctor so component data starts cleared (not garbage)
+    ecs_type_hooks_t hooks = {0};
+    hooks.ctor = zero_init_ctor;
+    ecs_set_hooks_id(ecs, (ecs_entity_t)id, &hooks);
+
     dynamic_component_t *dc = &g_components[g_component_count];
     memset(dc, 0, sizeof(dynamic_component_t));
     strncpy(dc->name, name, sizeof(dc->name) - 1);
@@ -50,7 +59,7 @@ static ecs_entity_t register_component(ecs_world_t *ecs, const char *name, size_
     dc->size = size;
     dc->alignment = alignment;
     g_component_count++;
-    
+
     return id;
 }
 

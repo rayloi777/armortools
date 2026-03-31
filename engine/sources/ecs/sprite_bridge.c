@@ -42,20 +42,18 @@ void sprite_bridge_create_sprite(uint64_t entity) {
     if (!sprite) return;
     // Always reload if texture_path is set (render_object may contain garbage)
     if (sprite->texture_path != NULL) {
-        fprintf(stderr, "Sprite Bridge: loading texture '%s' for entity %llu\n", sprite->texture_path, (unsigned long long)entity);
         gpu_texture_t *tex = data_get_image(sprite->texture_path);
         if (!tex) {
             fprintf(stderr, "Sprite Bridge: failed to load texture '%s'\n", sprite->texture_path);
             return;
         }
         sprite->render_object = (void *)tex;
-        float src_w = sprite->src_width > 0 ? sprite->src_width : (float)tex->width;
-        float src_h = sprite->src_height > 0 ? sprite->src_height : (float)tex->height;
+        // Use >= 1.0f threshold: Flecs doesn't zero-init components,
+        // so src_width/src_height may contain small garbage values
+        float src_w = sprite->src_width >= 1.0f ? sprite->src_width : (float)tex->width;
+        float src_h = sprite->src_height >= 1.0f ? sprite->src_height : (float)tex->height;
         sprite->width = src_w * sprite->scale_x;
         sprite->height = src_h * sprite->scale_y;
-        fprintf(stderr, "Sprite Bridge: loaded texture %dx%d, sprite %dx%d\n", tex->width, tex->height, (int)sprite->width, (int)sprite->height);
-    } else {
-        fprintf(stderr, "Sprite Bridge: entity %llu has no texture_path set\n", (unsigned long long)entity);
     }
 }
 
