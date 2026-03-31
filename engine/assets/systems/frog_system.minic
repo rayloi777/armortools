@@ -109,14 +109,13 @@ int init(void) {
         comp_set_float(g_vel_comp, vel, "vy", 40.0 + fi * 5.0);
 
         void *spr = entity_get(e, g_sprite_comp);
-        comp_set_ptr(g_sprite_comp, spr, "texture_path", "frog_idle.k");
         comp_set_float(g_sprite_comp, spr, "scale_x", 2.0);
         comp_set_float(g_sprite_comp, spr, "scale_y", 2.0);
         comp_set_bool(g_sprite_comp, spr, "flip_x", facing < 0);
         comp_set_int(g_sprite_comp, spr, "layer", 20 + fi);
         comp_set_bool(g_sprite_comp, spr, "visible", 1);
 
-        sprite_create(e);
+        sprite_create(e, "frog_idle.k");
 
         fi = fi + 1;
     }

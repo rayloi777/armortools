@@ -58,7 +58,7 @@ void *entity_get_component_data(struct game_world_t *world, uint64_t entity, uin
     if (!world || !world->world || entity == 0) return NULL;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
     if (!ecs_is_alive(ecs, (ecs_entity_t)entity)) return NULL;
-    return (void *)ecs_get_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id);
+    return (void *)ecs_get_mut_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id);
 }
 
 bool entity_is_valid(struct game_world_t *world, uint64_t entity) {

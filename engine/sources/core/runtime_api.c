@@ -616,6 +616,12 @@ static minic_val_t minic_sprite_draw(minic_val_t *args, int argc) {
 static minic_val_t minic_sprite_create(minic_val_t *args, int argc) {
     if (argc < 1) return minic_val_void();
     uint64_t entity = (uint64_t)(int)minic_val_to_d(args[0]);
+
+    // Optional: set texture_path directly (bypasses comp_set_ptr VM issues)
+    if (argc >= 2 && args[1].type == MINIC_T_PTR && args[1].p != NULL) {
+        sprite_bridge_set_texture(entity, (const char *)args[1].p);
+    }
+
     sprite_bridge_create_sprite(entity);
     return minic_val_void();
 }
