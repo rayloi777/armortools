@@ -237,7 +237,7 @@ static int vc_primary(vc_t *c) {
 				// The VM reads code[pc++] after the instruction.
 				// This is the "inline constant" pattern.
 				vc_emit(c, (uint32_t)ci); // inline constant index
-				c->free_reg = arg_base;   // free arg regs
+				c->free_reg = dest + 1;   // preserve dest, free below it
 				return dest;
 			}
 
@@ -249,7 +249,7 @@ static int vc_primary(vc_t *c) {
 						// args are at consecutive regs from arg_base
 						vc_emit(c, VM_MAKE_ABC(OP_CALL, dest, i, argc));
 						vc_emit(c, (uint32_t)arg_base); // inline: arg_base
-						c->free_reg = arg_base;
+						c->free_reg = dest + 1;
 						return dest;
 					}
 				}
@@ -582,18 +582,17 @@ static void vc_stmt(vc_t *c) {
 		int jmp_cond = vc_emit_jmp(c, VM_MAKE_ABX(OP_JMP_FALSE, cr, 0));
 		vc_free(c, cr);
 
-		// Increment: save position, skip tokens, compile later
-		int incr_lex_pos = c->lex.pos;
+		// Increment: save full lexer state, skip tokens, compile later
+		minic_lexer_t incr_lex = c->lex;
 		{
 			minic_lexer_t tmp = {0};
 			tmp.src           = c->lex.src;
 			tmp.pos           = c->lex.pos;
 			minic_lex_next(&tmp);
-			int incr_end_pos = tmp.pos; // position after increment
 			while (tmp.cur.type != TOK_RPAREN && tmp.cur.type != TOK_EOF)
 				minic_lex_next(&tmp);
-			c->lex.pos = tmp.pos; // skip past increment
-			(void)incr_end_pos; // used below via incr_lex_pos
+			c->lex.pos = tmp.pos; // skip past ')'
+			minic_lex_next(&c->lex); // re-prime lexer so body sees '{'
 		}
 
 		// Body
@@ -604,9 +603,8 @@ static void vc_stmt(vc_t *c) {
 		// Increment: compile now (after body, before loop-back)
 		int incr_pos = c->code_count;
 		{
-			int saved_pos = c->lex.pos;
-			c->lex.pos = incr_lex_pos;
-			minic_lex_next(&c->lex); // prime the lexer
+			minic_lexer_t body_end = c->lex;
+			c->lex = incr_lex; // restore full lexer state at increment start
 			// Compile increment — like vc_stmt but without trailing semicolon
 			if (vc_check(c, TOK_IDENT)) {
 				char iname[64];
@@ -653,7 +651,10 @@ static void vc_stmt(vc_t *c) {
 				int v = vc_expr(c);
 					vc_free(c, v);
 			}
-			c->lex.pos = saved_pos; // restore to after increment
+			// ')' is now current token — skip it, then restore body-end state
+			if (vc_check(c, TOK_RPAREN))
+				vc_advance(c);
+			c->lex = body_end;
 		}
 
 		// Loop back to condition
@@ -672,7 +673,6 @@ static void vc_stmt(vc_t *c) {
 		c->break_count    = saved_break;
 		c->continue_count = saved_continue;
 		vc_scope_restore(c, scope);
-		vc_expect(c, TOK_RPAREN);
 		return;
 	}
 
