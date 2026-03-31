@@ -28,7 +28,8 @@ void sprite_bridge_create_sprite(uint64_t entity) {
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(world);
     if (!ecs) return;
     comp_2d_sprite *sprite = (comp_2d_sprite *)ecs_get_id(ecs, (ecs_entity_t)entity, ecs_component_comp_2d_sprite());
-    if (!sprite || sprite->render_object != NULL) return;
+    if (!sprite) return;
+    // Always reload if texture_path is set (render_object may contain garbage)
     if (sprite->texture_path != NULL) {
         gpu_texture_t *tex = data_get_image(sprite->texture_path);
         if (!tex) {
