@@ -261,14 +261,14 @@ static int vc_primary(vc_t *c) {
 
 		// Array subscript: name[expr]
 		if (vc_check(c, TOK_LBRACKET)) {
-			// Not supported in VM yet — return dummy
 			vc_advance(c);
-			vc_expr(c);
+			int idx_reg = vc_expr(c);
 			vc_expect(c, TOK_RBRACKET);
 			int d = vc_reg(c);
-			// Load variable as global
-			int gi = vm_global_find_or_add(name);
-			vc_emit(c, VM_MAKE_ABX(OP_LOAD_GLOBAL, d, gi));
+			int ai = vm_arr_find_or_add(name);
+			vc_emit(c, VM_MAKE_ABX(OP_LOAD_ARR, d, ai));
+			vc_emit(c, (uint32_t)idx_reg); // inline: index register
+			vc_free(c, idx_reg);
 			return d;
 		}
 
@@ -716,6 +716,22 @@ static void vc_stmt(vc_t *c) {
 		strncpy(name, c->lex.cur.text, 63);
 		name[63] = '\0';
 		vc_advance(c);
+
+		// Array element assignment: name[expr] = expr;
+		if (vc_check(c, TOK_LBRACKET)) {
+			vc_advance(c);
+			int idx_reg = vc_expr(c);
+			vc_expect(c, TOK_RBRACKET);
+			vc_expect(c, TOK_ASSIGN);
+			int val = vc_expr(c);
+			int ai = vm_arr_find_or_add(name);
+			vc_emit(c, VM_MAKE_ABX(OP_STORE_ARR, val, ai));
+			vc_emit(c, (uint32_t)idx_reg); // inline: index register
+			vc_free(c, idx_reg);
+			vc_free(c, val);
+			vc_expect(c, TOK_SEMICOLON);
+			return;
+		}
 
 		// Simple assignment: name = expr;
 		if (vc_check(c, TOK_ASSIGN)) {

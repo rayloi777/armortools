@@ -1,6 +1,4 @@
 // FrogSystem - 2D ECS bouncing frog test
-// VM bug: global float array element assignment crashes (g_arr[0] = 1.0)
-// Workaround: use comp_set_float for individual fields
 
 int g_rect_comp = -1;
 int g_circle_comp = -1;

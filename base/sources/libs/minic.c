@@ -2770,6 +2770,9 @@ typedef enum {
 	OP_MUL_ASSIGN, // R(A) *= R(B)
 	OP_DIV_ASSIGN, // R(A) /= R(B)
 	OP_MOD_ASSIGN, // R(A) %= R(B)
+	// Array element access (uses vm_arrs table + vm_arr_data)
+	OP_LOAD_ARR,  // R(A) = vm_arr_data[vm_arrs[BX].offset + R(B)]; next word = arr_idx
+	OP_STORE_ARR, // vm_arr_data[vm_arrs[BX].offset + R(B)] = R(A); next word = arr_idx
 	OP_COUNT
 } minic_opcode_t;
 
@@ -2817,6 +2820,52 @@ static int         vm_global_find_or_add(const char *name) {
     vm_global_hashes[idx]    = h;
     vm_globals[idx]          = minic_val_int(0);
     return idx;
+}
+
+// --- VM array table ---
+#define VM_MAX_ARRS 64
+typedef struct {
+    char         name[64];
+    uint32_t     name_hash;
+    int          offset; // index into arr_data
+    int          count;
+    minic_type_t elem_type;
+} vm_arr_meta_t;
+static vm_arr_meta_t vm_arrs[VM_MAX_ARRS];
+static int           vm_arr_count = 0;
+static minic_val_t  *vm_arr_data = NULL; // pointer to env->arr_data, set at sync
+
+static int vm_arr_find_or_add(const char *name) {
+    uint32_t h = minic_name_hash(name);
+    for (int i = 0; i < vm_arr_count; i++) {
+        if (vm_arrs[i].name_hash == h && strcmp(vm_arrs[i].name, name) == 0)
+            return i;
+    }
+    if (vm_arr_count >= VM_MAX_ARRS)
+        return 0;
+    int idx = vm_arr_count++;
+    strncpy(vm_arrs[idx].name, name, 63);
+    vm_arrs[idx].name[63]  = '\0';
+    vm_arrs[idx].name_hash = h;
+    vm_arrs[idx].offset    = 0;
+    vm_arrs[idx].count     = 0;
+    vm_arrs[idx].elem_type = MINIC_T_INT;
+    return idx;
+}
+
+// Sync env->arrs into vm_arrs (called before VM execution)
+static void vm_arrs_load(minic_env_t *e) {
+    vm_arr_data = e->arr_data;
+    for (int i = 0; i < vm_arr_count; i++) {
+        uint32_t h = vm_arrs[i].name_hash;
+        // Search in env->arrs (function-local) and global_env->arrs
+        minic_arr_t *a = minic_arr_get(e, vm_arrs[i].name);
+        if (a) {
+            vm_arrs[i].offset    = a->offset;
+            vm_arrs[i].count     = a->count;
+            vm_arrs[i].elem_type = a->elem_type;
+        }
+    }
 }
 
 // Sync context vars -> vm_globals (before VM execution)
@@ -3068,6 +3117,31 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 			}
 			break;
 
+		// Array element access
+		case OP_LOAD_ARR: {
+			// A=dest, BX=arr_table_idx, next word=idx_reg
+			int arr_idx_reg = (int)frame->code[frame->pc++];
+			int elem_idx    = (int)minic_val_to_d(frame->regs[arr_idx_reg]);
+			vm_arr_meta_t *am = &vm_arrs[bx];
+			if (vm_arr_data && elem_idx >= 0 && elem_idx < am->count) {
+				*ra = vm_arr_data[am->offset + elem_idx];
+			}
+			else {
+				*ra = minic_val_int(0);
+			}
+			break;
+		}
+		case OP_STORE_ARR: {
+			// A=val_reg, BX=arr_table_idx, next word=idx_reg
+			int arr_idx_reg = (int)frame->code[frame->pc++];
+			int elem_idx    = (int)minic_val_to_d(frame->regs[arr_idx_reg]);
+			vm_arr_meta_t *am = &vm_arrs[bx];
+			if (vm_arr_data && elem_idx >= 0 && elem_idx < am->count) {
+				vm_arr_data[am->offset + elem_idx] = minic_val_cast(*ra, am->elem_type);
+			}
+			break;
+		}
+
 			// Function calls
 			case OP_CALL_EXT: {
 				// A=dest, BX=(argc<<8)|arg_base, next word=const_idx
@@ -3150,6 +3224,7 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 
 static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc) {
 	vm_globals_load(&ctx->e);
+	vm_arrs_load(&ctx->e);
 	minic_val_t r = minic_vm_exec_inner(ctx, proto, args, argc);
 	vm_globals_store(&ctx->e);
 	return r;
