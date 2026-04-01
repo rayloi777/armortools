@@ -1220,7 +1220,6 @@ void runtime_api_register(void) {
     minic_register("query_iter_entity", "i(i,i)", (minic_ext_fn_raw_t)query_iter_entity);
     minic_register_native("query_iter_entity_id", minic_query_iter_entity_native);
     minic_register_native("query_iter_comp_ptr", minic_query_iter_comp_ptr_native);
-    minic_register_native("query_iter_comp_ptr", minic_query_iter_comp_ptr_native);
     minic_register_native("query_foreach", minic_query_foreach_native);
     minic_register_native("query_foreach_batch", minic_query_foreach_batch_native);
     

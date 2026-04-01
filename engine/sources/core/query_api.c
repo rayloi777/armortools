@@ -447,7 +447,10 @@ void *query_iter_comp_ptr(int query_id, int entity_index, int comp_index) {
     if (!q->cached_comp_data[comp_index] || q->cached_comp_sizes[comp_index] == 0) return NULL;
 
     char *base = (char *)q->cached_comp_data[comp_index];
-    size_t stride = q->cached_comp_sizes[comp_index];
+    size_t size = q->cached_comp_sizes[comp_index];
+    // Pad stride to 8-byte alignment (Flecs aligns component storage)
+    size_t stride = (size + 7) & ~(size_t)7;
+    if (stride == 0) stride = size;
     return base + entity_index * stride;
 }
 

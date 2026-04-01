@@ -278,6 +278,37 @@ static int vc_primary(vc_t *c) {
 			// Local: just return the slot (no instruction needed, it's already there)
 			return slot;
 		}
+		// Function reference: pass user function as pointer value
+		if (c->env) {
+			for (int i = 0; i < c->env->func_count; i++) {
+				if (strcmp(c->env->funcs[i].name, name) == 0) {
+					minic_val_t fv;
+					fv.type       = MINIC_T_PTR;
+					fv.deref_type = MINIC_T_PTR;
+					fv.p          = &c->env->funcs[i];
+					int ci = vc_const(c, fv);
+					int d  = vc_reg(c);
+					vc_emit(c, VM_MAKE_ABX(OP_CONSTANT, d, ci));
+					return d;
+				}
+			}
+		}
+		// Enum constant
+		{
+			int ec = minic_enum_const_get(name);
+			if (ec >= 0) {
+				int d = vc_reg(c);
+				if (ec == 0)
+					vc_emit(c, VM_MAKE_ABC(OP_CONST_ZERO, d, 0, 0));
+				else if (ec == 1)
+					vc_emit(c, VM_MAKE_ABC(OP_CONST_ONE, d, 0, 0));
+				else if (ec >= -32768 && ec <= 32767)
+					vc_emit(c, VM_MAKE_ABX(OP_CONST_INT, d, ec));
+				else
+					vc_emit(c, VM_MAKE_ABX(OP_CONSTANT, d, vc_const(c, minic_val_int(ec))));
+				return d;
+			}
+		}
 		// Global
 		int gi = vm_global_find_or_add(name);
 		int d  = vc_reg(c);
