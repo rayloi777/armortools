@@ -32,7 +32,7 @@ static ecs_entity_t phase_to_flecs(system_phase_t phase) {
         case SYSTEM_PHASE_FRAME: return EcsOnValidate;
         case SYSTEM_PHASE_POST_FRAME: return EcsPostFrame;
         case SYSTEM_PHASE_INIT: return EcsOnStart;
-        case SYSTEM_PHASE_SHUTDOWN: return EcsPreStore;
+        case SYSTEM_PHASE_SHUTDOWN: return EcsPostFrame;
         default: return EcsOnUpdate;
     }
 }
@@ -224,7 +224,11 @@ static minic_val_t minic_system_create_native(minic_val_t *args, int argc) {
     
     uint64_t comp_ids[16] = {0};
     for (int i = 0; i < comp_count && i < 16; i++) {
-        comp_ids[i] = (uint64_t)(int)minic_val_to_d(args[3 + i]);
+        if (args[3 + i].type == MINIC_T_PTR) {
+            comp_ids[i] = (uint64_t)(uintptr_t)args[3 + i].p;
+        } else {
+            comp_ids[i] = (uint64_t)minic_val_to_d(args[3 + i]);
+        }
     }
     
     uint64_t result = system_create_with_components(g_system_world, name, phase, comp_ids, comp_count, NULL);

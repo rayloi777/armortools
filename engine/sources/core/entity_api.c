@@ -58,6 +58,8 @@ void *entity_get_component_data(struct game_world_t *world, uint64_t entity, uin
     if (!world || !world->world || entity == 0) return NULL;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
     if (!ecs_is_alive(ecs, (ecs_entity_t)entity)) return NULL;
+    /* Uses ecs_get_mut_id because Minic scripts read AND write through this pointer
+       via comp_set_float/comp_get_float. The const cast is intentional. */
     return (void *)ecs_get_mut_id(ecs, (ecs_entity_t)entity, (ecs_id_t)component_id);
 }
 

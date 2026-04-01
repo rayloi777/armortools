@@ -247,7 +247,7 @@ static minic_val_t minic_query_foreach_native(minic_val_t *args, int argc) {
             uint64_t entity = query_iter_entity(query_id, i);
             void *comp_data = query_iter_comp_ptr(query_id, i, 0);
             minic_val_t cb_args[2];
-            cb_args[0] = minic_val_int((int)entity);
+            cb_args[0] = minic_val_float((double)entity);
             cb_args[1] = minic_val_ptr(comp_data);
             minic_call_fn(callback, cb_args, 2);
             total++;
@@ -558,6 +558,15 @@ static minic_val_t minic_entity_add_native(minic_val_t *args, int argc) {
     return minic_val_void();
 }
 static minic_val_t minic_entity_remove_native(minic_val_t *args, int argc) {
+    if (argc < 2 || !g_runtime_world) return minic_val_void();
+    uint64_t entity = extract_id(&args[0]);
+    uint64_t comp = extract_id(&args[1]);
+    if (entity == 0 || comp == 0) return minic_val_void();
+    entity_remove_component(g_runtime_world, entity, comp);
+    return minic_val_void();
+}
+
+static minic_val_t minic_entity_remove_component_native(minic_val_t *args, int argc) {
     if (argc < 2 || !g_runtime_world) return minic_val_void();
     uint64_t entity = extract_id(&args[0]);
     uint64_t comp = extract_id(&args[1]);
@@ -1156,8 +1165,7 @@ void runtime_api_register(void) {
     minic_register_native("entity_get", minic_entity_get_native);
     minic_register_native("entity_set_data", minic_entity_set_data_native);
 
-    minic_register("entity_remove_component", "v(i,i)", (minic_ext_fn_raw_t)minic_entity_remove);
-    
+    minic_register_native("entity_remove_component", minic_entity_remove_component_native);
     minic_register_native("comp_set_int", minic_comp_set_int_native);
     minic_register_native("comp_set_float", minic_comp_set_float_native);
     minic_register_native("comp_add_float", minic_comp_add_float_native);
@@ -1211,6 +1219,7 @@ void runtime_api_register(void) {
     minic_register("query_iter_count", "i(i)", (minic_ext_fn_raw_t)query_iter_count);
     minic_register("query_iter_entity", "i(i,i)", (minic_ext_fn_raw_t)query_iter_entity);
     minic_register_native("query_iter_entity_id", minic_query_iter_entity_native);
+    minic_register_native("query_iter_comp_ptr", minic_query_iter_comp_ptr_native);
     minic_register_native("query_iter_comp_ptr", minic_query_iter_comp_ptr_native);
     minic_register_native("query_foreach", minic_query_foreach_native);
     minic_register_native("query_foreach_batch", minic_query_foreach_batch_native);
