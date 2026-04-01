@@ -46,6 +46,8 @@ int init(void) {
     comp_set_float(g_pos_comp, pos, "x", 640.0);
     comp_set_float(g_pos_comp, pos, "y", GROUND_Y);
     void *spr = entity_get(g_frog, g_sprite_comp);
+    comp_set_float(g_sprite_comp, spr, "pivot_x", 0.5);
+    comp_set_float(g_sprite_comp, spr, "pivot_y", 1.0);
     comp_set_float(g_sprite_comp, spr, "scale_x", 2.5);
     comp_set_float(g_sprite_comp, spr, "scale_y", 2.5);
     comp_set_bool(g_sprite_comp, spr, "visible", 1);
