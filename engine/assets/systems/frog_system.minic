@@ -1,40 +1,44 @@
-// FrogSystem - AI frog auto-bounces + player frog (yellow, keyboard controlled)
+// FrogSystem - 15 AI frogs + 1 player frog
 
 float GRAVITY = 2200.0;
 float GROUND_Y = 560.0;
 float JUMP_VEL = 600.0;
-float HOP_INTERVAL = 0.8;
-float MOVE_SPEED = 200.0;
+float AI_MOVE_SPEED = 200.0;
+float WALL_LEFT = 20.0;
+float WALL_RIGHT = 1260.0;
+int AI_FROG_COUNT = 15;
 
+// Component IDs
 float g_pos_comp = -1.0;
 float g_sprite_comp = -1.0;
-float g_rect_comp = -1.0;
 float g_line_comp = -1.0;
-int g_frame = 0;
+float g_vel_comp = -1.0;
 
-// AI frog state
-float g_frog = -1.0;
-float g_frog_vx = 0.0;
-float g_frog_vy = 0.0;
-int g_frog_ground = 1;
-float g_frog_dir = 1.0;
-float g_frog_hop_timer = 0.0;
+// Query
+int g_vel_query = -1;
 
-// Player frog state (rect uses its own x,y — no comp_2d_position needed)
+// Cached delta time (set once in step, read in callback)
+float g_dt = 0.016;
+
+// Player frog state (globals — player has no FrogVelocity component)
 float g_player = -1.0;
-float g_player_x = 300.0;
-float g_player_y = 560.0;
-float g_player_vx = 0.0;
-float g_player_vy = 0.0;
-int g_player_ground = 1;
-int g_player_jump_pressed = 0;
+float g_pvx = 0.0;
+float g_pvy = 0.0;
+int g_pground = 1;
+float g_pdir = 1.0;
+int g_pjump_press = 0;
 
 int init(void) {
-    printf("FrogSystem: Init (1 AI frog + 1 player frog)\n");
+    printf("FrogSystem: Init (15 AI + 1 player)\n");
+
     g_pos_comp = component_lookup("comp_2d_position");
     g_sprite_comp = component_lookup("comp_2d_sprite");
-    g_rect_comp = component_lookup("comp_2d_rect");
     g_line_comp = component_lookup("comp_2d_line");
+
+    // Custom velocity component for AI frogs
+    g_vel_comp = component_register("FrogVelocity", 8);
+    component_add_field(g_vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(g_vel_comp, "vy", TYPE_FLOAT, 4);
 
     // Ground line
     float ge = entity_create();
@@ -49,118 +53,146 @@ int init(void) {
     comp_set_int(g_line_comp, line, "layer", 5);
     comp_set_bool(g_line_comp, line, "visible", 1);
 
-    // AI frog (green sprite)
-    g_frog = entity_create();
-    entity_add(g_frog, g_pos_comp);
-    entity_add(g_frog, g_sprite_comp);
-    void *pos = entity_get(g_frog, g_pos_comp);
-    comp_set_float(g_pos_comp, pos, "x", 640.0);
-    comp_set_float(g_pos_comp, pos, "y", GROUND_Y);
-    void *spr = entity_get(g_frog, g_sprite_comp);
-    comp_set_float(g_sprite_comp, spr, "pivot_x", 0.5);
-    comp_set_float(g_sprite_comp, spr, "pivot_y", 1.0);
-    comp_set_float(g_sprite_comp, spr, "scale_x", 2.5);
-    comp_set_float(g_sprite_comp, spr, "scale_y", 2.5);
-    comp_set_bool(g_sprite_comp, spr, "visible", 1);
-    comp_set_int(g_sprite_comp, spr, "layer", 30);
-    sprite_create(g_frog, "frog_idle.k");
+    // AI frogs
+    int i = 0;
+    while (i < AI_FROG_COUNT) {
+        float e = entity_create();
+        entity_add(e, g_pos_comp);
+        entity_add(e, g_sprite_comp);
+        entity_add(e, g_vel_comp);
 
-    // Player frog (yellow rect)
+        void *pos = entity_get(e, g_pos_comp);
+        comp_set_float(g_pos_comp, pos, "x", 100.0 + i * 80.0);
+        comp_set_float(g_pos_comp, pos, "y", GROUND_Y);
+
+        float dir = 1.0;
+        if (i % 2 == 1) { dir = 0.0 - 1.0; }
+        void *vel = entity_get(e, g_vel_comp);
+        comp_set_float(g_vel_comp, vel, "vx", dir * AI_MOVE_SPEED);
+        comp_set_float(g_vel_comp, vel, "vy", 0.0);
+
+        void *spr = entity_get(e, g_sprite_comp);
+        comp_set_float(g_sprite_comp, spr, "pivot_x", 0.5);
+        comp_set_float(g_sprite_comp, spr, "pivot_y", 1.0);
+        comp_set_float(g_sprite_comp, spr, "scale_x", 2.5);
+        comp_set_float(g_sprite_comp, spr, "scale_y", 2.5);
+        comp_set_bool(g_sprite_comp, spr, "visible", 1);
+        comp_set_int(g_sprite_comp, spr, "layer", 30);
+        sprite_create(e, "frog_idle.k");
+
+        i = i + 1;
+    }
+
+    // Player frog (no FrogVelocity — uses globals instead)
     g_player = entity_create();
-    entity_add(g_player, g_rect_comp);
-    void *rect = entity_get(g_player, g_rect_comp);
-    comp_set_float(g_rect_comp, rect, "x", g_player_x);
-    comp_set_float(g_rect_comp, rect, "y", g_player_y);
-    comp_set_float(g_rect_comp, rect, "width", 40.0);
-    comp_set_float(g_rect_comp, rect, "height", 40.0);
-    comp_set_int(g_rect_comp, rect, "color", 0xffffff00);
-    comp_set_bool(g_rect_comp, rect, "filled", 1);
-    comp_set_int(g_rect_comp, rect, "layer", 31);
-    comp_set_bool(g_rect_comp, rect, "visible", 1);
+    entity_add(g_player, g_pos_comp);
+    entity_add(g_player, g_sprite_comp);
 
-    printf("FrogSystem: ready (1 AI frog + 1 player)\n");
+    void *ppos = entity_get(g_player, g_pos_comp);
+    comp_set_float(g_pos_comp, ppos, "x", 640.0);
+    comp_set_float(g_pos_comp, ppos, "y", GROUND_Y);
+
+    void *pspr = entity_get(g_player, g_sprite_comp);
+    comp_set_float(g_sprite_comp, pspr, "pivot_x", 0.5);
+    comp_set_float(g_sprite_comp, pspr, "pivot_y", 1.0);
+    comp_set_float(g_sprite_comp, pspr, "scale_x", 3.0);
+    comp_set_float(g_sprite_comp, pspr, "scale_y", 3.0);
+    comp_set_bool(g_sprite_comp, pspr, "visible", 1);
+    comp_set_int(g_sprite_comp, pspr, "layer", 35);
+    sprite_create(g_player, "frog_idle.k");
+
+    g_vel_query = query_create("FrogVelocity");
+    printf("FrogSystem: ready (15 AI + 1 player)\n");
+    return 0;
+}
+
+// AI frog callback — called by query_foreach for each AI frog
+int ai_frog_step(int entity, void *vel) {
+    float dt = g_dt;
+
+    // Read velocity
+    float vx = comp_get_float(g_vel_comp, vel, "vx");
+    float vy = comp_get_float(g_vel_comp, vel, "vy");
+
+    // Gravity
+    vy = vy + GRAVITY * dt;
+
+    // Get position
+    void *pos = entity_get(entity, g_pos_comp);
+    if (!pos) { return 0; }
+
+    float px = comp_get_float(g_pos_comp, pos, "x");
+    float py = comp_get_float(g_pos_comp, pos, "y");
+
+    // Apply velocity
+    px = px + vx * dt;
+    py = py + vy * dt;
+
+    // Ground collision — bounce with random height
+    if (py >= GROUND_Y) {
+        py = GROUND_Y;
+        vy = 0.0 - JUMP_VEL * (0.5 + 0.5 * rand_float());
+        vx = 0.0 - vx;
+    }
+
+    // Wall bounds
+    if (px < WALL_LEFT) { px = WALL_LEFT; vx = 0.0 - vx; }
+    if (px > WALL_RIGHT) { px = WALL_RIGHT; vx = 0.0 - vx; }
+
+    // Write back
+    comp_set_float(g_pos_comp, pos, "x", px);
+    comp_set_float(g_pos_comp, pos, "y", py);
+    comp_set_float(g_vel_comp, vel, "vx", vx);
+    comp_set_float(g_vel_comp, vel, "vy", vy);
+
     return 0;
 }
 
 int step(void) {
     float dt = sys_delta_time();
-    g_frame = g_frame + 1;
-    if (dt <= 0.0) dt = 0.016;
-    if (dt > 0.05) dt = 0.05;
+    if (dt <= 0.0) { dt = 0.016; }
+    if (dt > 0.05) { dt = 0.05; }
+    g_dt = dt;
 
-    // --- AI frog: auto hop left/right ---
-    g_frog_hop_timer = g_frog_hop_timer - dt;
-    g_frog_vx = g_frog_dir * MOVE_SPEED;
+    // AI frogs — batch update via query_foreach
+    query_foreach(g_vel_query, ai_frog_step);
 
-    if (g_frog_hop_timer <= 0.0) {
-        if (g_frog_ground) {
-            g_frog_vy = 0.0 - JUMP_VEL;
-            g_frog_hop_timer = HOP_INTERVAL;
-        }
-    }
-
-    g_frog_vy = g_frog_vy + GRAVITY * dt;
-
-    void *fp = entity_get(g_frog, g_pos_comp);
-    if (fp) {
-        float px = comp_get_float(g_pos_comp, fp, "x");
-        float py = comp_get_float(g_pos_comp, fp, "y");
-        px = px + g_frog_vx * dt;
-        py = py + g_frog_vy * dt;
-
-        if (py >= GROUND_Y) {
-            py = GROUND_Y;
-            g_frog_vy = 0.0;
-            g_frog_ground = 1;
-            g_frog_dir = 0.0 - g_frog_dir;
-        } else {
-            g_frog_ground = 0;
-        }
-
-        if (px < 20.0) { px = 20.0; g_frog_dir = 1.0; }
-        if (px > 1260.0) { px = 1260.0; g_frog_dir = 0.0 - 1.0; }
-
-        comp_set_float(g_pos_comp, fp, "x", px);
-        comp_set_float(g_pos_comp, fp, "y", py);
-    }
-
-    // --- Player frog: keyboard control ---
-    g_player_vx = 0.0;
-    if (keyboard_down("left")) g_player_vx = 0.0 - MOVE_SPEED;
-    if (keyboard_down("right")) g_player_vx = MOVE_SPEED;
+    // Player frog — keyboard control
+    if (keyboard_down("left")) { g_pdir = 0.0 - 1.0; }
+    if (keyboard_down("right")) { g_pdir = 1.0; }
+    g_pvx = g_pdir * AI_MOVE_SPEED;
 
     int space = keyboard_down("space");
     if (space) {
-        if (g_player_ground) {
-            if (g_player_jump_pressed == 0) {
-                g_player_vy = 0.0 - JUMP_VEL;
-            }
+        if (g_pground && g_pjump_press == 0) {
+            g_pvy = 0.0 - JUMP_VEL;
+            g_pground = 0;
         }
     }
-    g_player_jump_pressed = space;
+    g_pjump_press = space;
 
-    g_player_vy = g_player_vy + GRAVITY * dt;
+    g_pvy = g_pvy + GRAVITY * dt;
 
-    g_player_x = g_player_x + g_player_vx * dt;
-    g_player_y = g_player_y + g_player_vy * dt;
+    void *p = entity_get(g_player, g_pos_comp);
+    if (p) {
+        float px = comp_get_float(g_pos_comp, p, "x");
+        float py = comp_get_float(g_pos_comp, p, "y");
+        px = px + g_pvx * dt;
+        py = py + g_pvy * dt;
 
-    if (g_player_y >= GROUND_Y) {
-        g_player_y = GROUND_Y;
-        g_player_vy = 0.0;
-        g_player_ground = 1;
-    } else {
-        g_player_ground = 0;
+        if (py >= GROUND_Y) {
+            py = GROUND_Y;
+            g_pvy = 0.0;
+            g_pground = 1;
+        }
+
+        if (px < WALL_LEFT) { px = WALL_LEFT; g_pdir = 1.0; }
+        if (px > WALL_RIGHT) { px = WALL_RIGHT; g_pdir = 0.0 - 1.0; }
+
+        comp_set_float(g_pos_comp, p, "x", px);
+        comp_set_float(g_pos_comp, p, "y", py);
+        camera_follow(px, py);
     }
-
-    if (g_player_x < 20.0) g_player_x = 20.0;
-    if (g_player_x > 1260.0) g_player_x = 1260.0;
-
-    void *pr = entity_get(g_player, g_rect_comp);
-    if (pr) {
-        comp_set_float(g_rect_comp, pr, "x", g_player_x);
-        comp_set_float(g_rect_comp, pr, "y", g_player_y);
-    }
-    camera_follow(g_player_x, g_player_y);
 
     return 0;
 }
@@ -168,7 +200,7 @@ int step(void) {
 int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("AI frog (green) auto-bounce | Player (yellow) Arrows+Space", 10.0, 10.0);
+    draw_string("Arrows+Space = Player | AI frogs bounce", 10.0, 10.0);
     draw_fps(10.0, 32.0);
     return 0;
 }
