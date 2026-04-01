@@ -659,11 +659,9 @@ char *keyboard_key_code(i32 key) {
 	if (key == KEY_CODE_CONTROL) {
 		return "control";
 	}
-#ifdef IRON_MACOS
 	if (key == KEY_CODE_META) {
-		return "control";
+		return "meta";
 	}
-#endif
 	if (key == KEY_CODE_ALT) {
 		return "alt";
 	}

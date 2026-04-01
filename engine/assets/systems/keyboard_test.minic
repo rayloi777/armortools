@@ -1,0 +1,173 @@
+// KeyboardTest — displays which keys are currently pressed
+// Tests virtual key code mapping (layout-independent) on macOS
+
+int init(void) {
+    printf("KeyboardTest: Init\n");
+    return 0;
+}
+
+int step(void) {
+    return 0;
+}
+
+int draw(void) {
+    draw_set_font("font.ttf", 18);
+    draw_set_color(0xffffffff);
+
+    float y = 10.0;
+    draw_string("Keyboard Test — press any key", 10.0, y);
+    y = y + 28.0;
+
+    // Row 1: QWERTYUIOP
+    float x = 10.0;
+    if (keyboard_down("q")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("Q", x, y); x = x + 40.0;
+    if (keyboard_down("w")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("W", x, y); x = x + 40.0;
+    if (keyboard_down("e")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("E", x, y); x = x + 40.0;
+    if (keyboard_down("r")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("R", x, y); x = x + 40.0;
+    if (keyboard_down("t")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("T", x, y); x = x + 40.0;
+    if (keyboard_down("y")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("Y", x, y); x = x + 40.0;
+    if (keyboard_down("u")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("U", x, y); x = x + 40.0;
+    if (keyboard_down("i")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("I", x, y); x = x + 40.0;
+    if (keyboard_down("o")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("O", x, y); x = x + 40.0;
+    if (keyboard_down("p")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("P", x, y);
+
+    // Row 2: ASDFGHJKL
+    y = y + 28.0; x = 20.0;
+    if (keyboard_down("a")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("A", x, y); x = x + 40.0;
+    if (keyboard_down("s")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("S", x, y); x = x + 40.0;
+    if (keyboard_down("d")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("D", x, y); x = x + 40.0;
+    if (keyboard_down("f")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("F", x, y); x = x + 40.0;
+    if (keyboard_down("g")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("G", x, y); x = x + 40.0;
+    if (keyboard_down("h")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("H", x, y); x = x + 40.0;
+    if (keyboard_down("j")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("J", x, y); x = x + 40.0;
+    if (keyboard_down("k")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("K", x, y); x = x + 40.0;
+    if (keyboard_down("l")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("L", x, y);
+
+    // Row 3: ZXCVBNM
+    y = y + 28.0; x = 40.0;
+    if (keyboard_down("z")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("Z", x, y); x = x + 40.0;
+    if (keyboard_down("x")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("X", x, y); x = x + 40.0;
+    if (keyboard_down("c")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("C", x, y); x = x + 40.0;
+    if (keyboard_down("v")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("V", x, y); x = x + 40.0;
+    if (keyboard_down("b")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("B", x, y); x = x + 40.0;
+    if (keyboard_down("n")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("N", x, y); x = x + 40.0;
+    if (keyboard_down("m")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("M", x, y);
+
+    // Number row: 1234567890
+    y = y + 36.0; x = 10.0;
+    if (keyboard_down("1")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("1", x, y); x = x + 40.0;
+    if (keyboard_down("2")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("2", x, y); x = x + 40.0;
+    if (keyboard_down("3")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("3", x, y); x = x + 40.0;
+    if (keyboard_down("4")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("4", x, y); x = x + 40.0;
+    if (keyboard_down("5")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("5", x, y); x = x + 40.0;
+    if (keyboard_down("6")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("6", x, y); x = x + 40.0;
+    if (keyboard_down("7")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("7", x, y); x = x + 40.0;
+    if (keyboard_down("8")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("8", x, y); x = x + 40.0;
+    if (keyboard_down("9")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("9", x, y); x = x + 40.0;
+    if (keyboard_down("0")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff666666); }
+    draw_string("0", x, y);
+
+    // Special keys
+    y = y + 36.0; x = 10.0;
+    draw_set_color(0xffaaaaaa);
+    draw_string("Space  Enter  Bkspc  Tab  Esc", x, y);
+
+    y = y + 22.0;
+    if (keyboard_down("space"))    { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("SPC", x, y); x = x + 70.0;
+    if (keyboard_down("enter"))    { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("RET", x, y); x = x + 70.0;
+    if (keyboard_down("backspace")){ draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("BKSP", x, y); x = x + 70.0;
+    if (keyboard_down("tab"))      { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("TAB", x, y); x = x + 70.0;
+    if (keyboard_down("escape"))   { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("ESC", x, y);
+
+    // Arrows
+    x = x + 80.0;
+    if (keyboard_down("up"))    { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("UP", x, y - 22.0);
+    if (keyboard_down("left"))  { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("LFT", x, y);
+    if (keyboard_down("down"))  { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("DN", x + 50.0, y);
+    if (keyboard_down("right")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("RGT", x + 100.0, y);
+
+    // Modifiers
+    y = y + 36.0; x = 10.0;
+    draw_set_color(0xffaaaaaa);
+    draw_string("Modifiers:", x, y);
+    y = y + 22.0;
+    if (keyboard_down("shift"))   { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("SHIFT", x, y); x = x + 90.0;
+    if (keyboard_down("control")) { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("CTRL", x, y); x = x + 90.0;
+    if (keyboard_down("alt"))     { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("ALT", x, y); x = x + 90.0;
+    if (keyboard_down("meta"))    { draw_set_color(0xff00ff00); } else { draw_set_color(0xff444444); }
+    draw_string("META/CMD", x, y);
+
+    // Just-pressed indicator
+    y = y + 36.0; x = 10.0;
+    draw_set_color(0xffffff00);
+    int any_started = 0;
+    if (keyboard_started("q")) { draw_string("Q* ", x, y); x = x + 40.0; any_started = 1; }
+    if (keyboard_started("w")) { draw_string("W* ", x, y); x = x + 40.0; any_started = 1; }
+    if (keyboard_started("e")) { draw_string("E* ", x, y); x = x + 40.0; any_started = 1; }
+    if (keyboard_started("r")) { draw_string("R* ", x, y); x = x + 40.0; any_started = 1; }
+    if (keyboard_started("a")) { draw_string("A* ", x, y); x = x + 40.0; any_started = 1; }
+    if (keyboard_started("s")) { draw_string("S* ", x, y); x = x + 40.0; any_started = 1; }
+    if (keyboard_started("d")) { draw_string("D* ", x, y); x = x + 40.0; any_started = 1; }
+    if (keyboard_started("f")) { draw_string("F* ", x, y); x = x + 40.0; any_started = 1; }
+    if (keyboard_started("space")) { draw_string("SPC* ", x, y); x = x + 60.0; any_started = 1; }
+    if (keyboard_started("enter")) { draw_string("RET* ", x, y); x = x + 60.0; any_started = 1; }
+    if (keyboard_started("left")) { draw_string("LEFT* ", x, y); x = x + 60.0; any_started = 1; }
+    if (keyboard_started("right")) { draw_string("RIGHT* ", x, y); x = x + 60.0; any_started = 1; }
+    if (keyboard_started("up")) { draw_string("UP* ", x, y); x = x + 60.0; any_started = 1; }
+    if (keyboard_started("down")) { draw_string("DOWN* ", x, y); x = x + 60.0; any_started = 1; }
+    if (any_started == 0) {
+        draw_set_color(0xff666666);
+        draw_string("(pressed this frame shown here)", 10.0, y);
+    }
+
+    draw_set_color(0xffffffff);
+    draw_fps(10.0, 580.0);
+    return 0;
+}

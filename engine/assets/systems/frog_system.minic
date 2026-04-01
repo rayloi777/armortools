@@ -1,4 +1,4 @@
-// FrogSystem - 1 frog bounces left and right
+// FrogSystem - AI frog auto-bounces + player frog (yellow, keyboard controlled)
 
 float GRAVITY = 2200.0;
 float GROUND_Y = 560.0;
@@ -8,21 +8,32 @@ float MOVE_SPEED = 200.0;
 
 float g_pos_comp = -1.0;
 float g_sprite_comp = -1.0;
+float g_rect_comp = -1.0;
 float g_line_comp = -1.0;
 int g_frame = 0;
 
+// AI frog state
 float g_frog = -1.0;
-float g_vx = 0.0;
-float g_vy = 0.0;
-int g_ground = 1;
-float g_dir = 1.0;
-float g_hop_timer = 0.0;
-int g_jump_pressed = 0;
+float g_frog_vx = 0.0;
+float g_frog_vy = 0.0;
+int g_frog_ground = 1;
+float g_frog_dir = 1.0;
+float g_frog_hop_timer = 0.0;
+
+// Player frog state (rect uses its own x,y — no comp_2d_position needed)
+float g_player = -1.0;
+float g_player_x = 300.0;
+float g_player_y = 560.0;
+float g_player_vx = 0.0;
+float g_player_vy = 0.0;
+int g_player_ground = 1;
+int g_player_jump_pressed = 0;
 
 int init(void) {
-    printf("FrogSystem: Init (1 frog)\n");
+    printf("FrogSystem: Init (1 AI frog + 1 player frog)\n");
     g_pos_comp = component_lookup("comp_2d_position");
     g_sprite_comp = component_lookup("comp_2d_sprite");
+    g_rect_comp = component_lookup("comp_2d_rect");
     g_line_comp = component_lookup("comp_2d_line");
 
     // Ground line
@@ -38,7 +49,7 @@ int init(void) {
     comp_set_int(g_line_comp, line, "layer", 5);
     comp_set_bool(g_line_comp, line, "visible", 1);
 
-    // Frog
+    // AI frog (green sprite)
     g_frog = entity_create();
     entity_add(g_frog, g_pos_comp);
     entity_add(g_frog, g_sprite_comp);
@@ -54,7 +65,20 @@ int init(void) {
     comp_set_int(g_sprite_comp, spr, "layer", 30);
     sprite_create(g_frog, "frog_idle.k");
 
-    printf("FrogSystem: ready (1 frog, auto bounce L/R)\n");
+    // Player frog (yellow rect)
+    g_player = entity_create();
+    entity_add(g_player, g_rect_comp);
+    void *rect = entity_get(g_player, g_rect_comp);
+    comp_set_float(g_rect_comp, rect, "x", g_player_x);
+    comp_set_float(g_rect_comp, rect, "y", g_player_y);
+    comp_set_float(g_rect_comp, rect, "width", 40.0);
+    comp_set_float(g_rect_comp, rect, "height", 40.0);
+    comp_set_int(g_rect_comp, rect, "color", 0xffffff00);
+    comp_set_bool(g_rect_comp, rect, "filled", 1);
+    comp_set_int(g_rect_comp, rect, "layer", 31);
+    comp_set_bool(g_rect_comp, rect, "visible", 1);
+
+    printf("FrogSystem: ready (1 AI frog + 1 player)\n");
     return 0;
 }
 
@@ -64,65 +88,79 @@ int step(void) {
     if (dt <= 0.0) dt = 0.016;
     if (dt > 0.05) dt = 0.05;
 
-    // Auto hop timer
-    g_hop_timer = g_hop_timer - dt;
+    // --- AI frog: auto hop left/right ---
+    g_frog_hop_timer = g_frog_hop_timer - dt;
+    g_frog_vx = g_frog_dir * MOVE_SPEED;
 
-    // Horizontal velocity from direction
-    g_vx = g_dir * MOVE_SPEED;
-
-    // Auto-jump when grounded and timer expired
-    if (g_hop_timer <= 0.0) {
-        if (g_ground) {
-            g_vy = 0.0 - JUMP_VEL;
-            g_hop_timer = HOP_INTERVAL;
+    if (g_frog_hop_timer <= 0.0) {
+        if (g_frog_ground) {
+            g_frog_vy = 0.0 - JUMP_VEL;
+            g_frog_hop_timer = HOP_INTERVAL;
         }
     }
 
-    // Space for manual jump
+    g_frog_vy = g_frog_vy + GRAVITY * dt;
+
+    void *fp = entity_get(g_frog, g_pos_comp);
+    if (fp) {
+        float px = comp_get_float(g_pos_comp, fp, "x");
+        float py = comp_get_float(g_pos_comp, fp, "y");
+        px = px + g_frog_vx * dt;
+        py = py + g_frog_vy * dt;
+
+        if (py >= GROUND_Y) {
+            py = GROUND_Y;
+            g_frog_vy = 0.0;
+            g_frog_ground = 1;
+            g_frog_dir = 0.0 - g_frog_dir;
+        } else {
+            g_frog_ground = 0;
+        }
+
+        if (px < 20.0) { px = 20.0; g_frog_dir = 1.0; }
+        if (px > 1260.0) { px = 1260.0; g_frog_dir = 0.0 - 1.0; }
+
+        comp_set_float(g_pos_comp, fp, "x", px);
+        comp_set_float(g_pos_comp, fp, "y", py);
+    }
+
+    // --- Player frog: keyboard control ---
+    g_player_vx = 0.0;
+    if (keyboard_down("left")) g_player_vx = 0.0 - MOVE_SPEED;
+    if (keyboard_down("right")) g_player_vx = MOVE_SPEED;
+
     int space = keyboard_down("space");
     if (space) {
-        if (g_ground) {
-            if (g_jump_pressed == 0) {
-                g_vy = 0.0 - JUMP_VEL;
-                g_hop_timer = HOP_INTERVAL;
+        if (g_player_ground) {
+            if (g_player_jump_pressed == 0) {
+                g_player_vy = 0.0 - JUMP_VEL;
             }
         }
     }
-    g_jump_pressed = space;
+    g_player_jump_pressed = space;
 
-    // Arrow keys override direction
-    if (keyboard_down("left")) g_dir = 0.0 - 1.0;
-    if (keyboard_down("right")) g_dir = 1.0;
+    g_player_vy = g_player_vy + GRAVITY * dt;
 
-    // Apply gravity
-    g_vy = g_vy + GRAVITY * dt;
+    g_player_x = g_player_x + g_player_vx * dt;
+    g_player_y = g_player_y + g_player_vy * dt;
 
-    // Apply velocity to position
-    void *p = entity_get(g_frog, g_pos_comp);
-    if (p) {
-        float px = comp_get_float(g_pos_comp, p, "x");
-        float py = comp_get_float(g_pos_comp, p, "y");
-        px = px + g_vx * dt;
-        py = py + g_vy * dt;
-
-        // Ground collision — bounce direction on land
-        if (py >= GROUND_Y) {
-            py = GROUND_Y;
-            g_vy = 0.0;
-            g_ground = 1;
-            g_dir = 0.0 - g_dir;
-        } else {
-            g_ground = 0;
-        }
-
-        // Wall bounce
-        if (px < 20.0) { px = 20.0; g_dir = 1.0; }
-        if (px > 1260.0) { px = 1260.0; g_dir = 0.0 - 1.0; }
-
-        comp_set_float(g_pos_comp, p, "x", px);
-        comp_set_float(g_pos_comp, p, "y", py);
-        camera_follow(px, py);
+    if (g_player_y >= GROUND_Y) {
+        g_player_y = GROUND_Y;
+        g_player_vy = 0.0;
+        g_player_ground = 1;
+    } else {
+        g_player_ground = 0;
     }
+
+    if (g_player_x < 20.0) g_player_x = 20.0;
+    if (g_player_x > 1260.0) g_player_x = 1260.0;
+
+    void *pr = entity_get(g_player, g_rect_comp);
+    if (pr) {
+        comp_set_float(g_rect_comp, pr, "x", g_player_x);
+        comp_set_float(g_rect_comp, pr, "y", g_player_y);
+    }
+    camera_follow(g_player_x, g_player_y);
 
     return 0;
 }
@@ -130,7 +168,7 @@ int step(void) {
 int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("FrogSystem - 1 frog bounce L/R - Arrows + Space", 10.0, 10.0);
+    draw_string("AI frog (green) auto-bounce | Player (yellow) Arrows+Space", 10.0, 10.0);
     draw_fps(10.0, 32.0);
     return 0;
 }

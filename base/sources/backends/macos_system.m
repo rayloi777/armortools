@@ -36,39 +36,192 @@ static bool ctrl  = false;
 static bool alt   = false;
 static bool cmd   = false;
 
-- (void)flagsChanged:(NSEvent *)theEvent {
-	if (shift) {
-		iron_internal_keyboard_trigger_key_up(KEY_CODE_SHIFT);
-		shift = false;
-	}
-	if (ctrl) {
-		iron_internal_keyboard_trigger_key_up(KEY_CODE_CONTROL);
-		ctrl = false;
-	}
-	if (alt) {
-		iron_internal_keyboard_trigger_key_up(KEY_CODE_ALT);
-		alt = false;
-	}
-	if (cmd) {
-		iron_internal_keyboard_trigger_key_up(KEY_CODE_META);
-		cmd = false;
-	}
+// Map macOS virtual key codes (hardware positions) to KEY_CODE enum values.
+// Virtual key codes are layout-independent — kVK_ANSI_A is always the physical
+// key at the A position regardless of QWERTY, AZERTY, Dvorak, etc.
+static int macos_keycode_to_iron(unsigned short vk) {
+	switch (vk) {
+	// Letters (ANSI physical positions)
+	case 0x00: return KEY_CODE_A;     // kVK_ANSI_A
+	case 0x01: return KEY_CODE_S;     // kVK_ANSI_S
+	case 0x02: return KEY_CODE_D;     // kVK_ANSI_D
+	case 0x03: return KEY_CODE_F;     // kVK_ANSI_F
+	case 0x04: return KEY_CODE_H;     // kVK_ANSI_H
+	case 0x05: return KEY_CODE_G;     // kVK_ANSI_G
+	case 0x06: return KEY_CODE_Z;     // kVK_ANSI_Z
+	case 0x07: return KEY_CODE_X;     // kVK_ANSI_X
+	case 0x08: return KEY_CODE_C;     // kVK_ANSI_C
+	case 0x09: return KEY_CODE_V;     // kVK_ANSI_V
+	case 0x0B: return KEY_CODE_B;     // kVK_ANSI_B
+	case 0x0C: return KEY_CODE_Q;     // kVK_ANSI_Q
+	case 0x0D: return KEY_CODE_W;     // kVK_ANSI_W
+	case 0x0E: return KEY_CODE_E;     // kVK_ANSI_E
+	case 0x0F: return KEY_CODE_R;     // kVK_ANSI_R
+	case 0x10: return KEY_CODE_Y;     // kVK_ANSI_Y
+	case 0x11: return KEY_CODE_T;     // kVK_ANSI_T
+	case 0x1F: return KEY_CODE_O;     // kVK_ANSI_O
+	case 0x20: return KEY_CODE_U;     // kVK_ANSI_U
+	case 0x22: return KEY_CODE_I;     // kVK_ANSI_I
+	case 0x23: return KEY_CODE_P;     // kVK_ANSI_P
+	case 0x25: return KEY_CODE_L;     // kVK_ANSI_L
+	case 0x26: return KEY_CODE_J;     // kVK_ANSI_J
+	case 0x28: return KEY_CODE_K;     // kVK_ANSI_K
+	case 0x2D: return KEY_CODE_N;     // kVK_ANSI_N
+	case 0x2E: return KEY_CODE_M;     // kVK_ANSI_M
 
-	if ([theEvent modifierFlags] & NSShiftKeyMask) {
-		iron_internal_keyboard_trigger_key_down(KEY_CODE_SHIFT);
-		shift = true;
+	// Number row (physical positions, not sequential in virtual key codes)
+	case 0x12: return KEY_CODE_1;     // kVK_ANSI_1
+	case 0x13: return KEY_CODE_2;     // kVK_ANSI_2
+	case 0x14: return KEY_CODE_3;     // kVK_ANSI_3
+	case 0x15: return KEY_CODE_4;     // kVK_ANSI_4
+	case 0x17: return KEY_CODE_5;     // kVK_ANSI_5
+	case 0x16: return KEY_CODE_6;     // kVK_ANSI_6
+	case 0x1A: return KEY_CODE_7;     // kVK_ANSI_7
+	case 0x1C: return KEY_CODE_8;     // kVK_ANSI_8
+	case 0x19: return KEY_CODE_9;     // kVK_ANSI_9
+	case 0x1D: return KEY_CODE_0;     // kVK_ANSI_0
+
+	// Punctuation (physical positions)
+	case 0x21: return KEY_CODE_OPEN_BRACKET;    // kVK_ANSI_LeftBracket
+	case 0x1E: return KEY_CODE_CLOSE_BRACKET;   // kVK_ANSI_RightBracket
+	case 0x29: return KEY_CODE_SEMICOLON;       // kVK_ANSI_Semicolon
+	case 0x27: return KEY_CODE_QUOTE;           // kVK_ANSI_Quote
+	case 0x2A: return KEY_CODE_BACK_SLASH;      // kVK_ANSI_Backslash
+	case 0x2B: return KEY_CODE_COMMA;           // kVK_ANSI_Comma
+	case 0x2F: return KEY_CODE_PERIOD;          // kVK_ANSI_Period
+	case 0x2C: return KEY_CODE_SLASH;           // kVK_ANSI_Slash
+	case 0x32: return KEY_CODE_BACK_QUOTE;      // kVK_ANSI_Grave
+	case 0x1B: return KEY_CODE_HYPHEN_MINUS;    // kVK_ANSI_Minus
+	case 0x18: return KEY_CODE_EQUALS;          // kVK_ANSI_Equal
+
+	// Control keys
+	case 0x24: return KEY_CODE_RETURN;          // kVK_Return
+	case 0x30: return KEY_CODE_TAB;             // kVK_Tab
+	case 0x31: return KEY_CODE_SPACE;           // kVK_Space
+	case 0x33: return KEY_CODE_BACKSPACE;       // kVK_Delete (backspace)
+	case 0x35: return KEY_CODE_ESCAPE;          // kVK_Escape
+	case 0x75: return KEY_CODE_DELETE;          // kVK_ForwardDelete
+	case 0x73: return KEY_CODE_HOME;            // kVK_Home
+	case 0x77: return KEY_CODE_END;             // kVK_End
+	case 0x74: return KEY_CODE_PAGE_UP;         // kVK_PageUp
+	case 0x79: return KEY_CODE_PAGE_DOWN;       // kVK_PageDown
+
+	// Modifiers
+	case 0x38: return KEY_CODE_SHIFT;           // kVK_Shift
+	case 0x3C: return KEY_CODE_SHIFT;           // kVK_RightShift
+	case 0x3B: return KEY_CODE_CONTROL;         // kVK_Control
+	case 0x3E: return KEY_CODE_CONTROL;         // kVK_RightControl
+	case 0x3A: return KEY_CODE_ALT;             // kVK_Option
+	case 0x3D: return KEY_CODE_ALT;             // kVK_RightOption
+	case 0x37: return KEY_CODE_META;            // kVK_Command
+	case 0x36: return KEY_CODE_META;            // kVK_RightCommand
+	case 0x39: return KEY_CODE_CAPS_LOCK;       // kVK_CapsLock
+
+	// Arrow keys
+	case 0x7B: return KEY_CODE_LEFT;            // kVK_LeftArrow
+	case 0x7C: return KEY_CODE_RIGHT;           // kVK_RightArrow
+	case 0x7D: return KEY_CODE_DOWN;            // kVK_DownArrow
+	case 0x7E: return KEY_CODE_UP;              // kVK_UpArrow
+
+	// Function keys
+	case 0x7A: return KEY_CODE_F1;
+	case 0x78: return KEY_CODE_F2;
+	case 0x63: return KEY_CODE_F3;
+	case 0x76: return KEY_CODE_F4;
+	case 0x60: return KEY_CODE_F5;
+	case 0x61: return KEY_CODE_F6;
+	case 0x62: return KEY_CODE_F7;
+	case 0x64: return KEY_CODE_F8;
+	case 0x65: return KEY_CODE_F9;
+	case 0x6D: return KEY_CODE_F10;
+	case 0x67: return KEY_CODE_F11;
+	case 0x6F: return KEY_CODE_F12;
+	case 0x69: return KEY_CODE_F13;
+	case 0x6B: return KEY_CODE_F14;
+	case 0x71: return KEY_CODE_F15;
+	case 0x6A: return KEY_CODE_F16;
+	case 0x40: return KEY_CODE_F17;
+	case 0x4F: return KEY_CODE_F18;
+	case 0x50: return KEY_CODE_F19;
+	case 0x5A: return KEY_CODE_F20;
+
+	// Numpad
+	case 0x52: return KEY_CODE_NUMPAD_0;
+	case 0x53: return KEY_CODE_NUMPAD_1;
+	case 0x54: return KEY_CODE_NUMPAD_2;
+	case 0x55: return KEY_CODE_NUMPAD_3;
+	case 0x56: return KEY_CODE_NUMPAD_4;
+	case 0x57: return KEY_CODE_NUMPAD_5;
+	case 0x58: return KEY_CODE_NUMPAD_6;
+	case 0x59: return KEY_CODE_NUMPAD_7;
+	case 0x5B: return KEY_CODE_NUMPAD_8;
+	case 0x5C: return KEY_CODE_NUMPAD_9;
+	case 0x4B: return KEY_CODE_DIVIDE;          // kVK_ANSI_KeypadDivide
+	case 0x4C: return KEY_CODE_RETURN;          // kVK_ANSI_KeypadEnter
+	case 0x4E: return KEY_CODE_SUBTRACT;        // kVK_ANSI_KeypadMinus
+	case 0x43: return KEY_CODE_MULTIPLY;        // kVK_ANSI_KeypadMultiply
+	case 0x45: return KEY_CODE_ADD;             // kVK_ANSI_KeypadPlus
+	case 0x41: return KEY_CODE_DECIMAL;         // kVK_ANSI_KeypadDecimal
+	case 0x51: return KEY_CODE_EQUALS;          // kVK_ANSI_KeypadEquals
+	case 0x47: return KEY_CODE_NUM_LOCK;        // kVK_ANSI_KeypadClear
+
+	// Other
+	case 0x72: return KEY_CODE_HELP;            // kVK_Help
+	case 0x6E: return KEY_CODE_CONTEXT_MENU;    // kVK_ContextualMenu
+
+	default: return KEY_CODE_UNKNOWN;
 	}
-	if ([theEvent modifierFlags] & NSControlKeyMask) {
-		iron_internal_keyboard_trigger_key_down(KEY_CODE_CONTROL);
-		ctrl = true;
-	}
-	if ([theEvent modifierFlags] & NSAlternateKeyMask) {
-		iron_internal_keyboard_trigger_key_down(KEY_CODE_ALT);
-		alt = true;
-	}
-	if ([theEvent modifierFlags] & NSCommandKeyMask) {
-		iron_internal_keyboard_trigger_key_down(KEY_CODE_META);
-		cmd = true;
+}
+
+- (void)flagsChanged:(NSEvent *)theEvent {
+	unsigned short vk = [theEvent keyCode];
+	unsigned long flags = [theEvent modifierFlags];
+
+	switch (vk) {
+	case 0x38: // kVK_Shift
+	case 0x3C: // kVK_RightShift
+		if (shift) {
+			iron_internal_keyboard_trigger_key_up(KEY_CODE_SHIFT);
+			shift = false;
+		}
+		if (flags & NSShiftKeyMask) {
+			iron_internal_keyboard_trigger_key_down(KEY_CODE_SHIFT);
+			shift = true;
+		}
+		break;
+	case 0x3B: // kVK_Control
+	case 0x3E: // kVK_RightControl
+		if (ctrl) {
+			iron_internal_keyboard_trigger_key_up(KEY_CODE_CONTROL);
+			ctrl = false;
+		}
+		if (flags & NSControlKeyMask) {
+			iron_internal_keyboard_trigger_key_down(KEY_CODE_CONTROL);
+			ctrl = true;
+		}
+		break;
+	case 0x3A: // kVK_Option
+	case 0x3D: // kVK_RightOption
+		if (alt) {
+			iron_internal_keyboard_trigger_key_up(KEY_CODE_ALT);
+			alt = false;
+		}
+		if (flags & NSAlternateKeyMask) {
+			iron_internal_keyboard_trigger_key_down(KEY_CODE_ALT);
+			alt = true;
+		}
+		break;
+	case 0x37: // kVK_Command
+	case 0x36: // kVK_RightCommand
+		if (cmd) {
+			iron_internal_keyboard_trigger_key_up(KEY_CODE_META);
+			cmd = false;
+		}
+		if (flags & NSCommandKeyMask) {
+			iron_internal_keyboard_trigger_key_down(KEY_CODE_META);
+			cmd = true;
+		}
+		break;
 	}
 }
 
@@ -76,234 +229,65 @@ static bool cmd   = false;
 	if ([theEvent isARepeat])
 		return;
 
-	[self interpretKeyEvents:[NSArray arrayWithObject:theEvent]];
+	unsigned short vk = [theEvent keyCode];
+	int key_code = macos_keycode_to_iron(vk);
 
+	if (key_code != KEY_CODE_UNKNOWN) {
+		iron_internal_keyboard_trigger_key_down(key_code);
+	}
+
+	// Handle clipboard shortcuts via Command key
+	if ([theEvent modifierFlags] & NSCommandKeyMask) {
+		if (key_code == KEY_CODE_X) {
+			char *text = iron_internal_cut_callback();
+			if (text != NULL) {
+				NSPasteboard *board = [NSPasteboard generalPasteboard];
+				[board clearContents];
+				[board setString:[NSString stringWithUTF8String:text] forType:NSStringPboardType];
+			}
+		}
+		if (key_code == KEY_CODE_C) {
+			char *text = iron_internal_copy_callback();
+			if (text != NULL) {
+				iron_copy_to_clipboard(text);
+			}
+		}
+		if (key_code == KEY_CODE_V) {
+			NSPasteboard *board = [NSPasteboard generalPasteboard];
+			NSString     *data  = [board stringForType:NSStringPboardType];
+			if (data != nil) {
+				char charData[4096];
+				strcpy(charData, [data UTF8String]);
+				iron_internal_paste_callback(charData);
+			}
+		}
+	}
+
+	// Trigger key_press for text character input (layout-dependent)
 	NSString *characters = [theEvent charactersIgnoringModifiers];
 	if ([characters length]) {
 		unichar ch = [characters characterAtIndex:0];
-		switch (ch) { // keys that exist in keydown and keypress events
-		case 59:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_SEMICOLON);
-			break;
-		case 91:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_OPEN_BRACKET);
-			break;
-		case 93:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_CLOSE_BRACKET);
-			break;
-		case 39:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_QUOTE);
-			break;
-		case 92:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_BACK_SLASH);
-			break;
-		case 44:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_COMMA);
-			break;
-		case 46:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_PERIOD);
-			break;
-		case 47:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_SLASH);
-			break;
-		case 96:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_BACK_QUOTE);
-			break;
-		case 32:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_SPACE);
-			break;
-		case 34:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_DOUBLE_QUOTE);
-			break;
-		case 40:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_OPEN_PAREN);
-			break;
-		case 41:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_CLOSE_PAREN);
-			break;
-		case 42:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_ASTERISK);
-			break;
-		case 43:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_PLUS);
-			break;
-		case 45:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_HYPHEN_MINUS);
-			break;
-		case 61:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_EQUALS);
-			break;
-		case 95:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_UNDERSCORE);
-			break;
-		}
-
-		switch (ch) {
-		case NSRightArrowFunctionKey:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_RIGHT);
-			break;
-		case NSLeftArrowFunctionKey:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_LEFT);
-			break;
-		case NSUpArrowFunctionKey:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_UP);
-			break;
-		case NSDownArrowFunctionKey:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_DOWN);
-			break;
-		case 27:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_ESCAPE);
-			break;
-		case NSEnterCharacter:
-		case NSNewlineCharacter:
-		case NSCarriageReturnCharacter:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_RETURN);
+		if (vk == 0x24) {       // Return
 			iron_internal_keyboard_trigger_key_press('\n');
-			break;
-		case 0x7f:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_BACKSPACE);
+		}
+		else if (vk == 0x33) {  // Backspace
 			iron_internal_keyboard_trigger_key_press('\x08');
-			break;
-		case 9:
-			iron_internal_keyboard_trigger_key_down(KEY_CODE_TAB);
+		}
+		else if (vk == 0x30) {  // Tab
 			iron_internal_keyboard_trigger_key_press('\t');
-			break;
-		default:
-			if (ch == 'x' && [theEvent modifierFlags] & NSCommandKeyMask) {
-				char *text = iron_internal_cut_callback();
-				if (text != NULL) {
-					NSPasteboard *board = [NSPasteboard generalPasteboard];
-					[board clearContents];
-					[board setString:[NSString stringWithUTF8String:text] forType:NSStringPboardType];
-				}
-			}
-			if (ch == 'c' && [theEvent modifierFlags] & NSCommandKeyMask) {
-				char *text = iron_internal_copy_callback();
-				if (text != NULL) {
-					iron_copy_to_clipboard(text);
-				}
-			}
-			if (ch == 'v' && [theEvent modifierFlags] & NSCommandKeyMask) {
-				NSPasteboard *board = [NSPasteboard generalPasteboard];
-				NSString     *data  = [board stringForType:NSStringPboardType];
-				if (data != nil) {
-					char charData[4096];
-					strcpy(charData, [data UTF8String]);
-					iron_internal_paste_callback(charData);
-				}
-			}
-			if (ch >= L'a' && ch <= L'z') {
-				iron_internal_keyboard_trigger_key_down(ch - L'a' + KEY_CODE_A);
-			}
-			else if (ch >= L'A' && ch <= L'Z') {
-				iron_internal_keyboard_trigger_key_down(ch - L'A' + KEY_CODE_A);
-			}
-			else if (ch >= L'0' && ch <= L'9') {
-				iron_internal_keyboard_trigger_key_down(ch - L'0' + KEY_CODE_0);
-			}
+		}
+		else if (ch >= 32 && ch < 127) {
 			iron_internal_keyboard_trigger_key_press(ch);
-			break;
 		}
 	}
 }
 
 - (void)keyUp:(NSEvent *)theEvent {
-	NSString *characters = [theEvent charactersIgnoringModifiers];
-	if ([characters length]) {
-		unichar ch = [characters characterAtIndex:0];
-		switch (ch) {
-		case 59:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_SEMICOLON);
-			break;
-		case 91:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_OPEN_BRACKET);
-			break;
-		case 93:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_CLOSE_BRACKET);
-			break;
-		case 39:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_QUOTE);
-			break;
-		case 92:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_BACK_SLASH);
-			break;
-		case 44:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_COMMA);
-			break;
-		case 46:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_PERIOD);
-			break;
-		case 47:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_SLASH);
-			break;
-		case 96:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_BACK_QUOTE);
-			break;
-		case 45:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_HYPHEN_MINUS);
-			break;
-		case 61:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_EQUALS);
-			break;
-		case NSRightArrowFunctionKey:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_RIGHT);
-			break;
-		case NSLeftArrowFunctionKey:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_LEFT);
-			break;
-		case NSUpArrowFunctionKey:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_UP);
-			break;
-		case NSDownArrowFunctionKey:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_DOWN);
-			break;
-		case 27:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_ESCAPE);
-			break;
-		case NSEnterCharacter:
-		case NSNewlineCharacter:
-		case NSCarriageReturnCharacter:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_RETURN);
-			break;
-		case 0x7f:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_BACKSPACE);
-			break;
-		case 9:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_TAB);
-			break;
-		case 32:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_SPACE);
-			break;
-		case 34:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_DOUBLE_QUOTE);
-			break;
-		case 40:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_OPEN_PAREN);
-			break;
-		case 41:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_CLOSE_PAREN);
-			break;
-		case 42:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_ASTERISK);
-			break;
-		case 43:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_PLUS);
-			break;
-		case 95:
-			iron_internal_keyboard_trigger_key_up(KEY_CODE_UNDERSCORE);
-			break;
-		default:
-			if (ch >= L'a' && ch <= L'z') {
-				iron_internal_keyboard_trigger_key_up(ch - L'a' + KEY_CODE_A);
-			}
-			else if (ch >= L'A' && ch <= L'Z') {
-				iron_internal_keyboard_trigger_key_up(ch - L'A' + KEY_CODE_A);
-			}
-			else if (ch >= L'0' && ch <= L'9') {
-				iron_internal_keyboard_trigger_key_up(ch - L'0' + KEY_CODE_0);
-			}
-			break;
-		}
+	unsigned short vk = [theEvent keyCode];
+	int key_code = macos_keycode_to_iron(vk);
+
+	if (key_code != KEY_CODE_UNKNOWN) {
+		iron_internal_keyboard_trigger_key_up(key_code);
 	}
 }
 
