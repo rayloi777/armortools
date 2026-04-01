@@ -1,6 +1,7 @@
 #include "query_api.h"
 #include "ecs/ecs_world.h"
 #include "ecs/ecs_components.h"
+#include "ecs/ecs_dynamic.h"
 #include "flecs.h"
 #include "engine_world.h"
 #include <stdio.h>
@@ -67,6 +68,28 @@ int query_create(const char *filter_expr) {
     memset(q->last_entities, 0, sizeof(q->last_entities));
     memset(q->components, 0, sizeof(q->components));
     q->component_count = 0;
+
+    // Parse component names from filter expression and look up their IDs
+    {
+        char expr_copy[256];
+        strncpy(expr_copy, filter_expr, sizeof(expr_copy) - 1);
+        expr_copy[sizeof(expr_copy) - 1] = '\0';
+        char *p = expr_copy;
+        while (*p && q->component_count < MAX_QUERY_COMPONENTS) {
+            // Skip whitespace and commas
+            while (*p == ' ' || *p == ',' || *p == '\t') p++;
+            if (!*p) break;
+            char *start = p;
+            while (*p && *p != ',' && *p != ' ' && *p != '\t') p++;
+            char saved = *p;
+            *p = '\0';
+            ecs_entity_t comp_id = ecs_lookup(ecs, start);
+            if (comp_id != 0) {
+                q->components[q->component_count++] = comp_id;
+            }
+            *p = saved;
+        }
+    }
     q->cached_it = malloc(ECS_ITER_SIZE);
     if (!q->cached_it) {
         ecs_query_fini(query);
@@ -387,10 +410,17 @@ bool query_iter_next(int query_id) {
     // Cache component data arrays for direct access
     q->cached_comp_count = 0;
     int term_count = it->field_count;
+    if (term_count == 0) term_count = q->component_count > 0 ? q->component_count : 1;
     if (term_count > MAX_QUERY_COMPONENTS) term_count = MAX_QUERY_COMPONENTS;
     for (int t = 0; t < term_count; t++) {
         size_t sz = ecs_field_size(it, t + 1);
-        q->cached_comp_data[t] = ecs_field_w_size(it, sz, t + 1);
+        if (sz == 0 && t < q->component_count) {
+            // Use stored component ID to look up size from dynamic registry
+            dynamic_component_t *dc = ecs_dynamic_component_get(q->components[t]);
+            if (dc && dc->size > 0) sz = dc->size;
+        }
+        void *data = ecs_field_w_size(it, sz, t + 1);
+        q->cached_comp_data[t] = data;
         q->cached_comp_sizes[t] = sz;
         q->cached_comp_count = t + 1;
     }

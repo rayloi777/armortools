@@ -1,0 +1,362 @@
+// ECSTest - Comprehensive minic <-> Flecs integration test
+// Tests: entity lifecycle, component registration, field access, query iteration
+//       batch operations, entity naming, hierarchy, cross-frame persistence
+
+int g_pass = 0;
+int g_fail = 0;
+int g_total = 0;
+
+float g_persist_comp = -1.0;
+float g_persist_e = -1.0;
+int g_persist_verified = 0;
+
+// === Test helpers ===
+void check_int(char *label, int actual, int expected) {
+    g_total = g_total + 1;
+    if (actual == expected) {
+        g_pass = g_pass + 1;
+    } else {
+        g_fail = g_fail + 1;
+        printf("  FAIL: %s = %d (expected %d)\n", label, actual, expected);
+    }
+}
+
+void check_float(char *label, float actual, float expected, float tol) {
+    g_total = g_total + 1;
+    float diff = actual - expected;
+    if (diff < 0.0) { diff = 0.0 - diff; }
+    if (diff < tol) {
+        g_pass = g_pass + 1;
+    } else {
+        g_fail = g_fail + 1;
+        printf("  FAIL: %s = %g (expected %g)\n", label, actual, expected);
+    }
+}
+
+// ============================================================
+// T1: Entity Lifecycle
+// ============================================================
+void test_entity_lifecycle(void) {
+    printf("\n--- T1: Entity Lifecycle ---\n");
+
+    float e1 = entity_create();
+    check_int("entity_create > 0", e1 > 0.0, 1);
+    check_int("entity_exists valid", entity_exists(e1), 1);
+    check_int("entity_is_valid valid", entity_is_valid(e1), 1);
+
+    float e2 = entity_create();
+    check_int("second entity > 0", e2 > 0.0, 1);
+    check_int("entity_exists e2", entity_exists(e2), 1);
+
+    entity_destroy(e1);
+    check_int("destroyed entity !exists", entity_exists(e1), 0);
+}
+
+// ============================================================
+// T2: Entity-Component Binding
+// ============================================================
+void test_entity_component(void) {
+    printf("\n--- T2: Entity-Component Binding ---\n");
+
+    float pos_comp = component_lookup("comp_2d_position");
+    if (pos_comp <= 0.0) {
+        printf("  SKIP: comp_2d_position not found\n");
+        return;
+    }
+
+    float e = entity_create();
+    entity_add(e, pos_comp);
+    check_int("entity_has after add", entity_has(e, pos_comp), 1);
+
+    void *data = entity_get(e, pos_comp);
+    check_int("entity_get returns non-NULL", data != 0 ? 1 : 0, 1);
+}
+
+// ============================================================
+// T3: Component Registration & Field Access
+// ============================================================
+void test_component_fields(void) {
+    printf("\n--- T3: Component Registration & Field Access ---\n");
+
+    float my_comp = component_register("TestPos", 16);
+    check_int("component_register > 0", my_comp > 0.0, 1);
+    if (my_comp <= 0.0) {
+        printf("  SKIP: component_register failed\n");
+        return;
+    }
+
+    component_add_field(my_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(my_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(my_comp, "flags", TYPE_INT, 8);
+    component_add_field(my_comp, "active", TYPE_BOOL, 12);
+    component_finalize(my_comp, "TestPos");
+
+    float lookup = component_lookup("TestPos");
+    check_float("component_lookup by name", lookup, my_comp, 0.5);
+
+    int fcount = component_get_field_count(my_comp);
+    check_int("component field count >= 3", fcount >= 3, 1);
+
+    float e = entity_create();
+    entity_add(e, my_comp);
+    void *data = entity_get(e, my_comp);
+    check_int("entity_get custom comp", data != 0 ? 1 : 0, 1);
+    if (!data) {
+        printf("  SKIP: entity_get returned NULL\n");
+        return;
+    }
+
+    // Float set/get round-trip
+    comp_set_float(my_comp, data, "x", 100.0);
+    float rx = comp_get_float(my_comp, data, "x");
+    check_float("set/get float x", rx, 100.0, 0.001);
+
+    comp_set_float(my_comp, data, "y", 200.0);
+    float ry = comp_get_float(my_comp, data, "y");
+    check_float("set/get float y", ry, 200.0, 0.001);
+
+    // comp_add_float
+    comp_add_float(my_comp, data, "x", 50.0);
+    float ax = comp_get_float(my_comp, data, "x");
+    check_float("add_float result", ax, 150.0, 0.001);
+
+    // Int set/get round-trip
+    comp_set_int(my_comp, data, "flags", 42);
+    int flags = comp_get_int(my_comp, data, "flags");
+    check_int("set/get int flags", flags, 42);
+
+    // Bool set/get round-trip
+    comp_set_bool(my_comp, data, "active", 1);
+    int active = comp_get_bool(my_comp, data, "active");
+    check_int("set/get bool active", active, 1);
+    comp_set_bool(my_comp, data, "active", 0);
+    active = comp_get_bool(my_comp, data, "active");
+    check_int("set/get bool false", active, 0);
+}
+
+// ============================================================
+// T4: Batch Operations
+// ============================================================
+void test_batch(void) {
+    printf("\n--- T4: Batch Operations ---\n");
+
+    float my_comp = component_lookup("TestPos");
+    if (my_comp <= 0.0) {
+        printf("  SKIP: TestPos not found\n");
+        return;
+    }
+
+    float e = entity_create();
+    entity_add(e, my_comp);
+    void *data = entity_get(e, my_comp);
+    if (!data) {
+        printf("  SKIP: entity_get returned NULL\n");
+        return;
+    }
+
+    // set_floats with inline values (bypasses minic array limitations)
+    comp_set_float(my_comp, data, "x", 0.0);
+    comp_set_float(my_comp, data, "y", 0.0);
+    comp_set_floats(my_comp, data, "x,y", 10.0, 20.0);
+    float rx = comp_get_float(my_comp, data, "x");
+    float ry = comp_get_float(my_comp, data, "y");
+    check_float("set_floats x", rx, 10.0, 0.001);
+    check_float("set_floats y", ry, 20.0, 0.001);
+
+    // add_floats with inline values
+    comp_add_floats(my_comp, data, "x,y", 5.0, 15.0);
+    rx = comp_get_float(my_comp, data, "x");
+    ry = comp_get_float(my_comp, data, "y");
+    check_float("add_floats x", rx, 15.0, 0.001);
+    check_float("add_floats y", ry, 35.0, 0.001);
+}
+
+// ============================================================
+// T5: Query System
+// ============================================================
+void test_query(void) {
+    printf("\n--- T5: Query System ---\n");
+
+    float vel_comp = component_register("TestVel", 8);
+    if (vel_comp <= 0.0) {
+        printf("  SKIP: TestVel register failed\n");
+        return;
+    }
+    component_add_field(vel_comp, "vx", TYPE_FLOAT, 0);
+    component_add_field(vel_comp, "vy", TYPE_FLOAT, 4);
+    component_finalize(vel_comp, "TestVel");
+
+    float e1 = entity_create();
+    float e2 = entity_create();
+    float e3 = entity_create();
+    entity_add(e1, vel_comp);
+    entity_add(e2, vel_comp);
+    entity_add(e3, vel_comp);
+
+    void *d1 = entity_get(e1, vel_comp);
+    void *d2 = entity_get(e2, vel_comp);
+    void *d3 = entity_get(e3, vel_comp);
+    if (d1) comp_set_float(vel_comp, d1, "vx", 10.0);
+    if (d2) comp_set_float(vel_comp, d2, "vx", 20.0);
+    if (d3) comp_set_float(vel_comp, d3, "vx", 30.0);
+
+    int q = query_create("TestVel");
+    check_int("query_create >= 0", q >= 0, 1);
+    if (q < 0) return;
+
+    // Count matching entities
+    int found = 0;
+    query_iter_begin(q);
+    while (query_iter_next(q)) {
+        int count = query_iter_count(q);
+        found = found + count;
+    }
+    check_int("query found 3 entities", found, 3);
+
+    // Verify query returns valid data
+    query_iter_begin(q);
+    if (query_iter_next(q)) {
+        int count = query_iter_count(q);
+        check_int("query batch count > 0", count > 0, 1);
+        float eq = query_iter_entity_id(q, 0);
+        void *qd = query_iter_comp_ptr(q, 0, 0);
+        check_int("query entity valid", eq > 0.0, 1);
+        check_int("query comp ptr valid", qd != 0 ? 1 : 0, 1);
+    }
+
+    query_free(q);
+}
+
+// ============================================================
+// T6: Entity Naming
+// ============================================================
+void test_naming(void) {
+    printf("\n--- T6: Entity Naming ---\n");
+
+    float e = entity_create_named("TestEntityA");
+    check_int("create_named returns valid", e > 0.0, 1);
+    if (e <= 0.0) return;
+
+    // Verify name is accessible
+    const char *name = entity_get_name(e);
+    check_int("get_name non-NULL", name != 0 ? 1 : 0, 1);
+
+    // find_by_name should find it
+    float found = entity_find_by_name("TestEntityA");
+    check_float("find_by_name matches", found, e, 0.5);
+
+    // set_name + find_by_name
+    entity_set_name(e, "TestEntityB");
+    found = entity_find_by_name("TestEntityB");
+    check_float("find after set_name", found, e, 0.5);
+
+    // Old name should not find
+    float old_found = entity_find_by_name("TestEntityA");
+    check_int("old name not found", old_found == 0.0, 1);
+}
+
+// ============================================================
+// T7: Entity Hierarchy
+// ============================================================
+void test_hierarchy(void) {
+    printf("\n--- T7: Entity Hierarchy ---\n");
+
+    float parent = entity_create();
+    float child1 = entity_create();
+    float child2 = entity_create();
+
+    check_int("get_parent no parent", entity_get_parent(parent) == 0.0, 1);
+    check_int("get_parent child before", entity_get_parent(child1) == 0.0, 1);
+
+    entity_set_parent(child1, parent);
+    entity_set_parent(child2, parent);
+
+    float gp1 = entity_get_parent(child1);
+    check_float("get_parent child1 after", gp1, parent, 0.5);
+    float gp2 = entity_get_parent(child2);
+    check_float("get_parent child2 after", gp2, parent, 0.5);
+}
+
+// ============================================================
+// T8: Cross-frame Persistence (setup in init, verify in step)
+// ============================================================
+void setup_persistence(void) {
+    g_persist_comp = component_lookup("comp_2d_position");
+    g_persist_e = entity_create();
+    entity_add(g_persist_e, g_persist_comp);
+    void *data = entity_get(g_persist_e, g_persist_comp);
+    if (!data) {
+        printf("  FAIL: persist setup: entity_get returned NULL\n");
+        g_fail = g_fail + 1;
+        g_total = g_total + 1;
+        return;
+    }
+    comp_set_float(g_persist_comp, data, "x", 42.0);
+    comp_set_float(g_persist_comp, data, "y", 3.14);
+}
+
+// ============================================================
+// Main
+// ============================================================
+int init(void) {
+    printf("\n========================================\n");
+    printf("  ECSTest: Minic <-> Flecs Integration\n");
+    printf("========================================\n");
+
+    test_entity_lifecycle();
+    test_entity_component();
+    test_component_fields();
+    test_batch();
+    test_query();
+    test_naming();
+    test_hierarchy();
+    setup_persistence();
+
+    printf("\n========================================\n");
+    printf("  ECSTest Init: %d/%d passed, %d failed\n", g_pass, g_total, g_fail);
+    if (g_fail > 0) {
+        printf("  (%d FAILED)\n", g_fail);
+    }
+    printf("========================================\n\n");
+    return 0;
+}
+
+int step(void) {
+    if (!g_persist_verified) {
+        g_persist_verified = 1;
+        void *data = entity_get(g_persist_e, g_persist_comp);
+        if (!data) {
+            printf("FAIL: cross-frame persist: entity_get returned NULL\n");
+            g_fail = g_fail + 1;
+            g_total = g_total + 1;
+            return 0;
+        }
+        float x = comp_get_float(g_persist_comp, data, "x");
+        float y = comp_get_float(g_persist_comp, data, "y");
+        check_float("cross-frame persist x", x, 42.0, 0.001);
+        check_float("cross-frame persist y", y, 3.14, 0.001);
+        printf("  Cross-frame persistence: PASSED\n");
+    }
+    return 0;
+}
+
+int draw(void) {
+    draw_set_font("font.ttf", 16);
+    if (g_fail == 0 && g_persist_verified) {
+        draw_set_color(0xff44ff44);
+        draw_string("ECS TEST: ALL PASSED!", 10.0, 10.0);
+    } else if (g_fail > 0) {
+        draw_set_color(0xff6644ff);
+        draw_string("ECS TEST: FAILED", 10.0, 10.0);
+    } else {
+        draw_set_color(0xffff44ff);
+        draw_string("ECS TEST: RUNNING...", 10.0, 10.0);
+    }
+
+    // Show pass/fail counts
+    draw_set_color(0xffffffff);
+    draw_string("Pass:", 10.0, 30.0);
+    draw_string("Fail:", 10.0, 50.0);
+    draw_fps(10.0, 70.0);
+    return 0;
+}

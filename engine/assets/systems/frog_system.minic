@@ -6,18 +6,18 @@ float GROUND_Y = 560.0;
 float JUMP_VEL = 600.0;
 float PLAYER_SPEED = 250.0;
 
-int g_pos_comp = -1;
-int g_sprite_comp = -1;
-int g_line_comp = -1;
-int g_frog_comp = -1;
+float g_pos_comp = -1.0;
+float g_sprite_comp = -1.0;
+float g_line_comp = -1.0;
+float g_frog_comp = -1.0;
 int g_frame = 0;
 
 // Entities
-int g_player = -1;
-int g_ai0 = -1;  int g_ai1 = -1;  int g_ai2 = -1;  int g_ai3 = -1;  int g_ai4 = -1;
-int g_ai5 = -1;  int g_ai6 = -1;  int g_ai7 = -1;  int g_ai8 = -1;  int g_ai9 = -1;
-int g_ai10 = -1; int g_ai11 = -1; int g_ai12 = -1; int g_ai13 = -1; int g_ai14 = -1;
-int g_ai15 = -1; int g_ai16 = -1; int g_ai17 = -1; int g_ai18 = -1; int g_ai19 = -1;
+float g_player = -1.0;
+float g_ai0 = -1.0;  float g_ai1 = -1.0;  float g_ai2 = -1.0;  float g_ai3 = -1.0;  float g_ai4 = -1.0;
+float g_ai5 = -1.0;  float g_ai6 = -1.0;  float g_ai7 = -1.0;  float g_ai8 = -1.0;  float g_ai9 = -1.0;
+float g_ai10 = -1.0; float g_ai11 = -1.0; float g_ai12 = -1.0; float g_ai13 = -1.0; float g_ai14 = -1.0;
+float g_ai15 = -1.0; float g_ai16 = -1.0; float g_ai17 = -1.0; float g_ai18 = -1.0; float g_ai19 = -1.0;
 
 // Velocity stored in script globals (bypass Flecs dynamic comp write-back issue)
 float g_pv_x = 0.0; float g_pv_y = 0.0; int g_pground = 1;
@@ -66,8 +66,8 @@ float g_ht19 = 3.28; float g_hi19 = 3.28; float g_sp19 = 2.52;
 
 int g_jump_pressed = 0;
 
-int create_frog(float x, float y, float scale, int layer) {
-    int e = entity_create();
+float create_frog(float x, float y, float scale, int layer) {
+    float e = entity_create();
     entity_add(e, g_pos_comp);
     entity_add(e, g_sprite_comp);
     void *pos = entity_get(e, g_pos_comp);
@@ -87,10 +87,10 @@ int init(void) {
     g_pos_comp = component_lookup("comp_2d_position");
     g_sprite_comp = component_lookup("comp_2d_sprite");
     g_line_comp = component_lookup("comp_2d_line");
-    printf("  pos=%d sprite=%d line=%d\n", g_pos_comp, g_sprite_comp, g_line_comp);
+    printf("  pos=%g sprite=%g line=%g\n", g_pos_comp, g_sprite_comp, g_line_comp);
 
     // Ground line
-    int ge = entity_create();
+    float ge = entity_create();
     entity_add(ge, g_line_comp);
     void *line = entity_get(ge, g_line_comp);
     comp_set_float(g_line_comp, line, "x0", -2000.0);

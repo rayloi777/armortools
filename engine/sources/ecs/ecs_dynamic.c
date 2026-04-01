@@ -59,15 +59,8 @@ void ecs_dynamic_field_cache_build(void) {
 }
 
 field_cache_entry_t *ecs_dynamic_field_cache_lookup_hashed(uint64_t component_id, uint32_t name_hash) {
-    uint32_t bucket = name_hash & (FIELD_CACHE_BUCKETS - 1);
-    int start = g_field_cache_buckets[bucket];
-    if (start < 0) return NULL;
-
-    int size = g_field_cache_bucket_sizes[bucket];
-    int end = start + size;
-    // Entries for this bucket are contiguous in g_field_cache[start..end)
-    // Also filter by component_id (bucket may have different component_id entries with same name hash)
-    for (int i = start; i < end && i < g_field_cache_count; i++) {
+    // Linear scan — bucket-based cache doesn't guarantee contiguity
+    for (int i = 0; i < g_field_cache_count; i++) {
         if (g_field_cache[i].component_id == component_id &&
             g_field_cache[i].field_name_hash == name_hash) {
             return &g_field_cache[i];

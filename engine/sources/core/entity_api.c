@@ -70,7 +70,7 @@ bool entity_is_valid(struct game_world_t *world, uint64_t entity) {
 bool entity_exists(struct game_world_t *world, uint64_t entity) {
     if (!world || !world->world || entity == 0) return false;
     ecs_world_t *ecs = (ecs_world_t *)world->world;
-    return ecs_exists(ecs, (ecs_entity_t)entity);
+    return ecs_is_alive(ecs, (ecs_entity_t)entity);
 }
 
 const char *entity_get_name(struct game_world_t *world, uint64_t entity) {
