@@ -1,0 +1,939 @@
+// Vampire Survivors - Minimal Prototype
+// WASD/Arrows = move | Auto-fires at nearest enemy | Survive waves
+// Kill enemies -> collect XP gems -> level up -> Game over when HP=0 | R = restart
+// ==========================================================================
+// CONSTANTS
+// ==========================================================================
+float PI = 3.14159265;
+float WORLD_SIZE = 4000.0;
+float SPAWN_DIST = 650.0;
+int   MAX_ENEMIES = 150;
+int   MAX_BULLETS = 80;
+int   MAX_GEMS = 150;
+
+float PLAYER_RADIUS = 14.0;
+float PLAYER_SPEED = 220.0;
+float PLAYER_MAX_HP = 100.0;
+
+float ENEMY_RADIUS = 10.0;
+float ENEMY_BASE_HP = 40.0;
+float ENEMY_SPEED = 80.0;
+float ENEMY_DAMAGE = 10.0;
+
+float BULLET_SPEED = 450.0;
+float BULLET_DAMAGE = 25.0;
+float BULLET_RADIUS = 4.0;
+float BULLET_LIFETIME = 2.5;
+float FIRE_RATE = 0.35;
+
+float GEM_ATTRACT_SQ = 40000.0;   // 200^2
+float GEM_COLLECT_SQ = 900.0;     // 30^2
+float PLAYER_HIT_SQ = 576.0;      // (14+10)^2
+float BULLET_HIT_SQ = 196.0;      // (4+10)^2
+float INV_DURATION = 0.5;
+
+// ==========================================================================
+// PLAYER STATE
+// ==========================================================================
+float g_px = 2000.0;
+float g_py = 2000.0;
+float g_php = 100.0;
+float g_pmax_hp = 100.0;
+float g_pxp = 0.0;
+float g_pxp_next = 10.0;
+int   g_plevel = 0;
+float g_pspeed = 220.0;
+float g_pinv = 0.0;
+float g_dir_x = 1.0;
+float g_dir_y = 0.0;
+int   g_kills = 0;
+float g_time = 0.0;
+float g_fire_timer = 0.0;
+float g_fire_rate = 0.35;
+float g_bullet_damage = 25.0;
+float g_bullet_speed = 450.0;
+float g_xp_mult = 1.0;
+int   g_game_over = 0;
+int   g_started = 0;
+float g_spawn_acc = 0.0;
+int   g_total_enemies = 0;
+
+// Component IDs (stored as float for 64-bit pointer compat)
+float g_enemy_comp = -1.0;
+float g_bullet_comp = -1.0;
+float g_gem_comp = -1.0;
+
+// Query IDs
+int g_enemy_query = -1;
+int g_bullet_query = -1;
+int g_gem_query = -1;
+
+// Cached delta time
+float g_dt = 0.016;
+
+// Dead entity lists (collected during collision, destroyed after)
+int g_dead_enemies[64];
+int g_dead_enemy_count = 0;
+int g_dead_bullets[64];
+int g_dead_bullet_count = 0;
+int g_dead_gems[64];
+int g_dead_gem_count = 0;
+
+// Temp arrays for collision detection
+float g_col_ex[64];
+float g_col_ey[64];
+float g_col_ehp[64];
+int   g_col_ecount = 0;
+
+// Screen dimensions (set each frame in draw)
+float g_screen_w = 1280.0;
+float g_screen_h = 720.0;
+
+// ==========================================================================
+// SPAWN HELPERS
+// ==========================================================================
+void spawn_enemy(float x, float y, float hp, float speed, float damage) {
+    if (g_total_enemies >= MAX_ENEMIES) { return; }
+    float e = entity_create();
+    entity_add(e, g_enemy_comp);
+
+    void *data = entity_get(e, g_enemy_comp);
+    comp_set_float(g_enemy_comp, data, "x", x);
+    comp_set_float(g_enemy_comp, data, "y", y);
+    comp_set_float(g_enemy_comp, data, "hp", hp);
+    comp_set_float(g_enemy_comp, data, "max_hp", hp);
+    comp_set_float(g_enemy_comp, data, "speed", speed);
+    comp_set_float(g_enemy_comp, data, "damage", damage);
+    g_total_enemies++;
+}
+
+void spawn_bullet(float x, float y, float vx, float vy) {
+    float e = entity_create();
+    entity_add(e, g_bullet_comp);
+
+    void *data = entity_get(e, g_bullet_comp);
+    comp_set_float(g_bullet_comp, data, "x", x);
+    comp_set_float(g_bullet_comp, data, "y", y);
+    comp_set_float(g_bullet_comp, data, "vx", vx);
+    comp_set_float(g_bullet_comp, data, "vy", vy);
+    comp_set_float(g_bullet_comp, data, "lifetime", BULLET_LIFETIME);
+}
+
+void spawn_gem(float x, float y, float value) {
+    if (g_dead_gem_count >= MAX_GEMS) { return; }
+    float e = entity_create();
+    entity_add(e, g_gem_comp);
+
+    void *data = entity_get(e, g_gem_comp);
+    comp_set_float(g_gem_comp, data, "x", x);
+    comp_set_float(g_gem_comp, data, "y", y);
+    comp_set_float(g_gem_comp, data, "value", value);
+}
+
+// ==========================================================================
+// QUERY CALLBACKS
+// ==========================================================================
+int enemy_ai_step(int entity, void *data) {
+    float x = comp_get_float(g_enemy_comp, data, "x");
+    float y = comp_get_float(g_enemy_comp, data, "y");
+    float speed = comp_get_float(g_enemy_comp, data, "speed");
+
+    // Move toward player
+    float dx = g_px - x;
+    float dy = g_py - y;
+    float dist = sqrt(dx * dx + dy * dy);
+    if (dist > 1.0) {
+        x = x + (dx / dist) * speed * g_dt;
+        y = y + (dy / dist) * speed * g_dt;
+    }
+
+    // Clamp to world
+    if (x < 10.0) { x = 10.0; }
+    if (x > WORLD_SIZE - 10.0) { x = WORLD_SIZE - 10.0; }
+    if (y < 10.0) { y = 10.0; }
+    if (y > WORLD_SIZE - 10.0) { y = WORLD_SIZE - 10.0; }
+
+    comp_set_float(g_enemy_comp, data, "x", x);
+    comp_set_float(g_enemy_comp, data, "y", y);
+    return 0;
+}
+
+int bullet_move_step(int entity, void *data) {
+    float x = comp_get_float(g_bullet_comp, data, "x");
+    float y = comp_get_float(g_bullet_comp, data, "y");
+    float vx = comp_get_float(g_bullet_comp, data, "vx");
+    float vy = comp_get_float(g_bullet_comp, data, "vy");
+    float lifetime = comp_get_float(g_bullet_comp, data, "lifetime");
+
+    x = x + vx * g_dt;
+    y = y + vy * g_dt;
+    lifetime = lifetime - g_dt;
+
+    comp_set_float(g_bullet_comp, data, "x", x);
+    comp_set_float(g_bullet_comp, data, "y", y);
+    comp_set_float(g_bullet_comp, data, "lifetime", lifetime);
+
+    // Mark out-of-bounds or expired bullets for removal
+    if (lifetime <= 0.0 || x < -100.0 || x > WORLD_SIZE + 100.0 || y < -100.0 || y > WORLD_SIZE + 100.0) {
+        if (g_dead_bullet_count < 64) {
+            g_dead_bullets[g_dead_bullet_count] = entity;
+            g_dead_bullet_count++;
+        }
+    }
+    return 0;
+}
+
+int gem_attract_step(int entity, void *data) {
+    float x = comp_get_float(g_gem_comp, data, "x");
+    float y = comp_get_float(g_gem_comp, data, "y");
+
+    float dx = g_px - x;
+    float dy = g_py - y;
+    float dist_sq = dx * dx + dy * dy;
+
+    // Attract toward player if close
+    if (dist_sq < GEM_ATTRACT_SQ && dist_sq > 1.0) {
+        float dist = sqrt(dist_sq);
+        float attract_speed = 400.0;
+        x = x + (dx / dist) * attract_speed * g_dt;
+        y = y + (dy / dist) * attract_speed * g_dt;
+        comp_set_float(g_gem_comp, data, "x", x);
+        comp_set_float(g_gem_comp, data, "y", y);
+    }
+
+    // Collect if very close
+    if (dist_sq < GEM_COLLECT_SQ) {
+        float value = comp_get_float(g_gem_comp, data, "value");
+        g_pxp = g_pxp + value * g_xp_mult;
+        if (g_dead_gem_count < 64) {
+            g_dead_gems[g_dead_gem_count] = entity;
+            g_dead_gem_count++;
+        }
+    }
+    return 0;
+}
+
+// ==========================================================================
+// FIND NEAREST ENEMY (for auto-aim)
+// ==========================================================================
+// Returns 0 if none found, sets g_near_x/y if found
+float g_near_x = 0.0;
+float g_near_y = 0.0;
+int g_near_found = 0;
+
+int find_nearest(void) {
+    g_near_found = 0;
+    float best_sq = 999999.0;
+
+    query_iter_begin(g_enemy_query);
+    while (query_iter_next(g_enemy_query)) {
+        int n = query_iter_count(g_enemy_query);
+        int i = 0;
+        while (i < n) {
+            void *data = query_iter_comp_ptr(g_enemy_query, i, 0);
+            if (data) {
+                float ex = comp_get_float(g_enemy_comp, data, "x");
+                float ey = comp_get_float(g_enemy_comp, data, "y");
+                float dx = ex - g_px;
+                float dy = ey - g_py;
+                float dsq = dx * dx + dy * dy;
+                if (dsq < best_sq) {
+                    best_sq = dsq;
+                    g_near_x = ex;
+                    g_near_y = ey;
+                    g_near_found = 1;
+                }
+            }
+            i++;
+        }
+    }
+    return g_near_found;
+}
+
+// ==========================================================================
+// COLLISION: Bullets vs Enemies
+// ==========================================================================
+void check_bullet_hits(void) {
+    // Collect enemy positions first
+    g_col_ecount = 0;
+    query_iter_begin(g_enemy_query);
+    while (query_iter_next(g_enemy_query)) {
+        int n = query_iter_count(g_enemy_query);
+        int i = 0;
+        while (i < n && g_col_ecount < 64) {
+            void *data = query_iter_comp_ptr(g_enemy_query, i, 0);
+            if (data) {
+                g_col_ex[g_col_ecount] = comp_get_float(g_enemy_comp, data, "x");
+                g_col_ey[g_col_ecount] = comp_get_float(g_enemy_comp, data, "y");
+                g_col_ehp[g_col_ecount] = comp_get_float(g_enemy_comp, data, "hp");
+                g_col_ecount++;
+            }
+            i++;
+        }
+    }
+
+    if (g_col_ecount == 0) { return; }
+
+    // Now check each bullet against collected enemies
+    query_iter_begin(g_bullet_query);
+    while (query_iter_next(g_bullet_query)) {
+        int n = query_iter_count(g_bullet_query);
+        int i = 0;
+        while (i < n) {
+            void *bdata = query_iter_comp_ptr(g_bullet_query, i, 0);
+            if (!bdata) { i++; continue; }
+            float bx = comp_get_float(g_bullet_comp, bdata, "x");
+            float by = comp_get_float(g_bullet_comp, bdata, "y");
+            float blt = comp_get_float(g_bullet_comp, bdata, "lifetime");
+            if (blt <= 0.0) { i++; continue; }
+
+            int hit = 0;
+            int j = 0;
+            while (j < g_col_ecount) {
+                float dx = bx - g_col_ex[j];
+                float dy = by - g_col_ey[j];
+                if (dx * dx + dy * dy < BULLET_HIT_SQ) {
+                    g_col_ehp[j] = g_col_ehp[j] - g_bullet_damage;
+                    hit = 1;
+                }
+                j++;
+            }
+
+            if (hit) {
+                // Mark bullet dead
+                int ent = query_iter_entity_id(g_bullet_query, i);
+                if (g_dead_bullet_count < 64) {
+                    g_dead_bullets[g_dead_bullet_count] = ent;
+                    g_dead_bullet_count++;
+                }
+            }
+            i++;
+        }
+    }
+
+    // Write back damaged HP and mark dead enemies
+    int eidx = 0;
+    query_iter_begin(g_enemy_query);
+    while (query_iter_next(g_enemy_query)) {
+        int n = query_iter_count(g_enemy_query);
+        int i = 0;
+        while (i < n && eidx < g_col_ecount) {
+            void *data = query_iter_comp_ptr(g_enemy_query, i, 0);
+            if (data) {
+                comp_set_float(g_enemy_comp, data, "hp", g_col_ehp[eidx]);
+                if (g_col_ehp[eidx] <= 0.0) {
+                    int ent = query_iter_entity_id(g_enemy_query, i);
+                    if (g_dead_enemy_count < 64) {
+                        g_dead_enemies[g_dead_enemy_count] = ent;
+                        g_dead_enemy_count++;
+                    }
+                    // Spawn XP gem at enemy position
+                    spawn_gem(g_col_ex[eidx], g_col_ey[eidx], 1.0);
+                    g_kills++;
+                    g_total_enemies--;
+                }
+            }
+            eidx++;
+            i++;
+        }
+    }
+}
+
+// ==========================================================================
+// COLLISION: Enemies vs Player
+// ==========================================================================
+void check_player_hit(void) {
+    if (g_pinv > 0.0) { return; }
+
+    query_iter_begin(g_enemy_query);
+    while (query_iter_next(g_enemy_query)) {
+        int n = query_iter_count(g_enemy_query);
+        int i = 0;
+        while (i < n) {
+            void *data = query_iter_comp_ptr(g_enemy_query, i, 0);
+            if (data) {
+                float ex = comp_get_float(g_enemy_comp, data, "x");
+                float ey = comp_get_float(g_enemy_comp, data, "y");
+                float dx = ex - g_px;
+                float dy = ey - g_py;
+                if (dx * dx + dy * dy < PLAYER_HIT_SQ) {
+                    float dmg = comp_get_float(g_enemy_comp, data, "damage");
+                    g_php = g_php - dmg;
+                    g_pinv = INV_DURATION;
+                }
+            }
+            i++;
+        }
+    }
+}
+
+// ==========================================================================
+// SPAWN WAVE
+// ==========================================================================
+void spawn_enemies(void) {
+    float difficulty = 1.0 + g_time / 30.0;
+    float rate = 1.0 + difficulty * 0.6;
+    g_spawn_acc = g_spawn_acc + rate * g_dt;
+
+    while (g_spawn_acc >= 1.0 && g_total_enemies < MAX_ENEMIES) {
+        float angle = rand_float() * 2.0 * PI;
+        float dist = SPAWN_DIST + rand_float() * 100.0;
+        float sx = g_px + cos(angle) * dist;
+        float sy = g_py + sin(angle) * dist;
+        // Clamp to world
+        if (sx < 20.0) { sx = 20.0; }
+        if (sx > WORLD_SIZE - 20.0) { sx = WORLD_SIZE - 20.0; }
+        if (sy < 20.0) { sy = 20.0; }
+        if (sy > WORLD_SIZE - 20.0) { sy = WORLD_SIZE - 20.0; }
+
+        float hp = ENEMY_BASE_HP * (1.0 + (difficulty - 1.0) * 0.25);
+        spawn_enemy(sx, sy, hp, ENEMY_SPEED, ENEMY_DAMAGE);
+        g_spawn_acc = g_spawn_acc - 1.0;
+    }
+}
+
+// ==========================================================================
+// LEVEL UP
+// ==========================================================================
+void apply_random_upgrade(void) {
+    float roll = rand_float();
+    if (roll < 0.3) {
+        // +20% bullet damage
+        g_bullet_damage = g_bullet_damage * 1.2;
+    } else if (roll < 0.55) {
+        // +15% fire rate
+        g_fire_rate = g_fire_rate * 0.85;
+    } else if (roll < 0.75) {
+        // +10% move speed
+        g_pspeed = g_pspeed * 1.1;
+    } else if (roll < 0.9) {
+        // +15 max HP + heal
+        g_pmax_hp = g_pmax_hp + 15.0;
+        g_php = g_php + 15.0;
+        if (g_php > g_pmax_hp) { g_php = g_pmax_hp; }
+    } else {
+        // -20% XP requirement
+        g_xp_mult = g_xp_mult * 1.2;
+    }
+}
+
+// ==========================================================================
+// DESTROY DEAD ENTITIES
+// ==========================================================================
+void destroy_dead(void) {
+    int i = 0;
+    while (i < g_dead_enemy_count) {
+        entity_destroy(g_dead_enemies[i]);
+        i++;
+    }
+    g_dead_enemy_count = 0;
+
+    i = 0;
+    while (i < g_dead_bullet_count) {
+        entity_destroy(g_dead_bullets[i]);
+        i++;
+    }
+    g_dead_bullet_count = 0;
+
+    i = 0;
+    while (i < g_dead_gem_count) {
+        entity_destroy(g_dead_gems[i]);
+        i++;
+    }
+    g_dead_gem_count = 0;
+}
+
+// ==========================================================================
+// RESTART
+// ==========================================================================
+void restart_game(void) {
+    // Destroy all remaining entities
+    query_iter_begin(g_enemy_query);
+    while (query_iter_next(g_enemy_query)) {
+        int n = query_iter_count(g_enemy_query);
+        int i = 0;
+        while (i < n) {
+            g_dead_enemies[0] = query_iter_entity_id(g_enemy_query, i);
+            g_dead_enemy_count = 1;
+            i++;
+        }
+    }
+    destroy_dead();
+
+    query_iter_begin(g_bullet_query);
+    while (query_iter_next(g_bullet_query)) {
+        int n = query_iter_count(g_bullet_query);
+        int i = 0;
+        while (i < n) {
+            g_dead_bullets[0] = query_iter_entity_id(g_bullet_query, i);
+            g_dead_bullet_count = 1;
+            i++;
+        }
+    }
+    destroy_dead();
+
+    query_iter_begin(g_gem_query);
+    while (query_iter_next(g_gem_query)) {
+        int n = query_iter_count(g_gem_query);
+        int i = 0;
+        while (i < n) {
+            g_dead_gems[0] = query_iter_entity_id(g_gem_query, i);
+            g_dead_gem_count = 1;
+            i++;
+        }
+    }
+    destroy_dead();
+
+    // Reset player
+    g_px = WORLD_SIZE / 2.0;
+    g_py = WORLD_SIZE / 2.0;
+    g_php = PLAYER_MAX_HP;
+    g_pmax_hp = PLAYER_MAX_HP;
+    g_pspeed = PLAYER_SPEED;
+    g_dir_x = 1.0;
+    g_dir_y = 0.0;
+    g_fire_timer = 0.0;
+    g_fire_rate = FIRE_RATE;
+    g_bullet_damage = BULLET_DAMAGE;
+    g_bullet_speed = BULLET_SPEED;
+    g_pxp = 0.0;
+    g_pxp_next = 10.0;
+    g_plevel = 0;
+    g_kills = 0;
+    g_time = 0.0;
+    g_spawn_acc = 0.0;
+    g_xp_mult = 1.0;
+    g_pinv = 0.0;
+    g_total_enemies = 0;
+    g_game_over = 0;
+
+    camera_set_position(g_px, g_py);
+}
+
+// ==========================================================================
+// World-to-screen conversion
+// ==========================================================================
+// Draw API uses screen coordinates (0,0 = top-left, w,h = bottom-right)
+// Game world uses large coordinates (0..4000). Camera follows player.
+// To convert: screen = world - camera + screen_center
+float g_ox = 0.0; // screen offset X
+float g_oy = 0.0; // screen offset Y
+
+void update_screen_offset(void) {
+    float cam_x = camera_get_x();
+    float cam_y = camera_get_y();
+    g_screen_w = sys_width();
+    g_screen_h = sys_height();
+    g_ox = -cam_x + g_screen_w / 2.0;
+    g_oy = -cam_y + g_screen_h / 2.0;
+}
+
+// Convert world coords to screen coords
+float wx(float world_x) { return world_x + g_ox; }
+float wy(float world_y) { return world_y + g_oy; }
+
+// ==========================================================================
+// INIT
+// ==========================================================================
+int init(void) {
+    printf("VampireGame: Init\n");
+
+    // Register EnemyBody: 24 bytes
+    g_enemy_comp = component_register("EnemyBody", 24);
+    component_add_field(g_enemy_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(g_enemy_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(g_enemy_comp, "hp", TYPE_FLOAT, 8);
+    component_add_field(g_enemy_comp, "max_hp", TYPE_FLOAT, 12);
+    component_add_field(g_enemy_comp, "speed", TYPE_FLOAT, 16);
+    component_add_field(g_enemy_comp, "damage", TYPE_FLOAT, 20);
+
+    // Register BulletBody: 20 bytes
+    g_bullet_comp = component_register("BulletBody", 20);
+    component_add_field(g_bullet_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(g_bullet_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(g_bullet_comp, "vx", TYPE_FLOAT, 8);
+    component_add_field(g_bullet_comp, "vy", TYPE_FLOAT, 12);
+    component_add_field(g_bullet_comp, "lifetime", TYPE_FLOAT, 16);
+
+    // Register GemBody: 12 bytes
+    g_gem_comp = component_register("GemBody", 12);
+    component_add_field(g_gem_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(g_gem_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(g_gem_comp, "value", TYPE_FLOAT, 8);
+
+    // Create queries
+    g_enemy_query = query_create("EnemyBody");
+    g_bullet_query = query_create("BulletBody");
+    g_gem_query = query_create("GemBody");
+
+    // Player starts at world center
+    g_px = WORLD_SIZE / 2.0;
+    g_py = WORLD_SIZE / 2.0;
+    g_php = PLAYER_MAX_HP;
+    g_pmax_hp = PLAYER_MAX_HP;
+    g_pspeed = PLAYER_SPEED;
+    g_dir_x = 1.0;
+    g_dir_y = 0.0;
+    g_fire_timer = 0.0;
+    g_fire_rate = FIRE_RATE;
+    g_bullet_damage = BULLET_DAMAGE;
+    g_bullet_speed = BULLET_SPEED;
+    g_pxp = 0.0;
+    g_pxp_next = 10.0;
+    g_plevel = 0;
+    g_kills = 0;
+    g_time = 0.0;
+    g_spawn_acc = 0.0;
+    g_xp_mult = 1.0;
+    g_pinv = 0.0;
+    g_total_enemies = 0;
+    g_game_over = 0;
+    g_started = 0;
+
+    g_dead_enemy_count = 0;
+    g_dead_bullet_count = 0;
+    g_dead_gem_count = 0;
+
+    camera_set_position(g_px, g_py);
+    camera_set_zoom(1.0);
+
+    printf("VampireGame: Ready\n");
+    return 0;
+}
+
+// ==========================================================================
+// STEP
+// ==========================================================================
+int step(void) {
+    // --- Title screen ---
+    if (!g_started) {
+        if (keyboard_started("space") || keyboard_started("enter")) {
+            g_started = 1;
+        }
+        return 0;
+    }
+
+    // --- Game over ---
+    if (g_game_over) {
+        if (keyboard_started("r")) {
+            restart_game();
+        }
+        return 0;
+    }
+
+    // --- Delta time ---
+    g_dt = sys_delta_time();
+    if (g_dt <= 0.0) { g_dt = 0.016; }
+    if (g_dt > 0.05) { g_dt = 0.05; }
+    g_time = g_time + g_dt;
+
+    // --- Player movement ---
+    float dx = 0.0;
+    float dy = 0.0;
+    if (keyboard_down("left")  || keyboard_down("a")) { dx = dx - 1.0; }
+    if (keyboard_down("right") || keyboard_down("d")) { dx = dx + 1.0; }
+    if (keyboard_down("up")    || keyboard_down("w")) { dy = dy - 1.0; }
+    if (keyboard_down("down")  || keyboard_down("s")) { dy = dy + 1.0; }
+
+    // Gamepad
+    float glx = gamepad_stick_left_x(0);
+    float gly = gamepad_stick_left_y(0);
+    if (glx * glx + gly * gly > 0.01) {
+        dx = glx;
+        dy = gly;
+    }
+
+    // Normalize
+    float len = sqrt(dx * dx + dy * dy);
+    if (len > 0.0) {
+        dx = dx / len;
+        dy = dy / len;
+        g_dir_x = dx;
+        g_dir_y = dy;
+    }
+
+    g_px = g_px + dx * g_pspeed * g_dt;
+    g_py = g_py + dy * g_pspeed * g_dt;
+
+    // Clamp to world
+    if (g_px < 20.0) { g_px = 20.0; }
+    if (g_px > WORLD_SIZE - 20.0) { g_px = WORLD_SIZE - 20.0; }
+    if (g_py < 20.0) { g_py = 20.0; }
+    if (g_py > WORLD_SIZE - 20.0) { g_py = WORLD_SIZE - 20.0; }
+
+    // Camera follow
+    camera_follow(g_px, g_py);
+
+    // --- Invincibility ---
+    if (g_pinv > 0.0) { g_pinv = g_pinv - g_dt; }
+
+    // --- Reset dead lists ---
+    g_dead_enemy_count = 0;
+    g_dead_bullet_count = 0;
+    g_dead_gem_count = 0;
+
+    // --- Auto-fire weapon ---
+    g_fire_timer = g_fire_timer - g_dt;
+    if (g_fire_timer <= 0.0) {
+        if (find_nearest()) {
+            float tdx = g_near_x - g_px;
+            float tdy = g_near_y - g_py;
+            float tdist = sqrt(tdx * tdx + tdy * tdy);
+            if (tdist > 1.0) {
+                float bvx = (tdx / tdist) * g_bullet_speed;
+                float bvy = (tdy / tdist) * g_bullet_speed;
+                spawn_bullet(g_px, g_py, bvx, bvy);
+                g_fire_timer = g_fire_rate;
+            }
+        }
+    }
+
+    // --- Update entities ---
+    query_foreach(g_enemy_query, enemy_ai_step);
+    query_foreach(g_bullet_query, bullet_move_step);
+    query_foreach(g_gem_query, gem_attract_step);
+
+    // --- Collision detection ---
+    check_bullet_hits();
+    check_player_hit();
+
+    // --- Destroy dead entities ---
+    destroy_dead();
+
+    // --- Spawn enemies ---
+    spawn_enemies();
+
+    // --- Level up check ---
+    if (g_pxp >= g_pxp_next) {
+        g_plevel++;
+        g_pxp = g_pxp - g_pxp_next;
+        g_pxp_next = 10.0 + g_plevel * 8.0;
+        apply_random_upgrade();
+    }
+
+    // --- Game over check ---
+    if (g_php <= 0.0) {
+        g_php = 0.0;
+        g_game_over = 1;
+    }
+
+    return 0;
+}
+
+// ==========================================================================
+// DRAW
+// ==========================================================================
+int draw(void) {
+    update_screen_offset();
+
+    // --- Background grid (shows movement) ---
+    draw_set_color(0xff1a2e1a);
+    float grid = 100.0;
+    // World-space range visible on screen
+    float wsx = -g_ox - grid;
+    wsx = wsx - (wsx % grid);
+    float wsy = -g_oy - grid;
+    wsy = wsy - (wsy % grid);
+    float wex = -g_ox + g_screen_w + grid;
+    float wey = -g_oy + g_screen_h + grid;
+    float gx = wsx;
+    while (gx < wex) {
+        draw_line(wx(gx), wy(wsy), wx(gx), wy(wey), 1.0);
+        gx = gx + grid;
+    }
+    float gy = wsy;
+    while (gy < wey) {
+        draw_line(wx(wsx), wy(gy), wx(wex), wy(gy), 1.0);
+        gy = gy + grid;
+    }
+
+    // --- World boundary ---
+    draw_set_color(0xff662222);
+    draw_rect(wx(0.0), wy(0.0), WORLD_SIZE, WORLD_SIZE, 3.0);
+
+    // --- XP gems ---
+    draw_set_color(0xff44ddff);
+    query_iter_begin(g_gem_query);
+    while (query_iter_next(g_gem_query)) {
+        int n = query_iter_count(g_gem_query);
+        int i = 0;
+        while (i < n) {
+            void *data = query_iter_comp_ptr(g_gem_query, i, 0);
+            if (data) {
+                float gx = comp_get_float(g_gem_comp, data, "x");
+                float gy = comp_get_float(g_gem_comp, data, "y");
+                draw_filled_circle(wx(gx), wy(gy), 5.0, 6);
+            }
+            i++;
+        }
+    }
+
+    // --- Bullets ---
+    draw_set_color(0xffffee44);
+    query_iter_begin(g_bullet_query);
+    while (query_iter_next(g_bullet_query)) {
+        int n = query_iter_count(g_bullet_query);
+        int i = 0;
+        while (i < n) {
+            void *data = query_iter_comp_ptr(g_bullet_query, i, 0);
+            if (data) {
+                float bx = comp_get_float(g_bullet_comp, data, "x");
+                float by = comp_get_float(g_bullet_comp, data, "y");
+                draw_filled_circle(wx(bx), wy(by), 4.0, 6);
+            }
+            i++;
+        }
+    }
+
+    // --- Enemies ---
+    query_iter_begin(g_enemy_query);
+    while (query_iter_next(g_enemy_query)) {
+        int n = query_iter_count(g_enemy_query);
+        int i = 0;
+        while (i < n) {
+            void *data = query_iter_comp_ptr(g_enemy_query, i, 0);
+            if (data) {
+                float ex = comp_get_float(g_enemy_comp, data, "x");
+                float ey = comp_get_float(g_enemy_comp, data, "y");
+                float hp = comp_get_float(g_enemy_comp, data, "hp");
+                float max_hp = comp_get_float(g_enemy_comp, data, "max_hp");
+
+                // Enemy body
+                draw_set_color(0xff44bb44);
+                draw_filled_circle(wx(ex), wy(ey), ENEMY_RADIUS, 10);
+
+                // Health bar (if damaged)
+                if (hp < max_hp) {
+                    float sx = wx(ex) - 12.0;
+                    float sy = wy(ey) - 18.0;
+                    draw_set_color(0xff333333);
+                    draw_filled_rect(sx, sy, 24.0, 3.0);
+                    draw_set_color(0xff33ff33);
+                    draw_filled_rect(sx, sy, 24.0 * hp / max_hp, 3.0);
+                }
+            }
+            i++;
+        }
+    }
+
+    // --- Player ---
+    // Body
+    draw_set_color(0xff4488ff);
+    draw_filled_circle(wx(g_px), wy(g_py), PLAYER_RADIUS, 14);
+    // Direction indicator
+    draw_set_color(0xffffffff);
+    draw_filled_circle(wx(g_px) + g_dir_x * 10.0, wy(g_py) + g_dir_y * 10.0, 3.0, 6);
+    // Invincibility flash
+    if (g_pinv > 0.0) {
+        int flash = (int)(g_time * 10.0);
+        if (flash % 2 == 0) {
+            draw_set_color(0x44ffffff);
+            draw_filled_circle(wx(g_px), wy(g_py), PLAYER_RADIUS + 4.0, 14);
+        }
+    }
+
+    // =================================================================
+    // HUD — fixed screen position (top-left)
+    // =================================================================
+    float hx = 10.0;
+    float hy = 10.0;
+
+    // HP bar background
+    draw_set_color(0xff333333);
+    draw_filled_rect(hx, hy, 200.0, 14.0);
+    // HP bar fill
+    draw_set_color(0xff33cc33);
+    float hp_frac = g_php / g_pmax_hp;
+    if (hp_frac < 0.0) { hp_frac = 0.0; }
+    draw_filled_rect(hx, hy, 200.0 * hp_frac, 14.0);
+    // HP label
+    draw_set_color(0xffffffff);
+    draw_set_font("font.ttf", 11);
+    draw_string("HP", hx + 4.0, hy + 1.0);
+
+    // XP bar
+    draw_set_color(0xff222244);
+    draw_filled_rect(hx, hy + 18.0, 200.0, 10.0);
+    draw_set_color(0xff4466ff);
+    float xp_frac = g_pxp / g_pxp_next;
+    if (xp_frac > 1.0) { xp_frac = 1.0; }
+    draw_filled_rect(hx, hy + 18.0, 200.0 * xp_frac, 10.0);
+
+    // Stats text
+    draw_set_font("font.ttf", 13);
+    draw_set_color(0xffffffff);
+    draw_string("Lv ", hx + 210.0, hy);
+    draw_string(str_int(g_plevel), hx + 228.0, hy);
+
+    draw_string("Kills:", hx + 210.0, hy + 16.0);
+    draw_string(str_int(g_kills), hx + 260.0, hy + 16.0);
+
+    // Time
+    int minutes = (int)(g_time / 60.0);
+    int seconds = (int)(g_time) % 60;
+    draw_string("Time:", hx + 210.0, hy + 32.0);
+    draw_string(str_int(minutes), hx + 258.0, hy + 32.0);
+    draw_string(":", hx + 274.0, hy + 32.0);
+    if (seconds < 10) {
+        draw_string("0", hx + 282.0, hy + 32.0);
+        draw_string(str_int(seconds), hx + 290.0, hy + 32.0);
+    } else {
+        draw_string(str_int(seconds), hx + 282.0, hy + 32.0);
+    }
+
+    draw_fps(hx + 540.0, hy);
+
+    // =================================================================
+    // TITLE SCREEN
+    // =================================================================
+    if (!g_started) {
+        // Dim overlay centered on screen
+        float cx = g_screen_w / 2.0;
+        float cy = g_screen_h / 2.0;
+
+        draw_set_color(0xcc1a1a2e);
+        draw_filled_rect(cx - 340.0, cy - 125.0, 680.0, 250.0);
+
+        draw_set_color(0xffffffff);
+        draw_set_font("font.ttf", 28);
+        draw_string("VAMPIRE SURVIVORS", cx - 190.0, cy - 60.0);
+        draw_set_font("font.ttf", 14);
+        draw_string("Press SPACE to start", cx - 120.0, cy);
+        draw_string("WASD / Arrows = Move", cx - 120.0, cy + 25.0);
+        draw_string("Auto-fires at nearest enemy", cx - 150.0, cy + 50.0);
+        return 0;
+    }
+
+    // =================================================================
+    // GAME OVER SCREEN
+    // =================================================================
+    if (g_game_over) {
+        float cx = g_screen_w / 2.0;
+        float cy = g_screen_h / 2.0;
+
+        draw_set_color(0x88000000);
+        draw_filled_rect(cx - 340.0, cy - 110.0, 680.0, 220.0);
+
+        draw_set_color(0xffff4444);
+        draw_set_font("font.ttf", 28);
+        draw_string("GAME OVER", cx - 100.0, cy - 60.0);
+
+        draw_set_color(0xffffffff);
+        draw_set_font("font.ttf", 14);
+        draw_string("Survived:", cx - 120.0, cy - 15.0);
+        draw_string(str_int(minutes), cx - 45.0, cy - 15.0);
+        draw_string(":", cx - 29.0, cy - 15.0);
+        draw_string(str_int(seconds), cx - 21.0, cy - 15.0);
+
+        draw_string("Kills:", cx - 120.0, cy + 10.0);
+        draw_string(str_int(g_kills), cx - 60.0, cy + 10.0);
+
+        draw_string("Level:", cx - 120.0, cy + 35.0);
+        draw_string(str_int(g_plevel), cx - 65.0, cy + 35.0);
+
+        draw_set_color(0xffffaa44);
+        draw_string("Press R to restart", cx - 105.0, cy + 70.0);
+    }
+
+    return 0;
+}

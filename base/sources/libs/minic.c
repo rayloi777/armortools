@@ -2802,6 +2802,7 @@ typedef struct {
 
 // --- VM globals table ---
 #define VM_MAX_GLOBALS 256
+static int vm_active = 0;
 static minic_val_t vm_globals[VM_MAX_GLOBALS];
 static char        vm_global_names[VM_MAX_GLOBALS][64];
 static uint32_t    vm_global_hashes[VM_MAX_GLOBALS];
@@ -2913,6 +2914,22 @@ static inline minic_val_t vm_val_to_d_val(minic_val_t v) {
 static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc) {
 	static minic_val_t   vm_stack[VM_STACK_SIZE];
 	static minic_frame_t vm_frames[VM_MAX_FRAMES];
+	// Re-entry guard: save outer VM state when native callbacks call back into minic
+	minic_val_t   *saved_stack = NULL;
+	minic_frame_t *saved_frames = NULL;
+	minic_val_t   *saved_globals = NULL;
+	bool is_reentrant = (vm_active > 0);
+	if (is_reentrant) {
+		saved_stack  = (minic_val_t *)malloc(VM_STACK_SIZE * sizeof(minic_val_t));
+		saved_frames = (minic_frame_t *)malloc(VM_MAX_FRAMES * sizeof(minic_frame_t));
+		saved_globals = (minic_val_t *)malloc(VM_MAX_GLOBALS * sizeof(minic_val_t));
+		memcpy(saved_stack, vm_stack, VM_STACK_SIZE * sizeof(minic_val_t));
+		memcpy(saved_frames, vm_frames, VM_MAX_FRAMES * sizeof(minic_frame_t));
+		memcpy(saved_globals, vm_globals, VM_MAX_GLOBALS * sizeof(minic_val_t));
+	}
+	vm_active++;
+
+	minic_val_t _vm_result = minic_val_int(0);
 	int                  frame_top = 0;
 
 	// Init frame 0
@@ -3192,7 +3209,7 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 						frame->regs[ret_reg] = ret;
 					}
 					else {
-						return ret;
+						_vm_result = ret; goto vm_cleanup;
 					}
 					break;
 				}
@@ -3202,7 +3219,7 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 				frame = &vm_frames[frame_top];
 			}
 			else {
-				return minic_val_int(0);
+				_vm_result = minic_val_int(0); goto vm_cleanup;
 			}
 			break;
 		case OP_HALT:
@@ -3214,19 +3231,32 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 				frame->regs[ret_reg] = minic_val_int(0);
 				break;
 			}
-			return *ra;
+			_vm_result = *ra; goto vm_cleanup;
 		default:
-			return minic_val_int(0);
+			_vm_result = minic_val_int(0); goto vm_cleanup;
 		}
+		continue;
+vm_cleanup:
+		vm_active--;
+		if (is_reentrant) {
+			memcpy(vm_stack, saved_stack, VM_STACK_SIZE * sizeof(minic_val_t));
+			memcpy(vm_frames, saved_frames, VM_MAX_FRAMES * sizeof(minic_frame_t));
+			memcpy(vm_globals, saved_globals, VM_MAX_GLOBALS * sizeof(minic_val_t));
+			free(saved_stack);
+			free(saved_frames);
+			free(saved_globals);
+		}
+		return _vm_result;
 	}
 }
 
 
 static minic_val_t minic_vm_exec(minic_ctx_t *ctx, minic_proto_t *proto, minic_val_t *args, int argc) {
-	vm_globals_load(&ctx->e);
-	vm_arrs_load(&ctx->e);
+	bool is_reentry = (vm_active > 0);
+	if (!is_reentry) vm_globals_load(&ctx->e);
+	if (!is_reentry) vm_arrs_load(&ctx->e);
 	minic_val_t r = minic_vm_exec_inner(ctx, proto, args, argc);
-	vm_globals_store(&ctx->e);
+	if (!is_reentry) vm_globals_store(&ctx->e);
 	return r;
 }
 

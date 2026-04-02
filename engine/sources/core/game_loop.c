@@ -39,6 +39,7 @@ void game_loop_update(void) {
     sys_render();
 
     draw_begin(NULL, true, 0xff1a1a2e);
+
     camera2d_update(camera_bridge_get_camera(), g_delta_time);
     sys_2d_draw();
     minic_system_call_draw();

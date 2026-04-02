@@ -13,6 +13,7 @@
 #include <minic.h>
 #include <iron_input.h>
 #include <time.h>
+#include <math.h>
 static game_world_t *g_runtime_world = NULL;
 
 // Extract a 64-bit ID from a minic value — handles both pointer and float storage
@@ -726,6 +727,32 @@ static minic_val_t minic_rand_range(minic_val_t *args, int argc) {
     return minic_val_float(result);
 }
 
+static minic_val_t minic_sqrt(minic_val_t *args, int argc) {
+    (void)argc;
+    return minic_val_float(sqrtf((float)minic_val_to_d(args[0])));
+}
+static minic_val_t minic_sin(minic_val_t *args, int argc) {
+    (void)argc;
+    return minic_val_float(sinf((float)minic_val_to_d(args[0])));
+}
+static minic_val_t minic_cos(minic_val_t *args, int argc) {
+    (void)argc;
+    return minic_val_float(cosf((float)minic_val_to_d(args[0])));
+}
+
+// String conversion helpers for HUD display
+static char g_str_buf[64];
+static minic_val_t minic_str_int(minic_val_t *args, int argc) {
+    (void)argc;
+    snprintf(g_str_buf, sizeof(g_str_buf), "%d", (int)minic_val_to_d(args[0]));
+    return minic_val_ptr(g_str_buf);
+}
+static minic_val_t minic_str_float1(minic_val_t *args, int argc) {
+    (void)argc;
+    snprintf(g_str_buf, sizeof(g_str_buf), "%.1f", (float)minic_val_to_d(args[0]));
+    return minic_val_ptr(g_str_buf);
+}
+
 static minic_val_t minic_sprite_load(minic_val_t *args, int argc) {
     if (argc < 1) return minic_val_void();
     const char *name = (const char*)args[0].p;
@@ -1187,6 +1214,11 @@ void runtime_api_register(void) {
     minic_register("sys_height", "f()", (minic_ext_fn_raw_t)minic_sys_height);
     minic_register("rand_float", "f()", (minic_ext_fn_raw_t)minic_rand_float);
     minic_register("rand_range", "f(ff)", (minic_ext_fn_raw_t)minic_rand_range);
+    minic_register_native("sqrt", minic_sqrt);
+    minic_register_native("sin", minic_sin);
+    minic_register_native("cos", minic_cos);
+    minic_register_native("str_int", minic_str_int);
+    minic_register_native("str_float1", minic_str_float1);
     minic_register_native("bench_time", minic_bench_time_native);
 
     minic_register_native("sprite_load", minic_sprite_load);
