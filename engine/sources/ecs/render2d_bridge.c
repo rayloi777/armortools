@@ -3,7 +3,10 @@
 #include "ecs_components.h"
 #include "ecs_bridge.h"
 #include "flecs.h"
+#include "camera_bridge.h"
+#include "../core/camera2d.h"
 #include <iron_draw.h>
+#include <iron_system.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -244,16 +247,26 @@ void sys_2d_draw(void) {
     // Much faster than qsort's O(n log n) for the common case
     r2d_insertion_sort(s_items, count);
 
+    // Camera transform: world coords → screen coords
+    camera2d_t *cam = camera_bridge_get_camera();
+    float cam_x = camera2d_get_x(cam);
+    float cam_y = camera2d_get_y(cam);
+    float cam_zoom = camera2d_get_zoom(cam);
+    float half_w = iron_window_width() / 2.0f;
+    float half_h = iron_window_height() / 2.0f;
+
     uint32_t prev_color = draw_get_color();
     for (int i = 0; i < count; i++) {
         r2d_item_t *item = &s_items[i];
         switch (item->type) {
         case R2D_SPRITE: {
             gpu_texture_t *tex = item->sprite.texture;
-            float draw_w = item->sprite.src_width * item->sprite.scale_x;
-            float draw_h = item->sprite.src_height * item->sprite.scale_y;
-            float draw_x = item->sprite.x - (draw_w * item->sprite.pivot_x);
-            float draw_y = item->sprite.y - (draw_h * item->sprite.pivot_y);
+            float scaled_w = item->sprite.src_width * item->sprite.scale_x * cam_zoom;
+            float scaled_h = item->sprite.src_height * item->sprite.scale_y * cam_zoom;
+            float screen_x = (item->sprite.x - cam_x) * cam_zoom + half_w;
+            float screen_y = (item->sprite.y - cam_y) * cam_zoom + half_h;
+            float draw_x = screen_x - (scaled_w * item->sprite.pivot_x);
+            float draw_y = screen_y - (scaled_h * item->sprite.pivot_y);
             float sw = item->sprite.src_width;
             float sh = item->sprite.src_height;
             if (item->sprite.flip_x || item->sprite.flip_y) {
@@ -262,9 +275,9 @@ void sys_2d_draw(void) {
                     item->sprite.flip_y ? sh : 0,
                     item->sprite.flip_x ? -sw : sw,
                     item->sprite.flip_y ? -sh : sh,
-                    draw_x, draw_y, draw_w, draw_h);
+                    draw_x, draw_y, scaled_w, scaled_h);
             } else {
-                draw_scaled_sub_image(tex, 0, 0, sw, sh, draw_x, draw_y, draw_w, draw_h);
+                draw_scaled_sub_image(tex, 0, 0, sw, sh, draw_x, draw_y, scaled_w, scaled_h);
             }
             break;
         }

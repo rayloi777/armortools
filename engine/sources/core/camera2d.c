@@ -1,5 +1,6 @@
 #include "camera2d.h"
 #include "../global.h"
+#include <iron_system.h>
 #include <stdlib.h>
 #include <math.h>
 
@@ -113,13 +114,18 @@ void camera2d_update(camera2d_t *cam, float delta_time) {
 
 mat3_t camera2d_get_transform(camera2d_t *cam) {
     mat3_t t = mat3_identity();
-    
+
     if (!cam) return t;
-    
-    t = mat3_multmat(t, mat3_translation(-cam->x, -cam->y));
-    t = mat3_multmat(t, mat3_scale(mat3_identity(), vec4_create(cam->zoom, cam->zoom, 0, 0)));
+
+    float sw = (float)iron_window_width();
+    float sh = (float)iron_window_height();
+
+    // World → screen: translate to camera → scale → rotate → screen center
+    t = mat3_translation(sw / 2.0f, sh / 2.0f);
     t = mat3_multmat(t, mat3_rotation(cam->rotation));
-    
+    t = mat3_multmat(t, mat3_scale(mat3_identity(), vec4_create(cam->zoom, cam->zoom, 0, 0)));
+    t = mat3_multmat(t, mat3_translation(-cam->x, -cam->y));
+
     return t;
 }
 
