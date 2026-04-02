@@ -11,7 +11,6 @@ int AI_FROG_COUNT = 15;
 // Component IDs
 float g_pos_comp = -1.0;
 float g_sprite_comp = -1.0;
-float g_line_comp = -1.0;
 float g_vel_comp = -1.0;
 
 // Query
@@ -33,25 +32,11 @@ int init(void) {
 
     g_pos_comp = component_lookup("comp_2d_position");
     g_sprite_comp = component_lookup("comp_2d_sprite");
-    g_line_comp = component_lookup("comp_2d_line");
 
     // Custom velocity component for AI frogs
     g_vel_comp = component_register("FrogVelocity", 8);
     component_add_field(g_vel_comp, "vx", TYPE_FLOAT, 0);
     component_add_field(g_vel_comp, "vy", TYPE_FLOAT, 4);
-
-    // Ground line
-    float ge = entity_create();
-    entity_add(ge, g_line_comp);
-    void *line = entity_get(ge, g_line_comp);
-    comp_set_float(g_line_comp, line, "x0", -2000.0);
-    comp_set_float(g_line_comp, line, "y0", GROUND_Y);
-    comp_set_float(g_line_comp, line, "x1", 4000.0);
-    comp_set_float(g_line_comp, line, "y1", GROUND_Y);
-    comp_set_float(g_line_comp, line, "strength", 3.0);
-    comp_set_int(g_line_comp, line, "color", 0xff4a752a);
-    comp_set_int(g_line_comp, line, "layer", 5);
-    comp_set_bool(g_line_comp, line, "visible", 1);
 
     // AI frogs
     int i = 0;
@@ -78,7 +63,7 @@ int init(void) {
         comp_set_float(g_sprite_comp, spr, "scale_y", 2.5);
         comp_set_bool(g_sprite_comp, spr, "visible", 1);
         comp_set_int(g_sprite_comp, spr, "layer", 30);
-        sprite_create(e, "frog_idle.k");
+        r2d_sprite_create(e, "frog_idle.k");
 
         i = i + 1;
     }
@@ -99,7 +84,7 @@ int init(void) {
     comp_set_float(g_sprite_comp, pspr, "scale_y", 3.0);
     comp_set_bool(g_sprite_comp, pspr, "visible", 1);
     comp_set_int(g_sprite_comp, pspr, "layer", 35);
-    sprite_create(g_player, "frog_idle.k");
+    r2d_sprite_create(g_player, "frog_idle.k");
 
     g_vel_query = query_create("FrogVelocity");
     printf("FrogSystem: ready (15 AI + 1 player)\n");
@@ -162,6 +147,12 @@ int step(void) {
     if (keyboard_down("right")) { g_pdir = 1.0; }
     g_pvx = g_pdir * AI_MOVE_SPEED;
 
+    // Flip sprite to face movement direction
+    void *pspr = entity_get(g_player, g_sprite_comp);
+    if (pspr) {
+        comp_set_bool(g_sprite_comp, pspr, "flip_x", g_pdir < 0.0);
+    }
+
     int space = keyboard_down("space");
     if (space) {
         if (g_pground && g_pjump_press == 0) {
@@ -197,7 +188,9 @@ int step(void) {
     return 0;
 }
 
-int draw(void) {
+int draw_ui(void) {
+    draw_set_color(0xff4a752a);
+    draw_line(-2000.0, GROUND_Y, 4000.0, GROUND_Y, 3.0);
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
     draw_string("Arrows+Space = Player | AI frogs bounce", 10.0, 10.0);

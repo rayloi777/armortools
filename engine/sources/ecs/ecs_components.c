@@ -14,10 +14,6 @@ static ecs_entity_t comp_RenderMesh_entity = 0;
 static ecs_entity_t comp_EntityScript_entity = 0;
 static ecs_entity_t comp_2d_sprite_entity = 0;
 static ecs_entity_t comp_2d_camera_entity = 0;
-static ecs_entity_t comp_2d_rect_entity = 0;
-static ecs_entity_t comp_2d_circle_entity = 0;
-static ecs_entity_t comp_2d_line_entity = 0;
-static ecs_entity_t comp_2d_text_entity = 0;
 
 ecs_entity_t ecs_component_comp_2d_position(void) { return comp_2d_position_entity; }
 ecs_entity_t ecs_component_comp_2d_rotation(void) { return comp_2d_rotation_entity; }
@@ -29,10 +25,6 @@ ecs_entity_t ecs_component_RenderMesh(void) { return comp_RenderMesh_entity; }
 ecs_entity_t ecs_component_EntityScript(void) { return comp_EntityScript_entity; }
 ecs_entity_t ecs_component_comp_2d_sprite(void) { return comp_2d_sprite_entity; }
 ecs_entity_t ecs_component_comp_2d_camera(void) { return comp_2d_camera_entity; }
-ecs_entity_t ecs_component_comp_2d_rect(void) { return comp_2d_rect_entity; }
-ecs_entity_t ecs_component_comp_2d_circle(void) { return comp_2d_circle_entity; }
-ecs_entity_t ecs_component_comp_2d_line(void) { return comp_2d_line_entity; }
-ecs_entity_t ecs_component_comp_2d_text(void) { return comp_2d_text_entity; }
 
 static void zero_init_ctor(void *ptr, int32_t count, const ecs_type_info_t *ti) {
     memset(ptr, 0, ti->size * count);
@@ -77,10 +69,6 @@ void ecs_register_components(void *world) {
     comp_EntityScript_entity = register_component(ecs, "EntityScript", sizeof(EntityScript), _Alignof(EntityScript));
     comp_2d_sprite_entity = register_component(ecs, "comp_2d_sprite", sizeof(comp_2d_sprite), _Alignof(comp_2d_sprite));
     comp_2d_camera_entity = register_component(ecs, "comp_2d_camera", sizeof(comp_2d_camera), _Alignof(comp_2d_camera));
-    comp_2d_rect_entity = register_component(ecs, "comp_2d_rect", sizeof(comp_2d_rect), _Alignof(comp_2d_rect));
-    comp_2d_circle_entity = register_component(ecs, "comp_2d_circle", sizeof(comp_2d_circle), _Alignof(comp_2d_circle));
-    comp_2d_line_entity = register_component(ecs, "comp_2d_line", sizeof(comp_2d_line), _Alignof(comp_2d_line));
-    comp_2d_text_entity = register_component(ecs, "comp_2d_text", sizeof(comp_2d_text), _Alignof(comp_2d_text));
 }
 
 void ecs_register_builtin_fields(void) {
@@ -157,48 +145,6 @@ void ecs_register_builtin_fields(void) {
     ecs_dynamic_component_add_field(id, "bounds_max_x", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_camera, bounds_max_x));
     ecs_dynamic_component_add_field(id, "bounds_max_y", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_camera, bounds_max_y));
     ecs_dynamic_component_add_field(id, "has_bounds", DYNAMIC_TYPE_BOOL, offsetof(comp_2d_camera, has_bounds));
-
-    id = comp_2d_rect_entity;
-    ecs_dynamic_component_add_field(id, "x", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_rect, x));
-    ecs_dynamic_component_add_field(id, "y", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_rect, y));
-    ecs_dynamic_component_add_field(id, "width", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_rect, width));
-    ecs_dynamic_component_add_field(id, "height", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_rect, height));
-    ecs_dynamic_component_add_field(id, "color", DYNAMIC_TYPE_INT, offsetof(comp_2d_rect, color));
-    ecs_dynamic_component_add_field(id, "layer", DYNAMIC_TYPE_INT, offsetof(comp_2d_rect, layer));
-    ecs_dynamic_component_add_field(id, "filled", DYNAMIC_TYPE_BOOL, offsetof(comp_2d_rect, filled));
-    ecs_dynamic_component_add_field(id, "strength", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_rect, strength));
-    ecs_dynamic_component_add_field(id, "visible", DYNAMIC_TYPE_BOOL, offsetof(comp_2d_rect, visible));
-
-    id = comp_2d_circle_entity;
-    ecs_dynamic_component_add_field(id, "cx", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_circle, cx));
-    ecs_dynamic_component_add_field(id, "cy", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_circle, cy));
-    ecs_dynamic_component_add_field(id, "radius", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_circle, radius));
-    ecs_dynamic_component_add_field(id, "segments", DYNAMIC_TYPE_INT, offsetof(comp_2d_circle, segments));
-    ecs_dynamic_component_add_field(id, "color", DYNAMIC_TYPE_INT, offsetof(comp_2d_circle, color));
-    ecs_dynamic_component_add_field(id, "layer", DYNAMIC_TYPE_INT, offsetof(comp_2d_circle, layer));
-    ecs_dynamic_component_add_field(id, "filled", DYNAMIC_TYPE_BOOL, offsetof(comp_2d_circle, filled));
-    ecs_dynamic_component_add_field(id, "strength", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_circle, strength));
-    ecs_dynamic_component_add_field(id, "visible", DYNAMIC_TYPE_BOOL, offsetof(comp_2d_circle, visible));
-
-    id = comp_2d_line_entity;
-    ecs_dynamic_component_add_field(id, "x0", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_line, x0));
-    ecs_dynamic_component_add_field(id, "y0", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_line, y0));
-    ecs_dynamic_component_add_field(id, "x1", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_line, x1));
-    ecs_dynamic_component_add_field(id, "y1", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_line, y1));
-    ecs_dynamic_component_add_field(id, "strength", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_line, strength));
-    ecs_dynamic_component_add_field(id, "color", DYNAMIC_TYPE_INT, offsetof(comp_2d_line, color));
-    ecs_dynamic_component_add_field(id, "layer", DYNAMIC_TYPE_INT, offsetof(comp_2d_line, layer));
-    ecs_dynamic_component_add_field(id, "visible", DYNAMIC_TYPE_BOOL, offsetof(comp_2d_line, visible));
-
-    id = comp_2d_text_entity;
-    ecs_dynamic_component_add_field(id, "text", DYNAMIC_TYPE_PTR, offsetof(comp_2d_text, text));
-    ecs_dynamic_component_add_field(id, "x", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_text, x));
-    ecs_dynamic_component_add_field(id, "y", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_text, y));
-    ecs_dynamic_component_add_field(id, "font_path", DYNAMIC_TYPE_PTR, offsetof(comp_2d_text, font_path));
-    ecs_dynamic_component_add_field(id, "font_size", DYNAMIC_TYPE_INT, offsetof(comp_2d_text, font_size));
-    ecs_dynamic_component_add_field(id, "color", DYNAMIC_TYPE_INT, offsetof(comp_2d_text, color));
-    ecs_dynamic_component_add_field(id, "layer", DYNAMIC_TYPE_INT, offsetof(comp_2d_text, layer));
-    ecs_dynamic_component_add_field(id, "visible", DYNAMIC_TYPE_BOOL, offsetof(comp_2d_text, visible));
 }
 
 uint64_t ecs_get_builtin_component(const char *name) {
@@ -213,10 +159,6 @@ uint64_t ecs_get_builtin_component(const char *name) {
     if (strcmp(name, "EntityScript") == 0) return comp_EntityScript_entity;
     if (strcmp(name, "comp_2d_sprite") == 0) return comp_2d_sprite_entity;
     if (strcmp(name, "comp_2d_camera") == 0) return comp_2d_camera_entity;
-    if (strcmp(name, "comp_2d_rect") == 0) return comp_2d_rect_entity;
-    if (strcmp(name, "comp_2d_circle") == 0) return comp_2d_circle_entity;
-    if (strcmp(name, "comp_2d_line") == 0) return comp_2d_line_entity;
-    if (strcmp(name, "comp_2d_text") == 0) return comp_2d_text_entity;
     return 0;
 }
 
@@ -231,9 +173,5 @@ const char *ecs_get_builtin_component_name(uint64_t component_id) {
     if (component_id == comp_EntityScript_entity) return "EntityScript";
     if (component_id == comp_2d_sprite_entity) return "comp_2d_sprite";
     if (component_id == comp_2d_camera_entity) return "comp_2d_camera";
-    if (component_id == comp_2d_rect_entity) return "comp_2d_rect";
-    if (component_id == comp_2d_circle_entity) return "comp_2d_circle";
-    if (component_id == comp_2d_line_entity) return "comp_2d_line";
-    if (component_id == comp_2d_text_entity) return "comp_2d_text";
     return NULL;
 }

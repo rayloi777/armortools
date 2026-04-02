@@ -775,7 +775,7 @@ static minic_val_t minic_sprite_draw(minic_val_t *args, int argc) {
     return minic_val_void();
 }
 
-static minic_val_t minic_sprite_create(minic_val_t *args, int argc) {
+static minic_val_t minic_r2d_sprite_create(minic_val_t *args, int argc) {
     if (argc < 1) return minic_val_void();
     uint64_t entity = extract_id(&args[0]);
 
@@ -1223,7 +1223,7 @@ void runtime_api_register(void) {
 
     minic_register_native("sprite_load", minic_sprite_load);
     minic_register_native("sprite_draw", minic_sprite_draw);
-    minic_register_native("sprite_create", minic_sprite_create);
+    minic_register_native("r2d_sprite_create", minic_r2d_sprite_create);
     minic_register_native("draw_begin", minic_draw_begin);
     minic_register_native("draw_end", minic_draw_end);
     minic_register_native("draw_set_color", minic_draw_set_color);
