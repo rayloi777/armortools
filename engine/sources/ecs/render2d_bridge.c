@@ -12,12 +12,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define USE_BATCH_PIPELINE 1
 #define MAX_SPRITES 4096
 
 static game_world_t *g_render2d_world = NULL;
 static ecs_query_t *g_sys_2d_sprite_query = NULL;
 
-// Batch pipeline state
 static gpu_vertex_structure_t s_batch_structure;
 static gpu_buffer_t s_batch_vb;
 static gpu_buffer_t s_batch_ib;
@@ -26,7 +26,6 @@ static gpu_shader_t s_batch_vs;
 static gpu_shader_t s_batch_fs;
 static bool s_batch_initialized = false;
 
-// Per-frame vertex data (pos: float3, tex: float2, col: float4 = 9 floats per vertex)
 #define FLOATS_PER_VERTEX 9
 #define VERTS_PER_SPRITE  4
 #define INDICES_PER_SPRITE 6
@@ -59,7 +58,6 @@ static int sprite_compare(const void *a, const void *b) {
     const sprite_item_t *sa = (const sprite_item_t *)a;
     const sprite_item_t *sb = (const sprite_item_t *)b;
     if (sa->layer != sb->layer) return sa->layer - sb->layer;
-    // Secondary sort by texture pointer for batching
     if (sa->texture < sb->texture) return -1;
     if (sa->texture > sb->texture) return 1;
     return 0;
@@ -85,16 +83,13 @@ void sys_2d_init(void) {
     qdesc.terms[1].id = ecs_component_comp_2d_sprite();
     g_sys_2d_sprite_query = ecs_query_init(ecs, &qdesc);
 
-    // Vertex structure: pos(float3) + tex(float2) + col(float4)
     memset(&s_batch_structure, 0, sizeof(s_batch_structure));
     gpu_vertex_structure_add(&s_batch_structure, "pos", GPU_VERTEX_DATA_F32_3X);
     gpu_vertex_structure_add(&s_batch_structure, "tex", GPU_VERTEX_DATA_F32_2X);
     gpu_vertex_structure_add(&s_batch_structure, "col", GPU_VERTEX_DATA_F32_4X);
 
-    // Create dynamic vertex buffer for MAX_SPRITES * 4 vertices
     gpu_vertex_buffer_init(&s_batch_vb, MAX_SPRITES * VERTS_PER_SPRITE, &s_batch_structure);
 
-    // Create and fill index buffer (quad indices for all possible sprites)
     gpu_index_buffer_init(&s_batch_ib, MAX_SPRITES * INDICES_PER_SPRITE);
     int *indices = (int *)gpu_index_buffer_lock(&s_batch_ib);
     for (int i = 0; i < MAX_SPRITES; i++) {
@@ -108,7 +103,6 @@ void sys_2d_init(void) {
     }
     gpu_index_buffer_unlock(&s_batch_ib);
 
-    // Load compiled shader
     char *dp = data_path();
     char *ext = sys_shader_ext();
 
@@ -134,7 +128,6 @@ void sys_2d_init(void) {
     gpu_shader_init(&s_batch_vs, vs_buf->buffer, vs_buf->length, GPU_SHADER_TYPE_VERTEX);
     gpu_shader_init(&s_batch_fs, fs_buf->buffer, fs_buf->length, GPU_SHADER_TYPE_FRAGMENT);
 
-    // Create pipeline
     gpu_pipeline_init(&s_batch_pipeline);
     s_batch_pipeline.input_layout = &s_batch_structure;
     s_batch_pipeline.vertex_shader = &s_batch_vs;
@@ -145,8 +138,13 @@ void sys_2d_init(void) {
     s_batch_pipeline.alpha_blend_destination = GPU_BLEND_INV_SOURCE_ALPHA;
     gpu_pipeline_compile(&s_batch_pipeline);
 
+    if (s_batch_pipeline.impl.pipeline == NULL) {
+        fprintf(stderr, "Render2d Bridge: Pipeline compilation FAILED\n");
+        return;
+    }
+
     s_batch_initialized = true;
-    fprintf(stderr, "Render2d Bridge: batch pipeline initialized\n");
+    printf("Render2d Bridge: batch pipeline initialized\n");
 }
 
 void sys_2d_shutdown(void) {
@@ -169,46 +167,44 @@ void sys_2d_shutdown(void) {
 void sys_2d_draw(void) {
     if (!g_render2d_world || !s_batch_initialized) return;
 
-    int count = 0;
-    ensure_capacity(128);
+    if (!g_sys_2d_sprite_query) return;
 
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_render2d_world);
     if (!ecs) return;
 
-    // Collect visible sprites
-    if (g_sys_2d_sprite_query) {
-        ecs_iter_t it = ecs_query_iter(ecs, g_sys_2d_sprite_query);
-        while (ecs_query_next(&it)) {
-            comp_2d_position *pos = ecs_field(&it, comp_2d_position, 0);
-            comp_2d_sprite *spr = ecs_field(&it, comp_2d_sprite, 1);
-            for (int i = 0; i < it.count; i++) {
-                if (!spr[i].visible || !spr[i].render_object) continue;
-                gpu_texture_t *tex = (gpu_texture_t *)spr[i].render_object;
-                ensure_capacity(count);
-                sprite_item_t *item = &s_items[count++];
-                item->layer = spr[i].layer;
-                item->texture = tex;
-                item->x = pos[i].x;
-                item->y = pos[i].y;
-                item->z = pos[i].z;
-                item->scale_x = spr[i].scale_x;
-                item->scale_y = spr[i].scale_y;
-                item->src_width = spr[i].src_width >= 1.0f ? spr[i].src_width : (float)tex->width;
-                item->src_height = spr[i].src_height >= 1.0f ? spr[i].src_height : (float)tex->height;
-                item->pivot_x = spr[i].pivot_x;
-                item->pivot_y = spr[i].pivot_y;
-                item->flip_x = spr[i].flip_x;
-                item->flip_y = spr[i].flip_y;
-            }
+    int count = 0;
+    ensure_capacity(128);
+
+    ecs_iter_t it = ecs_query_iter(ecs, g_sys_2d_sprite_query);
+    while (ecs_query_next(&it)) {
+        comp_2d_position *pos = ecs_field(&it, comp_2d_position, 0);
+        comp_2d_sprite *spr = ecs_field(&it, comp_2d_sprite, 1);
+        for (int i = 0; i < it.count; i++) {
+            if (!spr[i].visible || !spr[i].render_object) continue;
+            ensure_capacity(count);
+            sprite_item_t *item = &s_items[count];
+            gpu_texture_t *tex = (gpu_texture_t *)spr[i].render_object;
+            item->layer = spr[i].layer;
+            item->texture = tex;
+            item->x = pos[i].x;
+            item->y = pos[i].y;
+            item->z = pos[i].z;
+            item->scale_x = spr[i].scale_x;
+            item->scale_y = spr[i].scale_y;
+            item->src_width = spr[i].src_width >= 1.0f ? spr[i].src_width : (float)tex->width;
+            item->src_height = spr[i].src_height >= 1.0f ? spr[i].src_height : (float)tex->height;
+            item->pivot_x = spr[i].pivot_x;
+            item->pivot_y = spr[i].pivot_y;
+            item->flip_x = spr[i].flip_x;
+            item->flip_y = spr[i].flip_y;
+            count++;
         }
     }
 
     if (count == 0) return;
 
-    // Sort by layer, then by texture for batching
     qsort(s_items, count, sizeof(sprite_item_t), sprite_compare);
 
-    // Camera transform
     camera2d_t *cam = camera_bridge_get_camera();
     float cam_x = camera2d_get_x(cam);
     float cam_y = camera2d_get_y(cam);
@@ -217,12 +213,10 @@ void sys_2d_draw(void) {
     float win_h = (float)iron_window_height();
     float half_w = win_w / 2.0f;
     float half_h = win_h / 2.0f;
-
-    // Normalize to clip space helper
     float inv_w2 = 2.0f / win_w;
     float inv_h2 = 2.0f / win_h;
 
-    // Fill vertex buffer with all sprite data
+#if USE_BATCH_PIPELINE
     float *verts = (float *)gpu_vertex_buffer_lock(&s_batch_vb);
 
     for (int i = 0; i < count; i++) {
@@ -234,49 +228,37 @@ void sys_2d_draw(void) {
         float draw_x = screen_x - (scaled_w * item->pivot_x);
         float draw_y = screen_y - (scaled_h * item->pivot_y);
 
-        // Convert to clip space [-1, 1], Y flipped
         float x0 = draw_x * inv_w2 - 1.0f;
         float y0 = -(draw_y * inv_h2 - 1.0f);
         float x1 = (draw_x + scaled_w) * inv_w2 - 1.0f;
         float y1 = -((draw_y + scaled_h) * inv_h2 - 1.0f);
-
         float z = item->z;
 
-        // UV coordinates (with flip support)
         float u0 = 0.0f, v0 = 0.0f;
         float u1 = 1.0f, v1 = 1.0f;
         if (item->flip_x) { float tmp = u0; u0 = u1; u1 = tmp; }
         if (item->flip_y) { float tmp = v0; v0 = v1; v1 = tmp; }
 
-        // White color with full alpha
         float r = 1.0f, g = 1.0f, b = 1.0f, a = 1.0f;
-
         float *v = verts + i * VERTS_PER_SPRITE * FLOATS_PER_VERTEX;
 
-        // Vertex 0 (BL): pos(x0, y1, z), uv(u0, v1), col(r,g,b,a)
         v[0] = x0; v[1] = y1; v[2] = z;
         v[3] = u0; v[4] = v1;
         v[5] = r;  v[6] = g;  v[7] = b; v[8] = a;
 
-        // Vertex 1 (TL): pos(x0, y0, z), uv(u0, v0), col(r,g,b,a)
         v[9]  = x0; v[10] = y0; v[11] = z;
         v[12] = u0; v[13] = v0;
         v[14] = r;  v[15] = g;  v[16] = b; v[17] = a;
 
-        // Vertex 2 (TR): pos(x1, y0, z), uv(u1, v0), col(r,g,b,a)
         v[18] = x1; v[19] = y0; v[20] = z;
         v[21] = u1; v[22] = v0;
         v[23] = r;  v[24] = g;  v[25] = b; v[26] = a;
-
-        // Vertex 3 (BR): pos(x1, y1, z), uv(u1, v1), col(r,g,b,a)
         v[27] = x1; v[28] = y1; v[29] = z;
         v[30] = u1; v[31] = v1;
         v[32] = r;  v[33] = g;  v[34] = b; v[35] = a;
     }
-
     gpu_vertex_buffer_unlock(&s_batch_vb);
 
-    // Batch render: draw consecutive sprites grouped by texture
     gpu_set_pipeline(&s_batch_pipeline);
     gpu_set_vertex_buffer(&s_batch_vb);
     gpu_set_index_buffer(&s_batch_ib);
@@ -288,13 +270,22 @@ void sys_2d_draw(void) {
         while (batch_end < count && s_items[batch_end].texture == batch_tex) {
             batch_end++;
         }
-
         int batch_count = batch_end - batch_start;
-
         gpu_set_texture(0, batch_tex);
         s_batch_ib.count = batch_count * INDICES_PER_SPRITE;
         gpu_draw();
-
         batch_start = batch_end;
     }
+#else
+    for (int i = 0; i < count; i++) {
+        sprite_item_t *item = &s_items[i];
+        float sw = item->src_width * item->scale_x * cam_zoom;
+        float sh = item->src_height * item->scale_y * cam_zoom;
+        float sx = (item->x - cam_x) * cam_zoom + half_w;
+        float sy = (item->y - cam_y) * cam_zoom + half_h;
+        float dx = sx - (sw * item->pivot_x);
+        float dy = sy - (sh * item->pivot_y);
+        draw_scaled_sub_image(item->texture, 0, 0, item->src_width, item->src_height, dx, dy, sw, sh);
+    }
+#endif
 }

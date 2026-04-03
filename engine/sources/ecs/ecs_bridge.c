@@ -79,7 +79,7 @@ void ecs_bridge_init(void) {
     sys_desc.callback = bridge_system;
     
     g_bridge_system = ecs_system_init(ecs, &sys_desc);
-    
+
     if (g_bridge_system == 0) {
         fprintf(stderr, "Failed to create bridge system\n");
         return;

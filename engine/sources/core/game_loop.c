@@ -7,7 +7,6 @@
 #include <iron_draw.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <time.h>
 
 static game_world_t *g_loop_world = NULL;
 static float g_delta_time = 0.0f;
@@ -36,10 +35,10 @@ void game_loop_update(void) {
 
     game_world_progress(g_loop_world, g_delta_time);
     minic_system_call_step();
+
     sys_render();
 
     draw_begin(NULL, true, 0xff1a1a2e);
-
     camera2d_update(camera_bridge_get_camera(), g_delta_time);
     sys_2d_draw();
     minic_system_call_draw();
