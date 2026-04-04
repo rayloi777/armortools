@@ -16,8 +16,9 @@
 #include <math.h>
 static game_world_t *g_runtime_world = NULL;
 
-// Extract a 64-bit ID from a minic value — handles both pointer and float storage
+// Extract a 64-bit ID from a minic value — handles ID, pointer, and float storage
 static uint64_t extract_id(minic_val_t *arg) {
+    if (arg->type == MINIC_T_ID) return arg->u64;
     if (arg->type == MINIC_T_PTR) return (uint64_t)(uintptr_t)arg->p;
     return (uint64_t)minic_val_to_d(*arg);
 }
@@ -227,11 +228,11 @@ static minic_val_t minic_query_iter_comp_ptr_native(minic_val_t *args, int argc)
 }
 
 static minic_val_t minic_query_iter_entity_native(minic_val_t *args, int argc) {
-    if (argc < 2) return minic_val_float(0.0);
+    if (argc < 2) return minic_val_id(0);
     int query_id = (int)minic_val_to_d(args[0]);
     int index = (int)minic_val_to_d(args[1]);
     uint64_t entity = query_iter_entity(query_id, index);
-    return minic_val_float((double)entity);
+    return minic_val_id(entity);
 }
 
 static minic_val_t minic_query_foreach_native(minic_val_t *args, int argc) {
@@ -240,20 +241,36 @@ static minic_val_t minic_query_foreach_native(minic_val_t *args, int argc) {
     void *callback = args[1].p;
     if (!callback) return minic_val_int(0);
 
+    // Phase 1: collect all entity/component pairs from the query FIRST
+    // (complete Flecs iteration before any VM re-entry)
+    #define FOREACH_BATCH 256
+    uint64_t entities[FOREACH_BATCH];
+    void *comp_ptrs[FOREACH_BATCH];
     int total = 0;
+
     query_iter_begin(query_id);
     while (query_iter_next(query_id)) {
         int count = query_iter_count(query_id);
         for (int i = 0; i < count; i++) {
-            uint64_t entity = query_iter_entity(query_id, i);
-            void *comp_data = query_iter_comp_ptr(query_id, i, 0);
-            minic_val_t cb_args[2];
-            cb_args[0] = minic_val_float((double)entity);
-            cb_args[1] = minic_val_ptr(comp_data);
-            minic_call_fn(callback, cb_args, 2);
+            if (total >= FOREACH_BATCH) break;
+            entities[total] = query_iter_entity(query_id, i);
+            comp_ptrs[total] = query_iter_comp_ptr(query_id, i, 0);
             total++;
         }
     }
+
+    // Phase 2: call the callback for each collected entity
+    // Component data pointers are now stale if entities moved archetypes
+    // during iteration, but since we completed iteration, no more iterator
+    // invalidation. The comp_ptrs point into the Flecs table storage which
+    // is still valid (just the archetype may have changed).
+    for (int i = 0; i < total; i++) {
+        minic_val_t cb_args[2];
+        cb_args[0] = minic_val_id(entities[i]);
+        cb_args[1] = minic_val_ptr(comp_ptrs[i]);
+        minic_call_fn(callback, cb_args, 2);
+    }
+
     return minic_val_int(total);
 }
 
@@ -457,10 +474,10 @@ static uint64_t minic_component_register(const char *name, int size) {
     return component_register(g_runtime_world, &desc);
 }
 static minic_val_t minic_component_register_native(minic_val_t *args, int argc) {
-    if (argc < 2 || !g_runtime_world) return minic_val_ptr(NULL);
+    if (argc < 2 || !g_runtime_world) return minic_val_id(0);
     const char *name = (const char *)args[0].p;
     int size = (int)minic_val_to_d(args[1]);
-    if (!name) return minic_val_ptr(NULL);
+    if (!name) return minic_val_id(0);
 
     component_desc_t desc = {
         .name = name,
@@ -473,18 +490,18 @@ static minic_val_t minic_component_register_native(minic_val_t *args, int argc) 
     };
 
     uint64_t id = component_register(g_runtime_world, &desc);
-    return minic_val_ptr((void *)(uintptr_t)id);
+    return minic_val_id(id);
 }
 static uint64_t minic_component_get_id(const char *name) {
     if (!g_runtime_world || !name) return 0;
     return component_get_id(g_runtime_world, name);
 }
 static minic_val_t minic_component_get_id_native(minic_val_t *args, int argc) {
-    if (argc < 1 || !g_runtime_world) return minic_val_ptr(NULL);
+    if (argc < 1 || !g_runtime_world) return minic_val_id(0);
     const char *name = (const char *)args[0].p;
-    if (!name) return minic_val_ptr(NULL);
+    if (!name) return minic_val_id(0);
     uint64_t id = component_get_id(g_runtime_world, name);
-    return minic_val_ptr((void *)(uintptr_t)id);
+    return minic_val_id(id);
 }
 static int minic_component_set_hooks(const char *name, const char *ctor_name, const char *dtor_name) {
     if (!g_runtime_world || !name) return -1;
@@ -529,19 +546,19 @@ static const char *minic_entity_get_name(uint64_t entity) {
     return entity_get_name(g_runtime_world, entity);
 }
 
-// Native wrappers that preserve 64-bit entity IDs through minic_val_t via pointer storage
+// Native wrappers that preserve 64-bit entity IDs through minic_val_t via id type
 static minic_val_t minic_entity_create_native(minic_val_t *args, int argc) {
     (void)args; (void)argc;
-    if (!g_runtime_world) return minic_val_ptr(NULL);
+    if (!g_runtime_world) return minic_val_id(0);
     uint64_t id = entity_create(g_runtime_world);
-    return minic_val_ptr((void *)(uintptr_t)id);
+    return minic_val_id(id);
 }
 static minic_val_t minic_entity_create_named_native(minic_val_t *args, int argc) {
-    if (argc < 1 || !g_runtime_world) return minic_val_ptr(NULL);
+    if (argc < 1 || !g_runtime_world) return minic_val_id(0);
     const char *name = (const char *)args[0].p;
-    if (!name) return minic_val_ptr(NULL);
+    if (!name) return minic_val_id(0);
     uint64_t id = entity_create_with_name(g_runtime_world, name);
-    return minic_val_ptr((void *)(uintptr_t)id);
+    return minic_val_id(id);
 }
 static minic_val_t minic_entity_destroy_native(minic_val_t *args, int argc) {
     if (argc < 1 || !g_runtime_world) return minic_val_void();
@@ -601,18 +618,18 @@ static minic_val_t minic_entity_get_name_native(minic_val_t *args, int argc) {
     return minic_val_ptr((void *)entity_get_name(g_runtime_world, entity));
 }
 static minic_val_t minic_entity_find_by_name_native(minic_val_t *args, int argc) {
-    if (argc < 1 || !g_runtime_world) return minic_val_ptr(NULL);
+    if (argc < 1 || !g_runtime_world) return minic_val_id(0);
     const char *name = (const char *)args[0].p;
-    if (!name) return minic_val_ptr(NULL);
+    if (!name) return minic_val_id(0);
     uint64_t id = entity_find_by_name(g_runtime_world, name);
-    return minic_val_ptr((void *)(uintptr_t)id);
+    return minic_val_id(id);
 }
 static minic_val_t minic_entity_get_parent_native(minic_val_t *args, int argc) {
-    if (argc < 1 || !g_runtime_world) return minic_val_ptr(NULL);
+    if (argc < 1 || !g_runtime_world) return minic_val_id(0);
     uint64_t entity = extract_id(&args[0]);
-    if (entity == 0) return minic_val_ptr(NULL);
+    if (entity == 0) return minic_val_id(0);
     uint64_t parent = entity_get_parent(g_runtime_world, entity);
-    return minic_val_ptr((void *)(uintptr_t)parent);
+    return minic_val_id(parent);
 }
 static minic_val_t minic_entity_set_parent_native(minic_val_t *args, int argc) {
     if (argc < 2 || !g_runtime_world) return minic_val_void();
@@ -623,10 +640,10 @@ static minic_val_t minic_entity_set_parent_native(minic_val_t *args, int argc) {
     return minic_val_void();
 }
 static minic_val_t minic_entity_get_native(minic_val_t *args, int argc) {
-    if (argc < 2 || !g_runtime_world) return minic_val_ptr(NULL);
+    if (argc < 2 || !g_runtime_world) return minic_val_id(0);
     uint64_t entity = extract_id(&args[0]);
     uint64_t comp = extract_id(&args[1]);
-    if (entity == 0 || comp == 0) return minic_val_ptr(NULL);
+    if (entity == 0 || comp == 0) return minic_val_id(0);
     return minic_val_ptr(entity_get_component_data(g_runtime_world, entity, comp));
 }
 static minic_val_t minic_entity_set_name_native(minic_val_t *args, int argc) {

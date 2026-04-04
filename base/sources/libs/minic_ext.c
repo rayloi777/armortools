@@ -174,6 +174,8 @@ static minic_type_t minic_sig_char(char c) {
 		return MINIC_T_CHAR;
 	case 'v':
 		return MINIC_T_VOID;
+	case 'e':
+		return MINIC_T_ID;
 	default:
 		return MINIC_T_INT;
 	}
@@ -302,6 +304,14 @@ minic_val_t minic_dispatch(minic_ext_func_t *ef, minic_val_t *args, int argc) {
 				a[i].p = (dv == 0.0) ? NULL : (void *)(uintptr_t)(uint64_t)dv;
 			}
 			break;
+		case MINIC_T_ID:
+			if (args[i].type == MINIC_T_ID) {
+				a[i].p = (void *)(uintptr_t)args[i].u64;
+			}
+			else {
+				a[i].p = (void *)(uintptr_t)(uint64_t)dv;
+			}
+			break;
 		}
 	}
 
@@ -333,6 +343,9 @@ minic_val_t minic_dispatch(minic_ext_func_t *ef, minic_val_t *args, int argc) {
 			break;
 		case MINIC_T_PTR:
 			adesc[i] = 'p';
+			break;
+		case MINIC_T_ID:
+			adesc[i] = 'e';
 			break;
 		default:
 			adesc[i] = 'i';

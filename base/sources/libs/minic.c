@@ -40,6 +40,7 @@ typedef enum {
 	TOK_TYPEDEF,
 	TOK_ENUM,
 	TOK_VOID,
+	TOK_ID,
 	TOK_IDENT,
 	TOK_NUMBER,
 	TOK_CHAR_LIT,
@@ -359,6 +360,10 @@ static void minic_lex_next(minic_lexer_t *l) {
 			}
 			if (len == 3 && strcmp(l->cur.text, "int") == 0) {
 				l->cur.type = TOK_INT;
+				return;
+			}
+			if (len == 2 && strcmp(l->cur.text, "id") == 0) {
+				l->cur.type = TOK_ID;
 				return;
 			}
 			break;
@@ -767,6 +772,8 @@ static const char *minic_tok_name(minic_tok_type_t t) {
 		return "'struct'";
 	case TOK_VOID:
 		return "'void'";
+	case TOK_ID:
+		return "'id'";
 	case TOK_EOF:
 		return "end of file";
 	default:
@@ -1555,22 +1562,40 @@ static minic_val_t minic_parse_cmp(minic_env_t *e) {
 	minic_tok_type_t op = e->lex.cur.type;
 	if (op == TOK_EQ || op == TOK_NEQ || op == TOK_LT || op == TOK_GT || op == TOK_LE || op == TOK_GE) {
 		minic_lex_next(&e->lex);
-		minic_val_t r  = minic_parse_expr(e);
-		double      dv = minic_val_to_d(v);
-		double      dr = minic_val_to_d(r);
+		minic_val_t r = minic_parse_expr(e);
 		int         res;
-		if (op == TOK_EQ)
-			res = dv == dr;
-		else if (op == TOK_NEQ)
-			res = dv != dr;
-		else if (op == TOK_LT)
-			res = dv < dr;
-		else if (op == TOK_GT)
-			res = dv > dr;
-		else if (op == TOK_LE)
-			res = dv <= dr;
-		else
-			res = dv >= dr;
+		// Fast path: both ID -- compare uint64_t directly (no double precision loss)
+		if (v.type == MINIC_T_ID && r.type == MINIC_T_ID) {
+			uint64_t uv = v.u64, ur = r.u64;
+			if (op == TOK_EQ)
+				res = uv == ur;
+			else if (op == TOK_NEQ)
+				res = uv != ur;
+			else if (op == TOK_LT)
+				res = uv < ur;
+			else if (op == TOK_GT)
+				res = uv > ur;
+			else if (op == TOK_LE)
+				res = uv <= ur;
+			else
+				res = uv >= ur;
+		}
+		else {
+			double dv = minic_val_to_d(v);
+			double dr = minic_val_to_d(r);
+			if (op == TOK_EQ)
+				res = dv == dr;
+			else if (op == TOK_NEQ)
+				res = dv != dr;
+			else if (op == TOK_LT)
+				res = dv < dr;
+			else if (op == TOK_GT)
+				res = dv > dr;
+			else if (op == TOK_LE)
+				res = dv <= dr;
+			else
+				res = dv >= dr;
+		}
 		return minic_val_int(res);
 	}
 	return v;
@@ -1618,6 +1643,8 @@ static minic_type_t minic_tok_to_type(minic_tok_type_t t) {
 	case TOK_FLOAT:
 	case TOK_DOUBLE:
 		return MINIC_T_FLOAT;
+	case TOK_ID:
+		return MINIC_T_ID;
 	default:
 		return MINIC_T_PTR; // void * -> PTR
 	}
@@ -1734,7 +1761,7 @@ static void minic_parse_stmt(minic_env_t *e) {
 	}
 
 	if (e->lex.cur.type == TOK_INT || e->lex.cur.type == TOK_FLOAT || e->lex.cur.type == TOK_CHAR || e->lex.cur.type == TOK_DOUBLE ||
-	    e->lex.cur.type == TOK_BOOL || e->lex.cur.type == TOK_VOID) {
+	    e->lex.cur.type == TOK_BOOL || e->lex.cur.type == TOK_VOID || e->lex.cur.type == TOK_ID) {
 		minic_type_t base_type = minic_tok_to_type(e->lex.cur.type); // Type before '*'
 		minic_type_t dtype     = base_type;
 		minic_lex_next(&e->lex); // Consume type keyword
@@ -1986,7 +2013,7 @@ static void minic_parse_stmt(minic_env_t *e) {
 		minic_expect(e, TOK_LPAREN);
 
 		if (e->lex.cur.type == TOK_INT || e->lex.cur.type == TOK_FLOAT || e->lex.cur.type == TOK_CHAR || e->lex.cur.type == TOK_DOUBLE ||
-		    e->lex.cur.type == TOK_BOOL || e->lex.cur.type == TOK_VOID) {
+		    e->lex.cur.type == TOK_BOOL || e->lex.cur.type == TOK_VOID || e->lex.cur.type == TOK_ID) {
 			minic_lex_next(&e->lex);
 		}
 		{
@@ -2267,7 +2294,7 @@ static void minic_parse_block(minic_env_t *e) {
 // Consume a type keyword (int, float, char, double, bool, void), return true if found
 static bool minic_lex_type(minic_env_t *e) {
 	if (e->lex.cur.type == TOK_INT || e->lex.cur.type == TOK_FLOAT || e->lex.cur.type == TOK_CHAR || e->lex.cur.type == TOK_DOUBLE ||
-	    e->lex.cur.type == TOK_BOOL || e->lex.cur.type == TOK_VOID) {
+	    e->lex.cur.type == TOK_BOOL || e->lex.cur.type == TOK_VOID || e->lex.cur.type == TOK_ID) {
 		minic_lex_next(&e->lex);
 		return true;
 	}

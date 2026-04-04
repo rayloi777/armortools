@@ -9,9 +9,9 @@ float WALL_RIGHT = 1260.0;
 int AI_FROG_COUNT = 15;
 
 // Component IDs
-float g_pos_comp = -1.0;
-float g_sprite_comp = -1.0;
-float g_vel_comp = -1.0;
+id g_pos_comp = 0;
+id g_sprite_comp = 0;
+id g_vel_comp = 0;
 
 // Query
 int g_vel_query = -1;
@@ -20,7 +20,7 @@ int g_vel_query = -1;
 float g_dt = 0.016;
 
 // Player frog state (globals — player has no FrogVelocity component)
-float g_player = -1.0;
+id g_player = 0;
 float g_pvx = 0.0;
 float g_pvy = 0.0;
 int g_pground = 1;
@@ -41,7 +41,7 @@ int init(void) {
     // AI frogs
     int i = 0;
     while (i < AI_FROG_COUNT) {
-        float e = entity_create();
+        id e = entity_create();
         entity_add(e, g_pos_comp);
         entity_add(e, g_sprite_comp);
         entity_add(e, g_vel_comp);
@@ -92,7 +92,7 @@ int init(void) {
 }
 
 // AI frog callback — called by query_foreach for each AI frog
-int ai_frog_step(int entity, void *vel) {
+int ai_frog_step(id entity, void *vel) {
     float dt = g_dt;
 
     // Read velocity

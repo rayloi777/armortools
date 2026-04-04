@@ -72,6 +72,25 @@ Bridge systems (`ecs_bridge.c`, `sprite_bridge.c`, `render2d_bridge.c`, `camera_
 
 Minic is a tree-walking interpreter bundled in `base/sources/libs/minic.c` with 500+ Iron API bindings. Game scripts live in `engine/assets/scripts/` and `engine/assets/systems/`. Scripts define components, entities, and systems at runtime. The entry point is loaded via `load_and_run_script()` in `game_engine.c`.
 
+#### Minic Types
+
+| Keyword | Internal | C equivalent | Use |
+|---------|----------|-------------|-----|
+| `int` | `MINIC_T_INT` | `int32_t` | General integers |
+| `float` | `MINIC_T_FLOAT` | `float` | Floating-point |
+| `bool` | `MINIC_T_BOOL` | `bool` | Booleans |
+| `void` | `MINIC_T_VOID` | `void` | Function returns |
+| `id` | `MINIC_T_ID` | `uint64_t` | Entity/component IDs (Flecs `ecs_id_t`) |
+
+The `id` type stores 64-bit Flecs entity/component IDs natively. It supports comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) via a fast path that compares `uint64_t` directly (no double precision loss). It does **not** support arithmetic. Use it for variables that hold entity or component IDs returned by `entity_create()`, `component_lookup()`, `query_foreach()` callbacks, etc.
+
+```c
+// Example usage in .minic scripts:
+id g_player = entity_create();
+id g_pos_comp = component_lookup("comp_2d_position");
+entity_add(g_player, g_pos_comp);
+```
+
 ### 2D Components
 
 2D ECS components use the `comp_2d_` naming prefix (e.g., `comp_2d_position`, `comp_2d_sprite`). The 2D render pipeline is driven by `render2d_bridge.c` which batches and submits 2D draw calls.

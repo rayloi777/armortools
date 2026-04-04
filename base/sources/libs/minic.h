@@ -21,15 +21,17 @@ typedef enum {
 	MINIC_T_BOOL  = 3, // used in extern-call ABI, stored as INT in vals
 	MINIC_T_CHAR  = 4, // used in extern-call ABI, stored as INT in vals
 	MINIC_T_VOID  = 5, // for void-returning functions
+	MINIC_T_ID   = 6, // uint64_t — entity/component IDs (Flecs ecs_id_t)
 } minic_type_t;
 
 typedef struct {
 	minic_type_t type;
 	minic_type_t deref_type; // pointed-to type (for MINIC_T_PTR)
 	union {
-		int   i; // MINIC_T_INT
-		float f; // MINIC_T_FLOAT
-		void *p; // MINIC_T_PTR
+		int      i;   // MINIC_T_INT
+		float    f;   // MINIC_T_FLOAT
+		void    *p;   // MINIC_T_PTR
+		uint64_t u64; // MINIC_T_ID (aliases p on 64-bit, zero extra size)
 	};
 } minic_val_t;
 
@@ -128,6 +130,14 @@ static inline minic_val_t minic_val_ptr(void *v) {
 	return r;
 }
 
+static inline minic_val_t minic_val_id(uint64_t v) {
+	minic_val_t r;
+	r.type       = MINIC_T_ID;
+	r.deref_type = MINIC_T_ID;
+	r.u64        = v;
+	return r;
+}
+
 static inline minic_val_t minic_val_typed_ptr(void *v, minic_type_t deref_type) {
 	minic_val_t r;
 	r.type       = MINIC_T_PTR;
@@ -153,6 +163,7 @@ static inline double minic_val_to_d(minic_val_t v) {
 	case MINIC_T_FLOAT:
 		return (double)v.f;
 	case MINIC_T_PTR:
+	case MINIC_T_ID:
 		return (double)(uintptr_t)v.p;
 	default:
 		return 0.0;
@@ -160,7 +171,9 @@ static inline double minic_val_to_d(minic_val_t v) {
 }
 
 static inline void *minic_val_to_ptr(minic_val_t v) {
-	return (v.type == MINIC_T_PTR) ? v.p : (void *)(uintptr_t)(uint64_t)minic_val_to_d(v);
+	if (v.type == MINIC_T_PTR) return v.p;
+	if (v.type == MINIC_T_ID) return (void *)(uintptr_t)v.u64;
+	return (void *)(uintptr_t)(uint64_t)minic_val_to_d(v);
 }
 
 static inline int minic_val_is_true(minic_val_t v) {
@@ -191,6 +204,13 @@ static inline minic_val_t minic_val_coerce(double d, minic_type_t t) {
 		r.type       = MINIC_T_PTR;
 		r.deref_type = MINIC_T_PTR;
 		r.p          = (void *)(uintptr_t)(uint64_t)d;
+		return r;
+	}
+	case MINIC_T_ID: {
+		minic_val_t r;
+		r.type       = MINIC_T_ID;
+		r.deref_type = MINIC_T_ID;
+		r.u64        = (uint64_t)d;
 		return r;
 	}
 	}

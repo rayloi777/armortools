@@ -43,7 +43,8 @@ static int vc_const(vc_t *c, minic_val_t v) {
 		if (c->constants[i].type == v.type &&
 		    ((v.type == MINIC_T_INT && c->constants[i].i == v.i) ||
 		     (v.type == MINIC_T_FLOAT && c->constants[i].f == v.f) ||
-		     (v.type == MINIC_T_PTR && c->constants[i].p == v.p)))
+		     (v.type == MINIC_T_PTR && c->constants[i].p == v.p) ||
+		     (v.type == MINIC_T_ID && c->constants[i].u64 == v.u64)))
 			return i;
 	if (c->const_count >= 4096)
 		return 0;
@@ -319,7 +320,7 @@ static int vc_primary(vc_t *c) {
 		vc_advance(c);
 		// Cast: (int)expr, (float)expr, etc.
 		if (vc_check(c, TOK_INT) || vc_check(c, TOK_FLOAT) || vc_check(c, TOK_CHAR) ||
-		    vc_check(c, TOK_DOUBLE) || vc_check(c, TOK_BOOL) || vc_check(c, TOK_VOID)) {
+		    vc_check(c, TOK_DOUBLE) || vc_check(c, TOK_BOOL) || vc_check(c, TOK_VOID) || vc_check(c, TOK_ID)) {
 			vc_advance(c);  // skip type keyword
 			vc_expect(c, TOK_RPAREN);
 			// Compile the sub-expression (cast is a no-op at VM level;
@@ -468,7 +469,7 @@ static void vc_stmt(vc_t *c) {
 
 	// Var decl: int/float/char/double/bool/void name [= expr];
 	if (c->lex.cur.type == TOK_INT || c->lex.cur.type == TOK_FLOAT || c->lex.cur.type == TOK_CHAR || c->lex.cur.type == TOK_DOUBLE ||
-	    c->lex.cur.type == TOK_BOOL || c->lex.cur.type == TOK_VOID) {
+	    c->lex.cur.type == TOK_BOOL || c->lex.cur.type == TOK_VOID || c->lex.cur.type == TOK_ID) {
 		vc_advance(c);
 		if (vc_check(c, TOK_STAR))
 			vc_advance(c);
@@ -563,7 +564,7 @@ static void vc_stmt(vc_t *c) {
 
 		// Optional type keyword
 		if (c->lex.cur.type == TOK_INT || c->lex.cur.type == TOK_FLOAT || c->lex.cur.type == TOK_CHAR ||
-		    c->lex.cur.type == TOK_DOUBLE || c->lex.cur.type == TOK_BOOL || c->lex.cur.type == TOK_VOID)
+		    c->lex.cur.type == TOK_DOUBLE || c->lex.cur.type == TOK_BOOL || c->lex.cur.type == TOK_VOID || c->lex.cur.type == TOK_ID)
 			vc_advance(c);
 
 		// Init
