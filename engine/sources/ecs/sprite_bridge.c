@@ -27,7 +27,7 @@ void sprite_bridge_set_texture(uint64_t entity, const char *path) {
     if (!world || !entity || !path) return;
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(world);
     if (!ecs) return;
-    comp_2d_sprite *sprite = (comp_2d_sprite *)ecs_get_mut_id(ecs, (ecs_entity_t)entity, ecs_component_comp_2d_sprite());
+    comp_2d_sprite *sprite = (comp_2d_sprite *)ecs_get_id(ecs, (ecs_entity_t)entity, ecs_component_comp_2d_sprite());
     if (sprite) {
         sprite->texture_path = (char *)path;
     }
@@ -38,7 +38,7 @@ void sprite_bridge_create_sprite(uint64_t entity) {
     if (!world || !entity) return;
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(world);
     if (!ecs) return;
-    comp_2d_sprite *sprite = (comp_2d_sprite *)ecs_get_mut_id(ecs, (ecs_entity_t)entity, ecs_component_comp_2d_sprite());
+    comp_2d_sprite *sprite = (comp_2d_sprite *)ecs_get_id(ecs, (ecs_entity_t)entity, ecs_component_comp_2d_sprite());
     if (!sprite) return;
     // Always reload if texture_path is set (render_object may contain garbage)
     if (sprite->texture_path != NULL) {

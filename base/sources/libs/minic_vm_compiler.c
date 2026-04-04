@@ -186,6 +186,8 @@ static int vc_primary(vc_t *c) {
 				c->max_reg = arg_base + argc;
 			vc_expect(c, TOK_RPAREN);
 
+			// Allocate dest above all argument registers to avoid overwriting locals/params
+			c->free_reg = arg_base + argc;
 			int dest = vc_reg(c);
 
 			// Check ext func
@@ -862,6 +864,7 @@ static void vc_stmt(vc_t *c) {
 				fv.deref_type = MINIC_T_PTR;
 				fv.p          = ef;
 				int ci = vc_const(c, fv);
+				c->free_reg = arg_base + argc;
 				int dest = vc_reg(c);
 				vc_emit(c, VM_MAKE_ABX(OP_CALL_EXT, dest, (argc << 8) | arg_base));
 				vc_emit(c, (uint32_t)ci);
@@ -874,6 +877,7 @@ static void vc_stmt(vc_t *c) {
 			if (c->env) {
 				for (int i = 0; i < c->env->func_count; i++) {
 					if (strcmp(c->env->funcs[i].name, name) == 0) {
+						c->free_reg = arg_base + argc;
 						int dest = vc_reg(c);
 						vc_emit(c, VM_MAKE_ABC(OP_CALL, dest, i, argc));
 						vc_emit(c, (uint32_t)arg_base);
