@@ -51,3 +51,4 @@ bool query_iter_next(int query_id);
 int query_iter_count(int query_id);
 uint64_t query_iter_entity(int query_id, int index);
 void *query_iter_comp_ptr(int query_id, int entity_index, int comp_index);
+uint64_t query_get_component_id(int query_id, int comp_index);

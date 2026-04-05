@@ -349,6 +349,12 @@ int query_total_count(int query_id) {
     return q->total_count;
 }
 
+uint64_t query_get_component_id(int query_id, int comp_index) {
+    runtime_query_t *q = get_query_by_id(query_id);
+    if (!q || comp_index < 0 || comp_index >= q->component_count) return 0;
+    return q->components[comp_index];
+}
+
 bool query_was_truncated(int query_id) {
     runtime_query_t *q = get_query_by_id(query_id);
     if (!q) return false;
@@ -456,7 +462,7 @@ void *query_iter_comp_ptr(int query_id, int entity_index, int comp_index) {
 
 void query_api_register(void) {
     query_api_init();
-    
+
     minic_register("query_create", "i(p)", (minic_ext_fn_raw_t)query_create);
     minic_register("query_destroy", "v(i)", (minic_ext_fn_raw_t)query_destroy);
     minic_register("query_next", "i(i)", (minic_ext_fn_raw_t)query_next);

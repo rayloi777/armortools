@@ -241,11 +241,9 @@ static minic_val_t minic_query_foreach_native(minic_val_t *args, int argc) {
     void *callback = args[1].p;
     if (!callback) return minic_val_int(0);
 
-    // Phase 1: collect all entity/component pairs from the query FIRST
-    // (complete Flecs iteration before any VM re-entry)
+    // Collect all entity IDs from the query (complete iteration first)
     #define FOREACH_BATCH 256
     uint64_t entities[FOREACH_BATCH];
-    void *comp_ptrs[FOREACH_BATCH];
     int total = 0;
 
     query_iter_begin(query_id);
@@ -253,21 +251,24 @@ static minic_val_t minic_query_foreach_native(minic_val_t *args, int argc) {
         int count = query_iter_count(query_id);
         for (int i = 0; i < count; i++) {
             if (total >= FOREACH_BATCH) break;
-            entities[total] = query_iter_entity(query_id, i);
-            comp_ptrs[total] = query_iter_comp_ptr(query_id, i, 0);
-            total++;
+            entities[total++] = query_iter_entity(query_id, i);
         }
     }
 
-    // Phase 2: call the callback for each collected entity
-    // Component data pointers are now stale if entities moved archetypes
-    // during iteration, but since we completed iteration, no more iterator
-    // invalidation. The comp_ptrs point into the Flecs table storage which
-    // is still valid (just the archetype may have changed).
+    // Call callback for each entity. Use entity_get_component_data to get
+    // a fresh component pointer each time — stale iterator pointers are
+    // invalidated after ecs_iter_fini runs at the end of the loop above.
     for (int i = 0; i < total; i++) {
+        // Look up the component ID the query uses (stored at index 0)
+        // and get a fresh pointer via ecs_get_id (read-only, safe).
+        extern uint64_t query_get_component_id(int query_id, int comp_index);
+        uint64_t comp_id = query_get_component_id(query_id, 0);
+        void *comp_ptr = (comp_id && g_runtime_world)
+            ? entity_get_component_data(g_runtime_world, entities[i], comp_id)
+            : NULL;
         minic_val_t cb_args[2];
         cb_args[0] = minic_val_id(entities[i]);
-        cb_args[1] = minic_val_ptr(comp_ptrs[i]);
+        cb_args[1] = minic_val_ptr(comp_ptr);
         minic_call_fn(callback, cb_args, 2);
     }
 
