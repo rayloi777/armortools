@@ -2834,6 +2834,9 @@ static minic_val_t vm_globals[VM_MAX_GLOBALS];
 static char        vm_global_names[VM_MAX_GLOBALS][64];
 static uint32_t    vm_global_hashes[VM_MAX_GLOBALS];
 static int         vm_global_count = 0;
+static minic_val_t vm_stack_reentry[VM_STACK_SIZE];
+static minic_val_t vm_saved_frames_buf[(VM_MAX_FRAMES * sizeof(minic_frame_t)) / sizeof(minic_val_t) + 1];
+static minic_val_t vm_saved_globals_buf[VM_MAX_GLOBALS];
 static int         vm_global_find_or_add(const char *name) {
     uint32_t h = minic_name_hash(name);
     for (int i = 0; i < vm_global_count; i++) {
@@ -2942,15 +2945,12 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 	static minic_val_t   vm_stack[VM_STACK_SIZE];
 	static minic_frame_t vm_frames[VM_MAX_FRAMES];
 	// Re-entry guard: save outer VM state when native callbacks call back into minic
-	minic_val_t   *saved_stack = NULL;
 	minic_frame_t *saved_frames = NULL;
 	minic_val_t   *saved_globals = NULL;
 	bool is_reentrant = (vm_active > 0);
 	if (is_reentrant) {
-		saved_stack  = (minic_val_t *)malloc(VM_STACK_SIZE * sizeof(minic_val_t));
-		saved_frames = (minic_frame_t *)malloc(VM_MAX_FRAMES * sizeof(minic_frame_t));
-		saved_globals = (minic_val_t *)malloc(VM_MAX_GLOBALS * sizeof(minic_val_t));
-		memcpy(saved_stack, vm_stack, VM_STACK_SIZE * sizeof(minic_val_t));
+		saved_frames  = (minic_frame_t *)vm_saved_frames_buf;
+		saved_globals = vm_saved_globals_buf;
 		memcpy(saved_frames, vm_frames, VM_MAX_FRAMES * sizeof(minic_frame_t));
 		memcpy(saved_globals, vm_globals, VM_MAX_GLOBALS * sizeof(minic_val_t));
 	}
@@ -2958,6 +2958,7 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 
 	minic_val_t _vm_result = minic_val_int(0);
 	int                  frame_top = 0;
+	minic_val_t         *active_stack = is_reentrant ? vm_stack_reentry : vm_stack;
 
 	// Init frame 0
 	minic_frame_t *frame = &vm_frames[0];
@@ -2966,7 +2967,7 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 	frame->pc            = 0;
 	frame->reg_base      = 0;
 	frame->num_regs      = proto->num_regs;
-	frame->regs          = vm_stack;
+	frame->regs          = active_stack;
 	frame->return_reg    = 0;
 
 	// Bind arguments
@@ -3212,7 +3213,7 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 					nf->pc         = 0;
 					nf->reg_base   = frame->reg_base + frame->num_regs;
 					nf->num_regs   = fn->proto->num_regs;
-					nf->regs       = &vm_stack[nf->reg_base];
+					nf->regs       = &active_stack[nf->reg_base];
 					nf->return_reg = a;
 					for (int ai = 0; ai < c && ai < nf->num_regs; ai++)
 						nf->regs[ai] = frame->regs[call_base2 + ai];
@@ -3266,12 +3267,8 @@ static minic_val_t minic_vm_exec_inner(minic_ctx_t *ctx, minic_proto_t *proto, m
 vm_cleanup:
 		vm_active--;
 		if (is_reentrant) {
-			memcpy(vm_stack, saved_stack, VM_STACK_SIZE * sizeof(minic_val_t));
 			memcpy(vm_frames, saved_frames, VM_MAX_FRAMES * sizeof(minic_frame_t));
 			memcpy(vm_globals, saved_globals, VM_MAX_GLOBALS * sizeof(minic_val_t));
-			free(saved_stack);
-			free(saved_frames);
-			free(saved_globals);
 		}
 		return _vm_result;
 	}

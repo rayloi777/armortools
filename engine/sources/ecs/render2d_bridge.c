@@ -13,7 +13,7 @@
 #include <string.h>
 
 #define USE_BATCH_PIPELINE 1
-#define MAX_SPRITES 4096
+#define MAX_SPRITES 8192
 
 static game_world_t *g_render2d_world = NULL;
 static ecs_query_t *g_sys_2d_sprite_query = NULL;
@@ -202,6 +202,11 @@ void sys_2d_draw(void) {
     }
 
     if (count == 0) return;
+
+    if (count > MAX_SPRITES) {
+        fprintf(stderr, "Render2d Bridge: %d sprites exceed MAX_SPRITES (%d), clamping\n", count, MAX_SPRITES);
+        count = MAX_SPRITES;
+    }
 
     qsort(s_items, count, sizeof(sprite_item_t), sprite_compare);
 

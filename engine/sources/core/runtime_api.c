@@ -242,15 +242,21 @@ static minic_val_t minic_query_foreach_native(minic_val_t *args, int argc) {
     if (!callback) return minic_val_int(0);
 
     // Collect all entity IDs from the query (complete iteration first)
-    #define FOREACH_BATCH 256
-    uint64_t entities[FOREACH_BATCH];
+    int cap = 256;
+    uint64_t *entities = (uint64_t *)malloc(cap * sizeof(uint64_t));
+    if (!entities) return minic_val_int(0);
     int total = 0;
 
     query_iter_begin(query_id);
     while (query_iter_next(query_id)) {
         int count = query_iter_count(query_id);
         for (int i = 0; i < count; i++) {
-            if (total >= FOREACH_BATCH) break;
+            if (total >= cap) {
+                cap *= 2;
+                uint64_t *new_buf = (uint64_t *)realloc(entities, cap * sizeof(uint64_t));
+                if (!new_buf) { free(entities); return minic_val_int(total); }
+                entities = new_buf;
+            }
             entities[total++] = query_iter_entity(query_id, i);
         }
     }
@@ -272,6 +278,7 @@ static minic_val_t minic_query_foreach_native(minic_val_t *args, int argc) {
         minic_call_fn(callback, cb_args, 2);
     }
 
+    free(entities);
     return minic_val_int(total);
 }
 
