@@ -5,6 +5,7 @@
 #include "query_api.h"
 #include "game_loop.h"
 #include "ecs/ecs_world.h"
+#include "ecs/flecs/flecs.h"
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
 #include "ecs/camera_bridge.h"
@@ -288,18 +289,38 @@ static minic_val_t minic_query_foreach_batch_native(minic_val_t *args, int argc)
     void *callback = args[1].p;
     if (!callback) return minic_val_int(0);
 
+    // Collect all entity IDs from the query first (complete iteration)
+    int cap = 256;
+    uint64_t *entities = (uint64_t *)malloc(cap * sizeof(uint64_t));
+    if (!entities) return minic_val_int(0);
     int total = 0;
+
     query_iter_begin(query_id);
     while (query_iter_next(query_id)) {
         int count = query_iter_count(query_id);
-        // Get pointer to first entity's component data — they're contiguous
-        void *comp_data = query_iter_comp_ptr(query_id, 0, 0);
-        minic_val_t cb_args[2];
-        cb_args[0] = minic_val_int(count);
-        cb_args[1] = minic_val_ptr(comp_data);
-        minic_call_fn(callback, cb_args, 2);
-        total += count;
+        for (int i = 0; i < count; i++) {
+            if (total >= cap) {
+                cap *= 2;
+                uint64_t *new_buf = (uint64_t *)realloc(entities, cap * sizeof(uint64_t));
+                if (!new_buf) { free(entities); return minic_val_int(total); }
+                entities = new_buf;
+            }
+            entities[total++] = query_iter_entity(query_id, i);
+        }
     }
+
+    // Call callback for each entity with a fresh component pointer
+    extern uint64_t query_get_component_id(int query_id, int comp_index);
+    for (int i = 0; i < total; i++) {
+        uint64_t comp_id = query_get_component_id(query_id, 0);
+        void *comp_ptr = entity_get_component_data(g_runtime_world, entities[i], comp_id);
+        minic_val_t cb_args[2];
+        cb_args[0] = minic_val_id(entities[i]);
+        cb_args[1] = minic_val_ptr(comp_ptr);
+        minic_call_fn(callback, cb_args, 2);
+    }
+
+    free(entities);
     return minic_val_int(total);
 }
 
@@ -741,6 +762,49 @@ static minic_val_t minic_bench_time_native(minic_val_t *args, int argc) {
                      (double)(ts.tv_nsec - g_bench_epoch.tv_nsec) * 1e-9;
     return minic_val_float((float)elapsed);
 }
+// Performance overlay API — expose Flecs ECS stats to Minic scripts
+static ecs_world_stats_t g_perf_stats;
+
+static minic_val_t minic_perf_entity_count(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    if (!g_runtime_world) return minic_val_int(0);
+    ecs_world_t *world = (ecs_world_t *)game_world_get_ecs(g_runtime_world);
+    ecs_world_stats_get(world, &g_perf_stats);
+    return minic_val_int((int)g_perf_stats.entities.count.gauge.avg[g_perf_stats.t]);
+}
+
+static minic_val_t minic_perf_component_count(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    if (!g_runtime_world) return minic_val_int(0);
+    ecs_world_t *world = (ecs_world_t *)game_world_get_ecs(g_runtime_world);
+    const ecs_world_info_t *info = ecs_get_world_info(world);
+    return minic_val_int((int)info->component_id_count);
+}
+
+static minic_val_t minic_perf_table_count(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    if (!g_runtime_world) return minic_val_int(0);
+    ecs_world_t *world = (ecs_world_t *)game_world_get_ecs(g_runtime_world);
+    const ecs_world_info_t *info = ecs_get_world_info(world);
+    return minic_val_int((int)info->table_count);
+}
+
+static minic_val_t minic_perf_systems_ran(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    if (!g_runtime_world) return minic_val_int(0);
+    ecs_world_t *world = (ecs_world_t *)game_world_get_ecs(g_runtime_world);
+    const ecs_world_info_t *info = ecs_get_world_info(world);
+    return minic_val_int((int)info->systems_ran_frame);
+}
+
+static minic_val_t minic_perf_frame_time_ms(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    if (!g_runtime_world) return minic_val_float(0.0f);
+    ecs_world_t *world = (ecs_world_t *)game_world_get_ecs(g_runtime_world);
+    const ecs_world_info_t *info = ecs_get_world_info(world);
+    return minic_val_float((float)(info->frame_time_total * 1000.0));
+}
+
 static float minic_rand_float(void) {
     return (float)rand() / (float)RAND_MAX;
 }
@@ -775,6 +839,11 @@ static minic_val_t minic_str_int(minic_val_t *args, int argc) {
 static minic_val_t minic_str_float1(minic_val_t *args, int argc) {
     (void)argc;
     snprintf(g_str_buf, sizeof(g_str_buf), "%.1f", (float)minic_val_to_d(args[0]));
+    return minic_val_ptr(g_str_buf);
+}
+static minic_val_t minic_str_float2(minic_val_t *args, int argc) {
+    (void)argc;
+    snprintf(g_str_buf, sizeof(g_str_buf), "%.2f", (float)minic_val_to_d(args[0]));
     return minic_val_ptr(g_str_buf);
 }
 
@@ -1245,6 +1314,14 @@ void runtime_api_register(void) {
     minic_register_native("str_int", minic_str_int);
     minic_register_native("str_float1", minic_str_float1);
     minic_register_native("bench_time", minic_bench_time_native);
+
+    // Performance overlay API
+    minic_register_native("perf_entity_count", minic_perf_entity_count);
+    minic_register_native("perf_component_count", minic_perf_component_count);
+    minic_register_native("perf_table_count", minic_perf_table_count);
+    minic_register_native("perf_systems_ran", minic_perf_systems_ran);
+    minic_register_native("perf_frame_time_ms", minic_perf_frame_time_ms);
+    minic_register_native("str_float2", minic_str_float2);
 
     minic_register_native("sprite_load", minic_sprite_load);
     minic_register_native("sprite_draw", minic_sprite_draw);

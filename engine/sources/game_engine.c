@@ -212,7 +212,9 @@ void _kickstart(void) {
     game_engine_init();
 
     printf("Loading Minic systems...\n");
+    //minic_system_load("VampireSystem", "data/systems/vampire_system.minic");
     minic_system_load("FrogSystem", "data/systems/frog_system.minic");
+    minic_system_load("PerfOverlay", "data/systems/perf_overlay.minic");
     minic_system_call_init();
 
     // Rebuild caches — dynamic components and fields registered during script

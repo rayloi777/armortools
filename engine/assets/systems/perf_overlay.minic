@@ -1,0 +1,93 @@
+// perf_overlay.minic - Performance overlay (toggle with F3)
+
+int g_show_overlay = 0;
+float g_delta_ms = 0.0;
+
+int init(void) {
+    printf("PerfOverlay: loaded (F3 to toggle)\n");
+    return 0;
+}
+
+int step(void) {
+    if (keyboard_started("f3")) {
+        g_show_overlay = 1 - g_show_overlay;
+    }
+    g_delta_ms = sys_delta_time() * 1000.0;
+    return 0;
+}
+
+int draw_ui(void) {
+    if (g_show_overlay == 0) { return 0; }
+
+    float x = 10.0;
+    float y = 10.0;
+    float line_h = 15.0;
+    float panel_w = 220.0;
+    float panel_h = 155.0;
+
+    // Background panel
+    draw_set_color(0xcc1a1a2e);
+    draw_filled_rect(x, y, panel_w, panel_h);
+    draw_set_color(0xff444466);
+    draw_rect(x, y, panel_w, panel_h, 1.0);
+
+    draw_set_font("font.ttf", 12);
+    draw_set_color(0xffffffff);
+
+    float row = y + 4.0;
+    float col_label = x + 6.0;
+    float col_value = x + 120.0;
+
+    // -- PERFORMANCE --
+    draw_string("-- PERFORMANCE --", col_label, row);
+    row = row + line_h;
+
+    // FPS
+    draw_string("FPS:", col_label, row);
+    draw_string(str_float1(sys_fps()), col_value, row);
+    row = row + line_h;
+
+    // Frame time
+    draw_string("Frame:", col_label, row);
+    draw_string(str_float2(perf_frame_time_ms()), col_value, row);
+    draw_string(" ms", col_value + 50.0, row);
+    row = row + line_h;
+
+    // Delta time
+    draw_string("Delta:", col_label, row);
+    draw_string(str_float2(g_delta_ms), col_value, row);
+    draw_string(" ms", col_value + 50.0, row);
+    row = row + line_h;
+
+    // Frame count
+    draw_string("Frame #:", col_label, row);
+    draw_string(str_int(sys_frame()), col_value, row);
+    row = row + line_h + 3.0;
+
+    // Separator
+    draw_set_color(0xff444466);
+    draw_line(col_label, row, x + panel_w - 6.0, row, 1.0);
+    draw_set_color(0xffffffff);
+    row = row + 5.0;
+
+    // -- ECS --
+    draw_string("-- ECS --", col_label, row);
+    row = row + line_h;
+
+    draw_string("Entities:", col_label, row);
+    draw_string(str_int(perf_entity_count()), col_value, row);
+    row = row + line_h;
+
+    draw_string("Components:", col_label, row);
+    draw_string(str_int(perf_component_count()), col_value, row);
+    row = row + line_h;
+
+    draw_string("Tables:", col_label, row);
+    draw_string(str_int(perf_table_count()), col_value, row);
+    row = row + line_h;
+
+    draw_string("Systems Ran:", col_label, row);
+    draw_string(str_int(perf_systems_ran()), col_value, row);
+
+    return 0;
+}

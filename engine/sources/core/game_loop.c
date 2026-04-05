@@ -28,7 +28,6 @@ void game_loop_update(void) {
     if (!g_loop_world) {
         return;
     }
-
     g_delta_time = sys_delta();
     g_time += g_delta_time;
     g_frame_count++;
@@ -37,7 +36,6 @@ void game_loop_update(void) {
     minic_system_call_step();
 
     sys_render();
-
     draw_begin(NULL, true, 0xff1a1a2e);
     camera2d_update(camera_bridge_get_camera(), g_delta_time);
     sys_2d_draw();
@@ -53,7 +51,6 @@ float game_loop_get_delta_time(void) {
 float game_loop_get_time(void) {
     return g_time;
 }
-
 uint64_t game_loop_get_frame_count(void) {
     return g_frame_count;
 }

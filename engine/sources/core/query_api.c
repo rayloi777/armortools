@@ -419,13 +419,13 @@ bool query_iter_next(int query_id) {
     if (term_count == 0) term_count = q->component_count > 0 ? q->component_count : 1;
     if (term_count > MAX_QUERY_COMPONENTS) term_count = MAX_QUERY_COMPONENTS;
     for (int t = 0; t < term_count; t++) {
-        size_t sz = ecs_field_size(it, t + 1);
+        size_t sz = ecs_field_size(it, t);
         if (sz == 0 && t < q->component_count) {
             // Use stored component ID to look up size from dynamic registry
             dynamic_component_t *dc = ecs_dynamic_component_get(q->components[t]);
             if (dc && dc->size > 0) sz = dc->size;
         }
-        void *data = ecs_field_w_size(it, sz, t + 1);
+        void *data = ecs_field_w_size(it, sz, t);
         q->cached_comp_data[t] = data;
         q->cached_comp_sizes[t] = sz;
         q->cached_comp_count = t + 1;
