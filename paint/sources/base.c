@@ -1102,7 +1102,7 @@ void ui_base_update(void *_) {
 	// 	config_raw->workspace = WORKSPACE_PLAYER;
 	// 	base_update_workspace();
 	// }
-	if (config_raw->experimental && keyboard_started("f5")) {
+	if (g_config->experimental && keyboard_started("f5")) {
 		base_run_in_player();
 	}
 
