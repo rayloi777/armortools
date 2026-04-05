@@ -1,6 +1,20 @@
 
 #include "global.h"
 
+char                     *str_get_pos_nor_from_depth = "\
+fun get_pos_from_depth(uv: float2, invVP: float4x4): float3 { \
+	var depth: float = sample_lod(gbufferD, sampler_linear, float2(uv.x, 1.0 - uv.y), 0.0).r; \
+	var wpos: float4 = float4(uv * 2.0 - 1.0, depth, 1.0); \
+	wpos = invVP * wpos; \
+	return wpos.xyz / wpos.w; \
+} \
+fun get_nor_from_depth(p0: float3, uv: float2, invVP: float4x4, tex_step: float2): float3 { \
+	var p1: float3 = get_pos_from_depth(uv + float2(tex_step.x * 4.0, 0.0), invVP); \
+	var p2: float3 = get_pos_from_depth(uv + float2(0.0, tex_step.y * 4.0), invVP); \
+	return normalize(cross(p2 - p0, p1 - p0)); \
+} \
+";
+
 void make_colorid_picker_run(node_shader_t *kong) {
 	// Mangle vertices to form full screen triangle
 	node_shader_write_vert(kong, "output.pos = float4(-1.0 + float((vertex_id() & 1) << 2), -1.0 + float((vertex_id() & 2) << 1), 0.0, 1.0);");
@@ -16,14 +30,14 @@ void make_colorid_picker_run(node_shader_t *kong) {
 	    "var tex_coord_inp4: float4 = gbuffer2[uint2(uint(constants.inp.x * constants.gbuffer_size.x), uint(constants.inp.y * constants.gbuffer_size.y))];");
 	node_shader_write_frag(kong, "var tex_coord_inp: float2 = tex_coord_inp4.ba;");
 
-	if (context_raw->tool == TOOL_TYPE_COLORID) {
+	if (g_context->tool == TOOL_TYPE_COLORID) {
 		kong->frag_out = "float4";
 		node_shader_add_texture(kong, "texcolorid", "_texcolorid");
 		node_shader_write_frag(kong, "var idcol: float3 = sample_lod(texcolorid, sampler_linear, tex_coord_inp, 0.0).rgb;");
 		node_shader_write_frag(kong, "output = float4(idcol, 1.0);");
 	}
-	else if (context_raw->tool == TOOL_TYPE_PICKER || context_raw->tool == TOOL_TYPE_MATERIAL) {
-		if (context_raw->pick_pos_nor_tex) {
+	else if (g_context->tool == TOOL_TYPE_PICKER || g_context->tool == TOOL_TYPE_MATERIAL) {
+		if (g_context->pick_pos_nor_tex) {
 			kong->frag_out = "float4[2]";
 			node_shader_add_texture(kong, "gbufferD", NULL);
 			node_shader_add_constant(kong, "invVP: float4x4", "_inv_view_proj_matrix");

@@ -1,81 +1,21 @@
 
 #include "global.h"
 
-void import_envmap_run(char *path, gpu_texture_t *image) {
-	// Init
-	if (import_envmap_pipeline == NULL) {
-		gc_unroot(import_envmap_pipeline);
-		import_envmap_pipeline = gpu_create_pipeline();
-		gc_root(import_envmap_pipeline);
-		import_envmap_pipeline->vertex_shader     = sys_get_shader("prefilter_envmap.vert");
-		import_envmap_pipeline->fragment_shader   = sys_get_shader("prefilter_envmap.frag");
-		import_envmap_pipeline->blend_source      = GPU_BLEND_SOURCE_ALPHA;
-		import_envmap_pipeline->blend_destination = GPU_BLEND_ONE;
-		gpu_vertex_structure_t *vs                = GC_ALLOC_INIT(gpu_vertex_structure_t, {0});
-		gpu_vertex_struct_add(vs, "pos", GPU_VERTEX_DATA_F32_2X);
-		import_envmap_pipeline->input_layout                      = vs;
-		import_envmap_pipeline->color_attachment_count            = 1;
-		import_envmap_pipeline->color_attachment[0] = GPU_TEXTURE_FORMAT_RGBA64;
-
-		gpu_pipeline_compile(import_envmap_pipeline);
-		import_envmap_params_loc   = 0;
-		import_envmap_radiance_loc = 0;
-		import_envmap_noise_loc    = 1;
-
-		gc_unroot(import_envmap_radiance);
-		import_envmap_radiance = gpu_create_render_target(1024, 512, GPU_TEXTURE_FORMAT_RGBA64);
-		gc_root(import_envmap_radiance);
-
-		gc_unroot(import_envmap_mips);
-		import_envmap_mips = any_array_create_from_raw((void *[]){}, 0);
-		gc_root(import_envmap_mips);
-		i32 w = 512;
-		for (i32 i = 0; i < 5; ++i) {
-			any_array_push(import_envmap_mips, gpu_create_render_target(w, w > 1 ? math_floor(w / 2.0) : 1, GPU_TEXTURE_FORMAT_RGBA64));
-			w = math_floor(w / 2.0);
-		}
-	}
-
-	// Down-scale to 1024x512
-	draw_begin(import_envmap_radiance, false, 0);
-	draw_set_pipeline(pipes_copy64);
-	draw_scaled_image(image, 0, 0, 1024, 512);
-	draw_set_pipeline(NULL);
-	draw_end();
-
-	// Radiance
-	for (i32 i = 0; i < import_envmap_mips->length; ++i) {
-		import_envmap_get_radiance_mip(import_envmap_mips->buffer[i], i, import_envmap_radiance);
-	}
-
-	// Irradiance
-	buffer_t *radiance_pixels        = gpu_get_texture_pixels(import_envmap_radiance);
-	scene_world->_->irradiance       = import_envmap_get_spherical_harmonics(radiance_pixels, import_envmap_radiance->width, import_envmap_radiance->height);
-
-	// World
-	scene_world->strength            = 1.0;
-	scene_world->radiance_mipmaps    = import_envmap_mips->length - 2;
-	scene_world->_->envmap           = image;
-	scene_world->envmap              = string_copy(path);
-	scene_world->_->radiance         = import_envmap_radiance;
-	scene_world->_->radiance_mipmaps = import_envmap_mips;
-	context_raw->saved_envmap        = image;
-	context_raw->show_envmap         = true;
-	if (context_raw->show_envmap_blur) {
-		scene_world->_->envmap = scene_world->_->radiance_mipmaps->buffer[0];
-	}
-	context_raw->ddirty = 2;
-	project_raw->envmap = string_copy(path);
-}
+gpu_pipeline_t        *import_envmap_pipeline = NULL;
+i32                    import_envmap_params_loc;
+i32                    import_envmap_radiance_loc;
+gpu_texture_t         *import_envmap_radiance = NULL;
+i32                    import_envmap_noise_loc;
+gpu_texture_t_array_t *import_envmap_mips = NULL;
 
 void import_envmap_get_radiance_mip(gpu_texture_t *mip, i32 level, gpu_texture_t *radiance) {
-	#ifdef IRON_METAL
+#ifdef IRON_METAL
 	i32 pass_count         = 8; // 32;
 	import_envmap_params.y = 512;
-	#else
+#else
 	i32 pass_count         = 1;
 	import_envmap_params.y = 1024 * 16;
-	#endif
+#endif
 	import_envmap_params.z = 1.0 / (float)pass_count;
 	import_envmap_params.x = (level + 1) / 10.0;
 
@@ -95,8 +35,8 @@ void import_envmap_get_radiance_mip(gpu_texture_t *mip, i32 level, gpu_texture_t
 }
 
 vec4_t import_envmap_reverse_equirect(f32 x, f32 y) {
-	f32 theta       = x * math_pi() * 2 - math_pi();
-	f32 phi         = y * math_pi();
+	f32 theta = x * math_pi() * 2 - math_pi();
+	f32 phi   = y * math_pi();
 	// return n.set(math_sin(phi) * math_cos(theta), -(math_sin(phi) * math_sin(theta)), math_cos(phi));
 	import_envmap_n = vec4_create(-math_cos(phi), math_sin(phi) * math_cos(theta), -(math_sin(phi) * math_sin(theta)), 1.0);
 	return import_envmap_n;
@@ -144,4 +84,71 @@ f32_array_t *import_envmap_get_spherical_harmonics(buffer_t *source, i32 source_
 	}
 
 	return sh;
+}
+
+void import_envmap_run(char *path, gpu_texture_t *image) {
+	// Init
+	if (import_envmap_pipeline == NULL) {
+		gc_unroot(import_envmap_pipeline);
+		import_envmap_pipeline = gpu_create_pipeline();
+		gc_root(import_envmap_pipeline);
+		import_envmap_pipeline->vertex_shader     = sys_get_shader("prefilter_envmap.vert");
+		import_envmap_pipeline->fragment_shader   = sys_get_shader("prefilter_envmap.frag");
+		import_envmap_pipeline->blend_source      = GPU_BLEND_SOURCE_ALPHA;
+		import_envmap_pipeline->blend_destination = GPU_BLEND_ONE;
+		gpu_vertex_structure_t *vs                = GC_ALLOC_INIT(gpu_vertex_structure_t, {0});
+		gpu_vertex_struct_add(vs, "pos", GPU_VERTEX_DATA_F32_2X);
+		import_envmap_pipeline->input_layout           = vs;
+		import_envmap_pipeline->color_attachment_count = 1;
+		import_envmap_pipeline->color_attachment[0]    = GPU_TEXTURE_FORMAT_RGBA64;
+
+		gpu_pipeline_compile(import_envmap_pipeline);
+		import_envmap_params_loc   = 0;
+		import_envmap_radiance_loc = 0;
+		import_envmap_noise_loc    = 1;
+
+		gc_unroot(import_envmap_radiance);
+		import_envmap_radiance = gpu_create_render_target(1024, 512, GPU_TEXTURE_FORMAT_RGBA64);
+		gc_root(import_envmap_radiance);
+
+		gc_unroot(import_envmap_mips);
+		import_envmap_mips = any_array_create_from_raw((void *[]){}, 0);
+		gc_root(import_envmap_mips);
+		i32 w = 512;
+		for (i32 i = 0; i < 5; ++i) {
+			any_array_push(import_envmap_mips, gpu_create_render_target(w, w > 1 ? math_floor(w / 2.0) : 1, GPU_TEXTURE_FORMAT_RGBA64));
+			w = math_floor(w / 2.0);
+		}
+	}
+
+	// Down-scale to 1024x512
+	draw_begin(import_envmap_radiance, false, 0);
+	draw_set_pipeline(pipes_copy64);
+	draw_scaled_image(image, 0, 0, 1024, 512);
+	draw_set_pipeline(NULL);
+	draw_end();
+
+	// Radiance
+	for (i32 i = 0; i < import_envmap_mips->length; ++i) {
+		import_envmap_get_radiance_mip(import_envmap_mips->buffer[i], i, import_envmap_radiance);
+	}
+
+	// Irradiance
+	buffer_t *radiance_pixels  = gpu_get_texture_pixels(import_envmap_radiance);
+	scene_world->_->irradiance = import_envmap_get_spherical_harmonics(radiance_pixels, import_envmap_radiance->width, import_envmap_radiance->height);
+
+	// World
+	scene_world->strength            = 1.0;
+	scene_world->radiance_mipmaps    = import_envmap_mips->length - 2;
+	scene_world->_->envmap           = image;
+	scene_world->envmap              = string_copy(path);
+	scene_world->_->radiance         = import_envmap_radiance;
+	scene_world->_->radiance_mipmaps = import_envmap_mips;
+	g_context->saved_envmap        = image;
+	g_context->show_envmap         = true;
+	if (g_context->show_envmap_blur) {
+		scene_world->_->envmap = scene_world->_->radiance_mipmaps->buffer[0];
+	}
+	g_context->ddirty = 2;
+	g_project->envmap = string_copy(path);
 }

@@ -1,6 +1,13 @@
 
 #include "global.h"
 
+typedef enum {
+	PLAYER_TARGET_WEB     = 0,
+	PLAYER_TARGET_WINDOWS = 1,
+	PLAYER_TARGET_LINUX   = 2,
+	PLAYER_TARGET_MACOS   = 3,
+} player_target_t;
+
 static char *export_player_readme = "\
 To start the player locally, use 'python -m http.server'\
 and open http://localhost:8000/ in the browser.\n\
@@ -106,10 +113,10 @@ void export_player_run(char *path) {
 
 	char *_project_filepath          = string_copy(project_filepath);
 	project_filepath                 = string("%s/%s", path_base, "start.arm");
-	bool _pack_assets_on_save        = context_raw->pack_assets_on_save;
-	context_raw->pack_assets_on_save = true;
+	bool _pack_assets_on_save        = g_context->pack_assets_on_save;
+	g_context->pack_assets_on_save = true;
 	export_arm_run_project();
-	context_raw->pack_assets_on_save = _pack_assets_on_save;
+	g_context->pack_assets_on_save = _pack_assets_on_save;
 	project_filepath                 = _project_filepath;
 
 	if (box_export_h_export_player_target->i == PLAYER_TARGET_WEB) {

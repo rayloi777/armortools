@@ -1,6 +1,35 @@
 
 #include "global.h"
 
+typedef struct draw_cloud_icon_data {
+	char               *f;
+	struct gpu_texture *image;
+} draw_cloud_icon_data_t;
+
+typedef struct ui_files_make_icon {
+	struct gpu_texture *image;
+	char               *shandle;
+	i32                 w;
+} ui_files_make_icon_t;
+
+char           *ui_files_last_search     = "";
+string_array_t *ui_files_files           = NULL;
+any_map_t      *ui_files_icon_map        = NULL;
+any_map_t      *ui_files_icon_file_map   = NULL;
+i32             ui_files_selected        = -1;
+bool            ui_files_show_extensions = false;
+bool            ui_files_offline         = false;
+ui_handle_t    *_ui_files_file_browser_handle;
+
+void ui_files_release_keys() {
+	// File dialog may prevent firing key up events
+	keyboard_up_listener(KEY_CODE_SHIFT);
+	keyboard_up_listener(KEY_CODE_CONTROL);
+#ifdef IRON_MACOS
+	keyboard_up_listener(KEY_CODE_META);
+#endif
+}
+
 void ui_files_show(char *filters, bool is_save, bool open_multiple, void (*files_done)(char *)) {
 	if (is_save) {
 		gc_unroot(ui_files_path);
@@ -26,7 +55,7 @@ void ui_files_show(char *filters, bool is_save, bool open_multiple, void (*files
 		}
 	}
 	else {
-		string_t_array_t *paths = iron_open_dialog(filters, "", open_multiple);
+		string_array_t *paths = iron_open_dialog(filters, "", open_multiple);
 		if (paths != NULL) {
 			for (i32 i = 0; i < paths->length; ++i) {
 				char *path = paths->buffer[i];
@@ -45,15 +74,6 @@ void ui_files_show(char *filters, bool is_save, bool open_multiple, void (*files
 	}
 
 	ui_files_release_keys();
-}
-
-void ui_files_release_keys() {
-	// File dialog may prevent firing key up events
-	keyboard_up_listener(KEY_CODE_SHIFT);
-	keyboard_up_listener(KEY_CODE_CONTROL);
-#ifdef IRON_MACOS
-	keyboard_up_listener(KEY_CODE_META);
-#endif
 }
 
 draw_cloud_icon_data_t *make_draw_cloud_icon_data(char *f, gpu_texture_t *image) {
@@ -80,15 +100,17 @@ void ui_files_file_browser_on_cache_cloud_done_on_next_frame(draw_cloud_icon_dat
 
 void ui_files_file_browser_on_cache_cloud_done(char *abs) {
 	if (abs != NULL) {
-		gpu_texture_t *image = data_get_image(abs);
+		gpu_texture_t *image = data_get_image(string_copy(abs));
 		if (image != NULL) {
 #ifdef IRON_WINDOWS
 			abs = string_copy(string_replace_all(abs, "\\", "/"));
 #endif
-			char                   *icon_file = substring(abs, string_last_index_of(abs, "/") + 1, string_length(abs));
-			char                   *f         = any_map_get(ui_files_icon_file_map, icon_file);
-			draw_cloud_icon_data_t *data      = make_draw_cloud_icon_data(f, image);
-			sys_notify_on_next_frame(&ui_files_file_browser_on_cache_cloud_done_on_next_frame, data);
+			char *icon_file = substring(abs, string_last_index_of(abs, "/") + 1, string_length(abs));
+			char *f         = any_map_get(ui_files_icon_file_map, icon_file);
+			if (f != NULL) {
+				draw_cloud_icon_data_t *data = make_draw_cloud_icon_data(f, image);
+				sys_notify_on_next_frame(&ui_files_file_browser_on_cache_cloud_done_on_next_frame, data);
+			}
 		}
 	}
 	else {
@@ -101,8 +123,73 @@ void ui_files_file_browser_on_init_cloud_done() {
 	tab_browser_refresh                             = true;
 }
 
-char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, bool refresh, void (*context_menu)(char *)) {
+static void ui_files_clear_icon_map(void) {
+	if (ui_files_icon_map == NULL) {
+		return;
+	}
+	gpu_texture_t   *icons_tex = resource_get("icons.k");
+	render_target_t *rt        = any_map_get(render_path_render_targets, "empty_black");
+	gpu_texture_t   *empty     = rt->_image;
+	for (i32 i = 0; i < (i32)ui_files_icon_map->keys->capacity; ++i) {
+		gpu_texture_t *tex = ui_files_icon_map->values->buffer[i];
+		if (tex != NULL && tex != icons_tex && tex != empty) {
+			gpu_delete_texture(tex);
+		}
+	}
+	gc_unroot(ui_files_icon_map);
+	ui_files_icon_map = NULL;
 
+	if (ui_files_icon_file_map != NULL) {
+		char dest[512];
+		if (path_is_protected()) {
+			strcpy(dest, iron_internal_save_path());
+		}
+		else {
+			strcpy(dest, iron_internal_files_location());
+			strcat(dest, PATH_SEP);
+		}
+
+		for (i32 i = 0; i < (i32)ui_files_icon_file_map->keys->capacity; ++i) {
+			char *icon_file = ui_files_icon_file_map->keys->buffer[i];
+			if (icon_file != NULL) {
+				char *path = string("%s%s%s%s", dest, ui_files_last_path, PATH_SEP, icon_file);
+				data_delete_image(path);
+			}
+		}
+	}
+	gc_unroot(ui_files_icon_file_map);
+	ui_files_icon_file_map = NULL;
+}
+
+void ui_files_make_icon(ui_files_make_icon_t *args) {
+	i32            w     = args->w;
+	gpu_texture_t *image = args->image;
+	i32            sw    = image->width > image->height ? w : math_floor(1.0 * image->width / (float)image->height * w);
+	i32            sh    = image->width > image->height ? math_floor(1.0 * image->height / (float)image->width * w) : w;
+	gpu_texture_t *icon  = gpu_create_render_target(sw, sh, GPU_TEXTURE_FORMAT_RGBA32);
+	draw_begin(icon, true, 0xffffffff);
+	draw_set_pipeline(pipes_copy_rgb);
+	draw_scaled_image(image, 0, 0, sw, sh);
+	draw_set_pipeline(NULL);
+	draw_end();
+	any_map_set(ui_files_icon_map, args->shandle, icon);
+	ui_base_hwnds->buffer[TAB_AREA_STATUS]->redraws = 3;
+
+	bool found = false;
+	for (i32 i = 0; i < project_assets->length; ++i) {
+		asset_t *a = project_assets->buffer[i];
+		if (string_equals(a->file, args->shandle)) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		data_delete_image(args->shandle); // The big image is not needed anymore
+	}
+}
+
+char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, bool refresh, void (*context_menu)(char *)) {
 	gpu_texture_t *icons       = resource_get("icons.k");
 	rect_t        *folder      = resource_tile50(icons, ICON_FOLDER_FULL);
 	rect_t        *file        = resource_tile50(icons, ICON_FILE);
@@ -111,7 +198,7 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 	bool           is_cloud    = starts_with(handle->text, "cloud");
 
 	if (is_cloud && file_cloud == NULL) {
-		file_init_cloud(&ui_files_file_browser_on_init_cloud_done, config_raw->server);
+		file_init_cloud(&ui_files_file_browser_on_init_cloud_done, g_config->server);
 	}
 	if (is_cloud && file_read_directory("cloud")->length == 0) {
 		return handle->text;
@@ -126,6 +213,10 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 		handle->text = string_copy(ui_files_default_path);
 	}
 
+	if (!string_equals(handle->text, ui_files_last_path)) {
+		ui_files_clear_icon_map();
+	}
+
 	if (!string_equals(handle->text, ui_files_last_path) || !string_equals(search, ui_files_last_search) || refresh) {
 		gc_unroot(ui_files_files);
 		ui_files_files = any_array_create_from_raw((void *[]){}, 0);
@@ -137,7 +228,7 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 			dir_path = string("%s%s", document_directory, dir_path);
 		}
 #endif
-		string_t_array_t *files_all = file_read_directory(dir_path);
+		string_array_t *files_all = file_read_directory(dir_path);
 
 		for (i32 i = 0; i < files_all->length; ++i) {
 			char *f      = files_all->buffer[i];
@@ -228,12 +319,10 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 
 			if (is_cloud && !ui_files_offline) {
 				if (ui_files_icon_map == NULL) {
-					gc_unroot(ui_files_icon_map);
 					ui_files_icon_map = any_map_create();
 					gc_root(ui_files_icon_map);
 				}
 				if (ui_files_icon_file_map == NULL) {
-					gc_unroot(ui_files_icon_file_map);
 					ui_files_icon_file_map = any_map_create();
 					gc_root(ui_files_icon_file_map);
 				}
@@ -241,8 +330,8 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 				if (icon == NULL) {
 					i32 dot = string_last_index_of(f, ".");
 					if (dot > -1) {
-						string_t_array_t *files_all = file_read_directory(handle->text);
-						char             *icon_file = string("%s_icon.jpg", substring(f, 0, dot));
+						string_array_t *files_all = file_read_directory(handle->text);
+						char           *icon_file = string("%s_icon.jpg", substring(f, 0, dot));
 						if (string_array_index_of(files_all, icon_file) >= 0) {
 							any_map_set(ui_files_icon_map, string("%s%s%s", handle->text, PATH_SEP, f), icons);
 
@@ -252,7 +341,7 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 							any_map_set(ui_files_icon_file_map, icon_file, f);
 
 							file_cache_cloud(string("%s%s%s", handle->text, PATH_SEP, icon_file), &ui_files_file_browser_on_cache_cloud_done,
-							                 config_raw->server);
+							                 g_config->server);
 						}
 					}
 				}
@@ -275,7 +364,6 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 
 			if (!is_folder && ends_with(f, ".arm") && !is_cloud) {
 				if (ui_files_icon_map == NULL) {
-					gc_unroot(ui_files_icon_map);
 					ui_files_icon_map = any_map_create();
 					gc_root(ui_files_icon_map);
 				}
@@ -289,7 +377,7 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 #endif
 
 					buffer_t         *buffer = iron_load_blob(blob_path);
-					project_format_t *raw;
+					project_t *raw;
 					if (import_arm_is_old(buffer)) {
 						raw = import_arm_from_old(buffer);
 					}
@@ -409,7 +497,7 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 				}
 
 				ui_files_selected = i;
-				if (sys_time() - context_raw->select_time < 0.2) {
+				if (sys_time() - g_context->select_time < 0.2) {
 					gc_unroot(base_drag_file);
 					base_drag_file = NULL;
 					gc_unroot(base_drag_file_icon);
@@ -422,7 +510,7 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 					handle->text      = string("%s%s", handle->text, f);
 					ui_files_selected = -1;
 				}
-				context_raw->select_time = sys_time();
+				g_context->select_time = sys_time();
 			}
 
 			// Label
@@ -463,34 +551,6 @@ char *ui_files_file_browser(ui_handle_t *handle, bool drag_files, char *search, 
 	}
 	ui->_y += slotw * 0.8;
 	return handle->text;
-}
-
-void ui_files_make_icon(ui_files_make_icon_t *args) {
-	i32            w     = args->w;
-	gpu_texture_t *image = args->image;
-	i32            sw    = image->width > image->height ? w : math_floor(1.0 * image->width / (float)image->height * w);
-	i32            sh    = image->width > image->height ? math_floor(1.0 * image->height / (float)image->width * w) : w;
-	gpu_texture_t *icon  = gpu_create_render_target(sw, sh, GPU_TEXTURE_FORMAT_RGBA32);
-	draw_begin(icon, true, 0xffffffff);
-	draw_set_pipeline(pipes_copy_rgb);
-	draw_scaled_image(image, 0, 0, sw, sh);
-	draw_set_pipeline(NULL);
-	draw_end();
-	any_map_set(ui_files_icon_map, args->shandle, icon);
-	ui_base_hwnds->buffer[TAB_AREA_STATUS]->redraws = 3;
-
-	bool found = false;
-	for (i32 i = 0; i < project_assets->length; ++i) {
-		asset_t *a = project_assets->buffer[i];
-		if (string_equals(a->file, args->shandle)) {
-			found = true;
-			break;
-		}
-	}
-
-	if (!found) {
-		data_delete_image(args->shandle); // The big image is not needed anymore
-	}
 }
 
 void ui_files_go_up(ui_handle_t *handle) {

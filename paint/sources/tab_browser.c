@@ -1,16 +1,21 @@
 
 #include "global.h"
 
+bool  tab_browser_known     = false;
+char *tab_browser_last_path = "";
+char *_tab_browser_draw_file;
+char *_tab_browser_draw_b;
+
 void tab_browser_show_directory(char *directory) {
 	tab_browser_hpath->text                          = string_copy(directory);
 	tab_browser_hsearch->text                        = "";
 	ui_base_htabs->buffer[TAB_AREA_STATUS]->i        = 0;
-	config_raw->layout_tabs->buffer[TAB_AREA_STATUS] = 0;
+	g_config->layout_tabs->buffer[TAB_AREA_STATUS] = 0;
 }
 
 void tab_browser_draw_bookmark_menu() {
 	if (ui_menu_button(tr("Delete"), "", ICON_DELETE)) {
-		string_array_remove(config_raw->bookmarks, _tab_browser_draw_b);
+		string_array_remove(g_config->bookmarks, _tab_browser_draw_b);
 		config_save();
 	}
 }
@@ -30,12 +35,12 @@ void tab_browser_draw_set_as_color_id_map_on_next_frame(void *_) {
 	}
 
 	if (asset_index != -1) {
-		context_raw->colorid_handle->i = asset_index;
-		context_raw->colorid_picked    = false;
+		g_context->colorid_handle->i = asset_index;
+		g_context->colorid_picked    = false;
 		ui_toolbar_handle->redraws     = 1;
-		if (context_raw->tool == TOOL_TYPE_COLORID) {
+		if (g_context->tool == TOOL_TYPE_COLORID) {
 			ui_header_handle->redraws = 2;
-			context_raw->ddirty       = 2;
+			g_context->ddirty       = 2;
 		}
 	}
 }
@@ -111,6 +116,18 @@ void tab_browser_draw_context_menu(char *file) {
 	ui_menu_draw(&tab_browser_draw_context_menu_draw, -1, -1);
 }
 
+void tab_browser_go_to_cloud() {
+	tab_browser_hpath->text = "cloud";
+}
+
+void tab_browser_go_to_disk() {
+#ifdef IRON_ANDROID
+	ui_menu_draw(&tab_browser_go_to_disk_android_menu, -1, -1);
+#else
+	tab_browser_hpath->text = string_copy(ui_files_default_path);
+#endif
+}
+
 void tab_browser_draw_side_menu() {
 	if (ui_menu_button(tr("Cloud"), "", ICON_CLOUD)) {
 		tab_browser_go_to_cloud();
@@ -130,15 +147,15 @@ void tab_browser_draw(ui_handle_t *htab) {
 #endif
 
 	if (ui_tab(htab, title, false, -1, false) && ui->_window_h > ui_statusbar_default_h * UI_SCALE()) {
-		if (config_raw->bookmarks == NULL) {
-			config_raw->bookmarks = any_array_create_from_raw((void *[]){}, 0);
+		if (g_config->bookmarks == NULL) {
+			g_config->bookmarks = any_array_create_from_raw((void *[]){}, 0);
 		}
 
 		i32  bookmarks_w = math_floor(100 * UI_SCALE());
 		bool show_full   = ui->_w > (500 * UI_SCALE());
 
-		if (string_equals(tab_browser_hpath->text, "") && config_raw->bookmarks->length > 0) { // Init to first bookmark
-			tab_browser_hpath->text = string_copy(config_raw->bookmarks->buffer[0]);
+		if (string_equals(tab_browser_hpath->text, "") && g_config->bookmarks->length > 0) { // Init to first bookmark
+			tab_browser_hpath->text = string_copy(g_config->bookmarks->buffer[0]);
 #ifdef IRON_WINDOWS
 			tab_browser_hpath->text = string_copy(string_replace_all(tab_browser_hpath->text, "/", "\\"));
 #endif
@@ -180,7 +197,7 @@ void tab_browser_draw(ui_handle_t *htab) {
 #ifdef IRON_WINDOWS
 				bookmark = string_copy(string_replace_all(bookmark, "\\", "/"));
 #endif
-				any_array_push(config_raw->bookmarks, bookmark);
+				any_array_push(g_config->bookmarks, bookmark);
 				config_save();
 			}
 
@@ -304,8 +321,8 @@ void tab_browser_draw(ui_handle_t *htab) {
 				tab_browser_go_to_disk();
 			}
 
-			for (i32 i = 0; i < config_raw->bookmarks->length; ++i) {
-				char *b      = config_raw->bookmarks->buffer[i];
+			for (i32 i = 0; i < g_config->bookmarks->length; ++i) {
+				char *b      = g_config->bookmarks->buffer[i];
 				char *folder = substring(b, string_last_index_of(b, "/") + 1, string_length(b));
 
 				if (ui_icon_button(folder, ICON_FOLDER, UI_ALIGN_LEFT)) {
@@ -329,10 +346,6 @@ void tab_browser_draw(ui_handle_t *htab) {
 	}
 }
 
-void tab_browser_go_to_cloud() {
-	tab_browser_hpath->text = "cloud";
-}
-
 #ifdef IRON_ANDROID
 
 void tab_browser_go_to_disk_android_menu() {
@@ -351,11 +364,3 @@ void tab_browser_go_to_disk_android_menu() {
 }
 
 #endif
-
-void tab_browser_go_to_disk() {
-#ifdef IRON_ANDROID
-	ui_menu_draw(&tab_browser_go_to_disk_android_menu, -1, -1);
-#else
-	tab_browser_hpath->text = string_copy(ui_files_default_path);
-#endif
-}

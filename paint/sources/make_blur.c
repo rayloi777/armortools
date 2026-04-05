@@ -1,6 +1,38 @@
 
 #include "global.h"
 
+char                *str_get_smudge_tool_weight = "\
+fun get_smudge_tool_weight(i: int): float { \
+	if (i == 0) { return 1.0 / 28.0; } \
+	if (i == 1) { return 2.0 / 28.0; } \
+	if (i == 2) { return 3.0 / 28.0; } \
+	if (i == 3) { return 4.0 / 28.0; } \
+	if (i == 4) { return 5.0 / 28.0; } \
+	if (i == 5) { return 6.0 / 28.0; } \
+	return 7.0 / 28.0; \
+} \
+";
+
+char                *str_get_blur_tool_weight   = "\
+fun get_blur_tool_weight(i: int): float { \
+	if (i == 0) { return 0.034619 / 2.0; } \
+	if (i == 1) { return 0.044859 / 2.0; } \
+	if (i == 2) { return 0.055857 / 2.0; } \
+	if (i == 3) { return 0.066833 / 2.0; } \
+	if (i == 4) { return 0.076841 / 2.0; } \
+	if (i == 5) { return 0.084894 / 2.0; } \
+	if (i == 6) { return 0.090126 / 2.0; } \
+	if (i == 7) { return 0.09194 / 2.0; } \
+	if (i == 8) { return 0.090126 / 2.0; } \
+	if (i == 9) { return 0.084894 / 2.0; } \
+	if (i == 10) { return 0.076841 / 2.0; } \
+	if (i == 11) { return 0.066833 / 2.0; } \
+	if (i == 12) { return 0.055857 / 2.0; } \
+	if (i == 13) { return 0.044859 / 2.0; } \
+	return 0.034619 / 2.0; \
+} \
+";
+
 void make_blur_run(node_shader_t *kong) {
 	// node_shader_write_frag(kong, "var tex_coord_inp: float2 = gbuffer2[uint2(sp.x * constants.gbuffer_size.x, sp.y * constants.gbuffer_size.y)].ba;");
 	node_shader_write_frag(kong, "var tex_coord_inp4: float4 = gbuffer2[uint2(uint(sp.x * constants.gbuffer_size.x), uint(sp.y * constants.gbuffer_size.y))];");
@@ -13,23 +45,23 @@ void make_blur_run(node_shader_t *kong) {
 	node_shader_write_frag(kong, "var nortan: float3 = float3(0.0, 0.0, 0.0);");
 	node_shader_write_frag(kong, "var height: float = 0.0;");
 	node_shader_write_frag(kong, "var mat_opacity: float = 1.0;");
-	bool is_mask = slot_layer_is_mask(context_raw->layer);
+	bool is_mask = slot_layer_is_mask(g_context->layer);
 	if (is_mask) {
 		node_shader_write_frag(kong, "var opacity: float = 1.0;");
 	}
 	else {
 		node_shader_write_frag(kong, "var opacity: float = 0.0;");
 	}
-	if (context_raw->material->paint_emis) {
+	if (g_context->material->paint_emis) {
 		node_shader_write_frag(kong, "var emis: float = 0.0;");
 	}
-	if (context_raw->material->paint_subs) {
+	if (g_context->material->paint_subs) {
 		node_shader_write_frag(kong, "var subs: float = 0.0;");
 	}
 
 	node_shader_add_constant(kong, "texpaint_size: float2", "_texpaint_size");
 	node_shader_write_frag(kong, "var blur_step: float = 1.0 / constants.texpaint_size.x;");
-	if (context_raw->tool == TOOL_TYPE_SMUDGE) {
+	if (g_context->tool == TOOL_TYPE_SMUDGE) {
 		// node_shader_write_frag(kong, "const blur_weight: float[7] = {1.0 / 28.0, 2.0 / 28.0, 3.0 / 28.0, 4.0 / 28.0, 5.0 / 28.0, 6.0 / 28.0, 7.0 / 28.0};");
 		node_shader_add_function(kong, str_get_smudge_tool_weight);
 		node_shader_add_constant(kong, "brush_direction: float3", "_brush_direction");

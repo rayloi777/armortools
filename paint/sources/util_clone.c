@@ -22,11 +22,11 @@ u8_array_t *util_clone_u8_array(u8_array_t *u8a) {
 	return u8_array_create_from_array(u8a);
 }
 
-string_t_array_t *util_clone_string_array(string_t_array_t *a) {
+string_array_t *util_clone_string_array(string_array_t *a) {
 	if (a == NULL) {
 		return NULL;
 	}
-	string_t_array_t *r = any_array_create_from_raw((void *[]){}, 0);
+	string_array_t *r = any_array_create_from_raw((void *[]){}, 0);
 	for (i32 i = 0; i < a->length; ++i) {
 		char *s = a->buffer[i];
 		any_array_push(r, s);
@@ -220,16 +220,6 @@ shader_context_t_array_t *util_clone_shader_contexts(shader_context_t_array_t *c
 		c->texture_units           = util_clone_tex_units(contexts->buffer[i]->texture_units);
 		any_array_push(r, c);
 	}
-	return r;
-}
-
-shader_data_t *util_clone_shader_data(shader_data_t *s) {
-	if (s == NULL) {
-		return NULL;
-	}
-	shader_data_t *r = GC_ALLOC_INIT(shader_data_t, {0});
-	r->name          = string_copy(s->name);
-	r->contexts      = util_clone_shader_contexts(s->contexts);
 	return r;
 }
 

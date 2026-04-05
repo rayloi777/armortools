@@ -1,14 +1,26 @@
 
 #include "global.h"
 
+shader_context_t   *make_material_default_scon = NULL;
+material_context_t *make_material_default_mcon = NULL;
+
 bool make_material_get_mout() {
-	for (i32 i = 0; i < context_raw->material->canvas->nodes->length; ++i) {
-		ui_node_t *n = context_raw->material->canvas->nodes->buffer[i];
+	for (i32 i = 0; i < g_context->material->canvas->nodes->length; ++i) {
+		ui_node_t *n = g_context->material->canvas->nodes->buffer[i];
 		if (string_equals(n->type, "OUTPUT_MATERIAL_PBR")) {
 			return true;
 		}
 	}
 	return false;
+}
+
+void make_material_delete_context_on_next_frame(shader_context_t *c) {
+	shader_context_delete(c);
+}
+
+void make_material_delete_context(shader_context_t *c) {
+	// Ensure pipeline is no longer in use
+	sys_notify_on_next_frame(&make_material_delete_context_on_next_frame, c);
 }
 
 void make_material_parse_mesh_material() {
@@ -71,7 +83,7 @@ void make_material_parse_mesh_material() {
 		any_array_push(m->contexts, mcon);
 	}
 
-	context_raw->ddirty = 2;
+	g_context->ddirty = 2;
 
 	render_path_raytrace_dirty = 1;
 }
@@ -122,6 +134,143 @@ void make_material_parse_mesh_preview_material(material_data_t *md) {
 	any_array_push(m->_->shader->contexts, scon);
 }
 
+void make_material_bake_node_preview(ui_node_t *node, ui_node_canvas_t *group, ui_node_t_array_t *parents) {
+	if (string_equals(node->type, "BLUR")) {
+		char          *id    = parser_material_node_name(node, parents);
+		gpu_texture_t *image = any_map_get(g_context->node_previews, id);
+		any_array_push(g_context->node_previews_used, id);
+		i32 res_x = math_floor(config_get_texture_res_x() / 4.0);
+		i32 res_y = math_floor(config_get_texture_res_y() / 4.0);
+		if (image == NULL || image->width != res_x || image->height != res_y) {
+			if (image != NULL) {
+				gpu_delete_texture(image);
+			}
+			image = gpu_create_render_target(res_x, res_y, GPU_TEXTURE_FORMAT_RGBA32);
+			any_map_set(g_context->node_previews, id, image);
+		}
+
+		parser_material_blur_passthrough = true;
+		util_render_make_node_preview(g_context->material->canvas, node, image, group, parents);
+		parser_material_blur_passthrough = false;
+	}
+	else if (string_equals(node->type, "DIRECT_WARP")) {
+		char          *id    = parser_material_node_name(node, parents);
+		gpu_texture_t *image = any_map_get(g_context->node_previews, id);
+		any_array_push(g_context->node_previews_used, id);
+		i32 res_x = math_floor(config_get_texture_res_x());
+		i32 res_y = math_floor(config_get_texture_res_y());
+		if (image == NULL || image->width != res_x || image->height != res_y) {
+			if (image != NULL) {
+				gpu_delete_texture(image);
+			}
+			image = gpu_create_render_target(res_x, res_y, GPU_TEXTURE_FORMAT_RGBA32);
+			any_map_set(g_context->node_previews, id, image);
+		}
+
+		parser_material_warp_passthrough = true;
+		util_render_make_node_preview(g_context->material->canvas, node, image, group, parents);
+		parser_material_warp_passthrough = false;
+	}
+	else if (string_equals(node->type, "BAKE_CURVATURE")) {
+		char          *id    = parser_material_node_name(node, parents);
+		gpu_texture_t *image = any_map_get(g_context->node_previews, id);
+		any_array_push(g_context->node_previews_used, id);
+		i32 res_x = math_floor(config_get_texture_res_x());
+		i32 res_y = math_floor(config_get_texture_res_y());
+		if (image == NULL || image->width != res_x || image->height != res_y) {
+			if (image != NULL) {
+				gpu_delete_texture(image);
+			}
+			image = gpu_create_render_target(res_x, res_y, GPU_TEXTURE_FORMAT_R8);
+			any_map_set(g_context->node_previews, id, image);
+		}
+
+		if (render_path_paint_live_layer == NULL) {
+			gc_unroot(render_path_paint_live_layer);
+			render_path_paint_live_layer = slot_layer_create("_live", LAYER_SLOT_TYPE_LAYER, NULL);
+			gc_root(render_path_paint_live_layer);
+		}
+
+		tool_type_t _tool      = g_context->tool;
+		bake_type_t _bake_type = g_context->bake_type;
+		g_context->tool      = TOOL_TYPE_BAKE;
+		g_context->bake_type = BAKE_TYPE_CURVATURE;
+
+		parser_material_bake_passthrough = true;
+		gc_unroot(parser_material_start_node);
+		parser_material_start_node = node;
+		gc_root(parser_material_start_node);
+		gc_unroot(parser_material_start_group);
+		parser_material_start_group = group;
+		gc_root(parser_material_start_group);
+		gc_unroot(parser_material_start_parents);
+		parser_material_start_parents = parents;
+		gc_root(parser_material_start_parents);
+		make_material_parse_paint_material(false);
+		parser_material_bake_passthrough = false;
+		gc_unroot(parser_material_start_node);
+		parser_material_start_node = NULL;
+		gc_unroot(parser_material_start_group);
+		parser_material_start_group = NULL;
+		gc_unroot(parser_material_start_parents);
+		parser_material_start_parents = NULL;
+		g_context->pdirty           = 1;
+		render_path_paint_use_live_layer(true);
+		render_path_paint_commands_paint(false);
+		render_path_paint_dilate(true, false);
+		render_path_paint_use_live_layer(false);
+		g_context->pdirty = 0;
+
+		g_context->tool      = _tool;
+		g_context->bake_type = _bake_type;
+		make_material_parse_paint_material(false);
+
+		any_map_t       *rts           = render_path_render_targets;
+		render_target_t *texpaint_live = any_map_get(rts, "texpaint_live");
+		draw_begin(image, false, 0);
+		draw_image(texpaint_live->_image, 0, 0);
+		draw_end();
+	}
+}
+
+void make_material_traverse_nodes(ui_node_t_array_t *nodes, ui_node_canvas_t *group, ui_node_t_array_t *parents) {
+	for (i32 i = 0; i < nodes->length; ++i) {
+		ui_node_t *node = nodes->buffer[i];
+		make_material_bake_node_preview(node, group, parents);
+		if (string_equals(node->type, "GROUP")) {
+			for (i32 j = 0; j < project_material_groups->length; ++j) {
+				node_group_t *g     = project_material_groups->buffer[j];
+				char         *cname = g->canvas->name;
+				if (string_equals(cname, node->name)) {
+					any_array_push(parents, node);
+					make_material_traverse_nodes(g->canvas->nodes, g->canvas, parents);
+					array_pop(parents);
+					break;
+				}
+			}
+		}
+	}
+}
+
+void make_material_bake_node_previews() {
+	g_context->node_previews_used = any_array_create_from_raw((void *[]){}, 0);
+	if (g_context->node_previews == NULL) {
+		g_context->node_previews = any_map_create();
+	}
+	ui_node_t_array_t *empty = any_array_create_from_raw((void *[]){}, 0);
+	make_material_traverse_nodes(g_context->material->canvas->nodes, NULL, empty);
+
+	string_array_t *keys = map_keys(g_context->node_previews);
+	for (i32 i = 0; i < keys->length; ++i) {
+		char *key = keys->buffer[i];
+		if (string_array_index_of(g_context->node_previews_used, key) == -1) {
+			gpu_texture_t *image = any_map_get(g_context->node_previews, key);
+			gpu_delete_texture(image);
+			map_delete(g_context->node_previews, key);
+		}
+	}
+}
+
 void make_material_parse_paint_material(bool bake_previews) {
 	if (!make_material_get_mout()) {
 		return;
@@ -156,7 +305,7 @@ void make_material_parse_paint_material(bool bake_previews) {
 		}
 	}
 
-	material_t            *sdata = GC_ALLOC_INIT(material_t, {.name = "Material", .canvas = context_raw->material->canvas});
+	material_t            *sdata = GC_ALLOC_INIT(material_t, {.name = "Material", .canvas = g_context->material->canvas});
 	material_context_t    *tmcon = GC_ALLOC_INIT(material_context_t, {.name = "paint", .bind_textures = any_array_create_from_raw((void *[]){}, 0)});
 	node_shader_context_t *con   = make_paint_run(sdata, tmcon);
 
@@ -188,149 +337,12 @@ void make_material_parse_paint_material(bool bake_previews) {
 	}
 }
 
-void make_material_bake_node_previews() {
-	context_raw->node_previews_used = any_array_create_from_raw((void *[]){}, 0);
-	if (context_raw->node_previews == NULL) {
-		context_raw->node_previews = any_map_create();
-	}
-	ui_node_t_array_t *empty = any_array_create_from_raw((void *[]){}, 0);
-	make_material_traverse_nodes(context_raw->material->canvas->nodes, NULL, empty);
-
-	string_t_array_t *keys = map_keys(context_raw->node_previews);
-	for (i32 i = 0; i < keys->length; ++i) {
-		char *key = keys->buffer[i];
-		if (string_array_index_of(context_raw->node_previews_used, key) == -1) {
-			gpu_texture_t *image = any_map_get(context_raw->node_previews, key);
-			gpu_delete_texture(image);
-			map_delete(context_raw->node_previews, key);
-		}
-	}
-}
-
-void make_material_traverse_nodes(ui_node_t_array_t *nodes, ui_node_canvas_t *group, ui_node_t_array_t *parents) {
-	for (i32 i = 0; i < nodes->length; ++i) {
-		ui_node_t *node = nodes->buffer[i];
-		make_material_bake_node_preview(node, group, parents);
-		if (string_equals(node->type, "GROUP")) {
-			for (i32 j = 0; j < project_material_groups->length; ++j) {
-				node_group_t *g     = project_material_groups->buffer[j];
-				char         *cname = g->canvas->name;
-				if (string_equals(cname, node->name)) {
-					any_array_push(parents, node);
-					make_material_traverse_nodes(g->canvas->nodes, g->canvas, parents);
-					array_pop(parents);
-					break;
-				}
-			}
-		}
-	}
-}
-
-void make_material_bake_node_preview(ui_node_t *node, ui_node_canvas_t *group, ui_node_t_array_t *parents) {
-	if (string_equals(node->type, "BLUR")) {
-		char          *id    = parser_material_node_name(node, parents);
-		gpu_texture_t *image = any_map_get(context_raw->node_previews, id);
-		any_array_push(context_raw->node_previews_used, id);
-		i32 res_x = math_floor(config_get_texture_res_x() / 4.0);
-		i32 res_y = math_floor(config_get_texture_res_y() / 4.0);
-		if (image == NULL || image->width != res_x || image->height != res_y) {
-			if (image != NULL) {
-				gpu_delete_texture(image);
-			}
-			image = gpu_create_render_target(res_x, res_y, GPU_TEXTURE_FORMAT_RGBA32);
-			any_map_set(context_raw->node_previews, id, image);
-		}
-
-		parser_material_blur_passthrough = true;
-		util_render_make_node_preview(context_raw->material->canvas, node, image, group, parents);
-		parser_material_blur_passthrough = false;
-	}
-	else if (string_equals(node->type, "DIRECT_WARP")) {
-		char          *id    = parser_material_node_name(node, parents);
-		gpu_texture_t *image = any_map_get(context_raw->node_previews, id);
-		any_array_push(context_raw->node_previews_used, id);
-		i32 res_x = math_floor(config_get_texture_res_x());
-		i32 res_y = math_floor(config_get_texture_res_y());
-		if (image == NULL || image->width != res_x || image->height != res_y) {
-			if (image != NULL) {
-				gpu_delete_texture(image);
-			}
-			image = gpu_create_render_target(res_x, res_y, GPU_TEXTURE_FORMAT_RGBA32);
-			any_map_set(context_raw->node_previews, id, image);
-		}
-
-		parser_material_warp_passthrough = true;
-		util_render_make_node_preview(context_raw->material->canvas, node, image, group, parents);
-		parser_material_warp_passthrough = false;
-	}
-	else if (string_equals(node->type, "BAKE_CURVATURE")) {
-		char          *id    = parser_material_node_name(node, parents);
-		gpu_texture_t *image = any_map_get(context_raw->node_previews, id);
-		any_array_push(context_raw->node_previews_used, id);
-		i32 res_x = math_floor(config_get_texture_res_x());
-		i32 res_y = math_floor(config_get_texture_res_y());
-		if (image == NULL || image->width != res_x || image->height != res_y) {
-			if (image != NULL) {
-				gpu_delete_texture(image);
-			}
-			image = gpu_create_render_target(res_x, res_y, GPU_TEXTURE_FORMAT_R8);
-			any_map_set(context_raw->node_previews, id, image);
-		}
-
-		if (render_path_paint_live_layer == NULL) {
-			gc_unroot(render_path_paint_live_layer);
-			render_path_paint_live_layer = slot_layer_create("_live", LAYER_SLOT_TYPE_LAYER, NULL);
-			gc_root(render_path_paint_live_layer);
-		}
-
-		tool_type_t _tool      = context_raw->tool;
-		bake_type_t _bake_type = context_raw->bake_type;
-		context_raw->tool      = TOOL_TYPE_BAKE;
-		context_raw->bake_type = BAKE_TYPE_CURVATURE;
-
-		parser_material_bake_passthrough = true;
-		gc_unroot(parser_material_start_node);
-		parser_material_start_node = node;
-		gc_root(parser_material_start_node);
-		gc_unroot(parser_material_start_group);
-		parser_material_start_group = group;
-		gc_root(parser_material_start_group);
-		gc_unroot(parser_material_start_parents);
-		parser_material_start_parents = parents;
-		gc_root(parser_material_start_parents);
-		make_material_parse_paint_material(false);
-		parser_material_bake_passthrough = false;
-		gc_unroot(parser_material_start_node);
-		parser_material_start_node = NULL;
-		gc_unroot(parser_material_start_group);
-		parser_material_start_group = NULL;
-		gc_unroot(parser_material_start_parents);
-		parser_material_start_parents = NULL;
-		context_raw->pdirty           = 1;
-		render_path_paint_use_live_layer(true);
-		render_path_paint_commands_paint(false);
-		render_path_paint_dilate(true, false);
-		render_path_paint_use_live_layer(false);
-		context_raw->pdirty = 0;
-
-		context_raw->tool      = _tool;
-		context_raw->bake_type = _bake_type;
-		make_material_parse_paint_material(false);
-
-		any_map_t       *rts           = render_path_render_targets;
-		render_target_t *texpaint_live = any_map_get(rts, "texpaint_live");
-		draw_begin(image, false, 0);
-		draw_image(texpaint_live->_image, 0, 0);
-		draw_end();
-	}
-}
-
 parse_node_preview_result_t *make_material_parse_node_preview_material(ui_node_t *node, ui_node_canvas_t *group, ui_node_t_array_t *parents) {
 	if (node->outputs->length == 0) {
 		return NULL;
 	}
 
-	material_t            *sdata         = GC_ALLOC_INIT(material_t, {.name = "Material", .canvas = context_raw->material->canvas});
+	material_t            *sdata         = GC_ALLOC_INIT(material_t, {.name = "Material", .canvas = g_context->material->canvas});
 	material_context_t    *mcon_raw      = GC_ALLOC_INIT(material_context_t, {.name = "mesh", .bind_textures = any_array_create_from_raw((void *[]){}, 0)});
 	node_shader_context_t *con           = make_node_preview_run(sdata, mcon_raw, node, group, parents);
 	bool                   compile_error = false;
@@ -353,7 +365,7 @@ parse_node_preview_result_t *make_material_parse_node_preview_material(ui_node_t
 }
 
 void make_material_parse_brush() {
-	parser_logic_parse(context_raw->brush->canvas);
+	parser_logic_parse(g_context->brush->canvas);
 }
 
 char *make_material_blend_mode(node_shader_t *kong, i32 blending, char *cola, char *colb, char *opac) {
@@ -498,14 +510,5 @@ char *make_material_blend_mode_mask(node_shader_t *kong, i32 blending, char *col
 
 f32 make_material_get_displace_strength() {
 	vec4_t sc = context_main_object()->base->transform->scale;
-	return config_raw->displace_strength * 0.02 * sc.x;
-}
-
-void make_material_delete_context_on_next_frame(shader_context_t *c) {
-	shader_context_delete(c);
-}
-
-void make_material_delete_context(shader_context_t *c) {
-	// Ensure pipeline is no longer in use
-	sys_notify_on_next_frame(&make_material_delete_context_on_next_frame, c);
+	return g_config->displace_strength * 0.02 * sc.x;
 }

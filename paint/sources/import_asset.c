@@ -1,20 +1,26 @@
 
 #include "global.h"
 
+f32  _import_asset_drop_x;
+f32  _import_asset_drop_y;
+bool _import_asset_show_box;
+bool _import_asset_hdr_as_envmap;
+void (*_import_asset_done)(void);
+
 void import_asset_run_cache_cloud_done(char *abs) {
 	if (abs == NULL) {
 		return;
 	}
-	import_asset_run(abs, _import_asset_drop_x, _import_asset_drop_y, _import_asset_show_box, _import_asset_hdr_as_envmap, _import_asset_done);
+	import_asset_run(string_copy(abs), _import_asset_drop_x, _import_asset_drop_y, _import_asset_show_box, _import_asset_hdr_as_envmap, _import_asset_done);
 }
 
 void import_asset_run(char *path, f32 drop_x, f32 drop_y, bool show_box, bool hdr_as_envmap, void (*done)(void)) {
 	if (starts_with(path, "cloud")) {
-		#ifdef IRON_ANDROID
+#ifdef IRON_ANDROID
 		console_toast(tr("Downloading"));
-		#else
+#else
 		console_info(tr("Downloading"));
-		#endif
+#endif
 
 		_import_asset_drop_x        = drop_x;
 		_import_asset_drop_y        = drop_y;
@@ -23,13 +29,13 @@ void import_asset_run(char *path, f32 drop_x, f32 drop_y, bool show_box, bool hd
 		gc_unroot(_import_asset_done);
 		_import_asset_done = done;
 		gc_root(_import_asset_done);
-		file_cache_cloud(path, &import_asset_run_cache_cloud_done, config_raw->server);
+		file_cache_cloud(path, &import_asset_run_cache_cloud_done, g_config->server);
 
 		return;
 	}
 
 	if (path_is_mesh(path)) {
-		if (context_raw->tool == TOOL_TYPE_GIZMO) {
+		if (g_context->tool == TOOL_TYPE_GIZMO) {
 			// project_import_mesh_box(path, false, false, tab_meshes_import_mesh_done);
 			project_import_mesh_box(path, false, false, tab_scene_import_mesh_done);
 		}
@@ -58,9 +64,9 @@ void import_asset_run(char *path, f32 drop_x, f32 drop_y, bool show_box, bool hd
 			ui_nodes_hwnd->redraws           = 2;
 		}
 
-		if (context_raw->tool == TOOL_TYPE_COLORID && project_asset_names->length == 1) {
+		if (g_context->tool == TOOL_TYPE_COLORID && project_asset_names->length == 1) {
 			ui_header_handle->redraws = 2;
-			context_raw->ddirty       = 2;
+			g_context->ddirty       = 2;
 		}
 	}
 	else if (path_is_project(path)) {

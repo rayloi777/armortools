@@ -10,19 +10,15 @@ void nodes_material_init() {
 	nodes_material_input = any_array_create_from_raw((void *[]){}, 0);
 	gc_root(nodes_material_input);
 	attribute_node_init();
-	camera_data_node_init();
 	rgb_node_init(); // color_node_init
-	fresnel_node_init();
 	geometry_node_init();
 	layer_node_init();
 	layer_mask_node_init();
-	layer_weight_node_init();
 	material_node_init();
 	object_info_node_init();
 	picker_node_init();
 	script_node_init();
 	shader_node_init();
-	tangent_node_init();
 	texture_coordinate_node_init();
 	uv_map_node_init();
 	value_node_init();
@@ -49,12 +45,18 @@ void nodes_material_init() {
 	gc_root(nodes_material_color);
 	blur_node_init();
 	brightness_contrast_node_init();
+	color_mask_node_init();
+	color_ramp_node_init();
+	combine_color_node_init();
 	gamma_node_init();
 	hue_saturation_value_node_init();
 	invert_color_node_init();
 	mix_color_node_init();
 	quantize_node_init();
+	rgb_curves_node_init();
+	rgb_to_bw_node_init();
 	replace_color_node_init();
+	separate_color_node_init();
 	warp_node_init();
 
 	gc_unroot(nodes_material_utilities);
@@ -62,19 +64,19 @@ void nodes_material_init() {
 	gc_root(nodes_material_utilities);
 	bump_node_init();
 	clamp_node_init();
-	color_mask_node_init();
-	color_ramp_node_init();
 	combine_xyz_node_init();
+	float_curve_node_init();
 	map_range_node_init();
 	mapping_node_init();
 	math2_node_init();
 	mix_normal_map_node_init();
 	normal_node_init();
 	normal_map_node_init();
-	rgb_to_bw_node_init();
 	separate_xyz_node_init();
 	vector_curves_node_init();
 	vector_math2_node_init();
+	vector_rotate_node_init();
+	vector_transform_node_init();
 
 	#if defined(IRON_WINDOWS) || defined(IRON_LINUX) || defined(IRON_MACOS)
 
@@ -153,7 +155,7 @@ ui_node_t *nodes_material_create_node(char *node_type, node_group_t *group) {
 		return NULL;
 	}
 	ui_node_canvas_t *canvas = group != NULL ? group->canvas : ui_nodes_get_canvas(false);
-	ui_nodes_t       *nodes  = group != NULL ? group->nodes : context_raw->material->nodes;
+	ui_nodes_t       *nodes  = group != NULL ? group->nodes : g_context->material->nodes;
 	ui_node_t        *node   = ui_nodes_make_node(n, nodes, canvas);
 	any_array_push(canvas->nodes, node);
 	return node;

@@ -1,6 +1,15 @@
 
 #include "global.h"
 
+typedef struct import_texture_data {
+	char               *path;
+	struct gpu_texture *image;
+} import_texture_data_t;
+
+gpu_texture_t *import_texture_default_importer(char *path) {
+	return data_get_image(path);
+}
+
 void import_texture_run_on_next_frame(import_texture_data_t *itd) {
 	import_envmap_run(itd->path, itd->image);
 }
@@ -45,12 +54,12 @@ void import_texture_run(char *path, bool hdr_as_envmap) {
 	}
 
 	any_map_set(data_cached_images, path, image);
-	string_t_array_t *ar    = string_split(path, PATH_SEP);
+	string_array_t *ar    = string_split(path, PATH_SEP);
 	char             *name  = ar->buffer[ar->length - 1];
 	asset_t          *asset = GC_ALLOC_INIT(asset_t, {.name = name, .file = path, .id = project_asset_id++});
 	any_array_push(project_assets, asset);
-	if (context_raw->texture == NULL) {
-		context_raw->texture = asset;
+	if (g_context->texture == NULL) {
+		g_context->texture = asset;
 	}
 	any_array_push(project_asset_names, name);
 	any_imap_set(project_asset_map, asset->id, image);
@@ -62,8 +71,4 @@ void import_texture_run(char *path, bool hdr_as_envmap) {
 		import_texture_data_t *itd = GC_ALLOC_INIT(import_texture_data_t, {.path = path, .image = image});
 		sys_notify_on_next_frame(&import_texture_run_on_next_frame, itd); // Make sure file browser process did finish
 	}
-}
-
-gpu_texture_t *import_texture_default_importer(char *path) {
-	return data_get_image(path);
 }

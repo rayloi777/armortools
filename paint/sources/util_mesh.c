@@ -1,9 +1,42 @@
 
 #include "global.h"
 
+i16_array_t *util_mesh_va0;
+i32_array_t *util_mesh_quantized;
+
+void util_mesh_remove_merged() {
+	if (g_context->merged_object != NULL) {
+		mesh_data_delete(g_context->merged_object->data);
+		mesh_object_remove(g_context->merged_object);
+		g_context->merged_object = NULL;
+	}
+}
+
+mesh_object_t_array_t *util_mesh_get_unique() {
+	mesh_object_t_array_t *ar = any_array_create_from_raw((void *[]){}, 0);
+
+	for (i32 i = 0; i < project_paint_objects->length; ++i) {
+		if (!project_paint_objects->buffer[i]->base->visible) {
+			continue;
+		}
+		bool found = false;
+		for (i32 j = 0; j < i; ++j) {
+			if (project_paint_objects->buffer[i]->data == project_paint_objects->buffer[j]->data) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			any_array_push(ar, project_paint_objects->buffer[i]);
+		}
+	}
+
+	return ar;
+}
+
 void util_mesh_merge(mesh_object_t_array_t *paint_objects) {
 	if (paint_objects == NULL) {
-		if (context_raw->tool == TOOL_TYPE_GIZMO) {
+		if (g_context->tool == TOOL_TYPE_GIZMO) {
 			paint_objects = util_mesh_get_unique();
 		}
 		else {
@@ -13,7 +46,7 @@ void util_mesh_merge(mesh_object_t_array_t *paint_objects) {
 	if (paint_objects->length == 0) {
 		return;
 	}
-	context_raw->merged_object_is_atlas = paint_objects->length < project_paint_objects->length;
+	g_context->merged_object_is_atlas = paint_objects->length < project_paint_objects->length;
 	i32 vlen                            = 0;
 	i32 ilen                            = 0;
 	f32 max_scale                       = 0.0;
@@ -88,7 +121,7 @@ void util_mesh_merge(mesh_object_t_array_t *paint_objects) {
 		voff += math_floor(vas->buffer[0]->values->length / 4.0);
 		ioff += math_floor(ias->length);
 	}
-	mesh_data_t *raw = GC_ALLOC_INIT(mesh_data_t, {.name          = context_raw->paint_object->base->name,
+	mesh_data_t *raw = GC_ALLOC_INIT(mesh_data_t, {.name          = g_context->paint_object->base->name,
 	                                               .vertex_arrays = any_array_create_from_raw(
 	                                                   (void *[]){
 	                                                       GC_ALLOC_INIT(vertex_array_t, {.values = va0, .attrib = "pos", .data = "short4norm"}),
@@ -109,19 +142,11 @@ void util_mesh_merge(mesh_object_t_array_t *paint_objects) {
 	}
 	util_mesh_remove_merged();
 	mesh_data_t *md                           = mesh_data_create(raw);
-	context_raw->merged_object                = mesh_object_create(md, context_raw->paint_object->material);
-	context_raw->merged_object->base->name    = string("%s_merged", context_raw->paint_object->base->name);
-	context_raw->merged_object->force_context = "paint";
-	object_set_parent(context_raw->merged_object->base, context_main_object()->base);
+	g_context->merged_object                = mesh_object_create(md, g_context->paint_object->material);
+	g_context->merged_object->base->name    = string("%s_merged", g_context->paint_object->base->name);
+	g_context->merged_object->force_context = "paint";
+	object_set_parent(g_context->merged_object->base, context_main_object()->base);
 	render_path_raytrace_ready = false;
-}
-
-void util_mesh_remove_merged() {
-	if (context_raw->merged_object != NULL) {
-		mesh_data_delete(context_raw->merged_object->data);
-		mesh_object_remove(context_raw->merged_object);
-		context_raw->merged_object = NULL;
-	}
 }
 
 void util_mesh_swap_axis(i32 a, i32 b) {
@@ -402,8 +427,7 @@ void util_mesh_equirect_unwrap(raw_mesh_t *mesh) {
 	mesh->texa = i16_array_create(verts * 2);
 	vec4_t n   = vec4_create(0.0, 0.0, 0.0, 1.0);
 	for (i32 i = 0; i < verts; ++i) {
-		n = vec4_create(mesh->posa->buffer[i * 4] / 32767.0, mesh->posa->buffer[i * 4 + 1] / 32767.0, mesh->posa->buffer[i * 4 + 2] / 32767.0,
-		                1.0);
+		n = vec4_create(mesh->posa->buffer[i * 4] / 32767.0, mesh->posa->buffer[i * 4 + 1] / 32767.0, mesh->posa->buffer[i * 4 + 2] / 32767.0, 1.0);
 		n = vec4_norm(n);
 		// Sphere projection
 		// mesh.texa[i * 2    ] = math_atan2(n.x, n.y) / (math_pi() * 2) + 0.5;
@@ -412,29 +436,6 @@ void util_mesh_equirect_unwrap(raw_mesh_t *mesh) {
 		mesh->texa->buffer[i * 2]     = math_floor(((math_atan2(-n.z, n.x) + math_pi()) / (float)(math_pi() * 2)) * 32767);
 		mesh->texa->buffer[i * 2 + 1] = math_floor((math_acos(n.y) / (float)math_pi()) * 32767);
 	}
-}
-
-bool util_mesh_pnpoly(f32 v0x, f32 v0y, f32 v1x, f32 v1y, f32 v2x, f32 v2y, f32 px, f32 py) {
-	// https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html
-	bool c = false;
-	if (((v0y > py) != (v2y > py)) && (px < (v2x - v0x) * (py - v0y) / (float)(v2y - v0y) + v0x)) {
-		c = !c;
-	}
-	if (((v1y > py) != (v0y > py)) && (px < (v0x - v1x) * (py - v1y) / (float)(v0y - v1y) + v1x)) {
-		c = !c;
-	}
-	if (((v2y > py) != (v1y > py)) && (px < (v1x - v2x) * (py - v2y) / (float)(v1y - v2y) + v2x)) {
-		c = !c;
-	}
-	return c;
-}
-
-vec4_t util_mesh_calc_normal(vec4_t p0, vec4_t p1, vec4_t p2) {
-	vec4_t cb = vec4_sub(p2, p1);
-	vec4_t ab = vec4_sub(p0, p1);
-	cb        = vec4_cross(cb, ab);
-	cb        = vec4_norm(cb);
-	return cb;
 }
 
 i32 util_mesh_decimate_sort(i32 *pa, i32 *pb) {
@@ -599,26 +600,4 @@ void util_mesh_pack_uvs(i16_array_t *texa) {
 		texa->buffer[i * 2]     = texa->buffer[i * 2] / (float)atlas_stride + item_x;
 		texa->buffer[i * 2 + 1] = texa->buffer[i * 2 + 1] / (float)atlas_stride + item_y;
 	}
-}
-
-mesh_object_t_array_t *util_mesh_get_unique() {
-	mesh_object_t_array_t *ar = any_array_create_from_raw((void *[]){}, 0);
-
-	for (i32 i = 0; i < project_paint_objects->length; ++i) {
-		if (!project_paint_objects->buffer[i]->base->visible) {
-			continue;
-		}
-		bool found = false;
-		for (i32 j = 0; j < i; ++j) {
-			if (project_paint_objects->buffer[i]->data == project_paint_objects->buffer[j]->data) {
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
-			any_array_push(ar, project_paint_objects->buffer[i]);
-		}
-	}
-
-	return ar;
 }

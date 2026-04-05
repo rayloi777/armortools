@@ -1,6 +1,19 @@
 
 #include "global.h"
 
+bool  args_use                    = false;
+char *args_asset_path             = "";
+bool  args_background             = false;
+bool  args_export_textures        = false;
+char *args_export_textures_type   = "";
+char *args_export_textures_preset = "";
+char *args_export_textures_path   = "";
+bool  args_reimport_mesh          = false;
+bool  args_export_mesh            = false;
+char *args_export_mesh_path       = "";
+bool  args_export_material        = false;
+char *args_export_material_path   = "";
+
 void args_parse() {
 	if (iron_get_arg_count() > 1) {
 		args_use = true;
@@ -107,11 +120,11 @@ void args_run_on_next_frame(void *_) {
 
 		if (string_equals(args_export_textures_type, "png")) {
 			base_bits_handle->i      = TEXTURE_BITS_BITS8;
-			context_raw->format_type = TEXTURE_LDR_FORMAT_PNG;
+			g_context->format_type = TEXTURE_LDR_FORMAT_PNG;
 		}
 		else if (string_equals(args_export_textures_type, "jpg")) {
 			base_bits_handle->i      = TEXTURE_BITS_BITS8;
-			context_raw->format_type = TEXTURE_LDR_FORMAT_JPG;
+			g_context->format_type = TEXTURE_LDR_FORMAT_JPG;
 		}
 		else if (string_equals(args_export_textures_type, "exr16")) {
 			base_bits_handle->i = TEXTURE_BITS_BITS16;
@@ -123,7 +136,7 @@ void args_run_on_next_frame(void *_) {
 			iron_log(tr("Invalid texture type"));
 		}
 
-		context_raw->layers_export = EXPORT_MODE_VISIBLE;
+		g_context->layers_export = EXPORT_MODE_VISIBLE;
 
 		// Get export preset and apply the correct one from args
 		gc_unroot(box_export_files);
@@ -163,7 +176,7 @@ void args_run_on_next_frame(void *_) {
 		export_mesh_run(string("%s%s%s", args_export_mesh_path, PATH_SEP, f), NULL, false, true);
 	}
 	else if (args_export_material) {
-		context_raw->write_icon_on_export = true;
+		g_context->write_icon_on_export = true;
 		export_arm_run_material(args_export_material_path);
 	}
 

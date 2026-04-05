@@ -1,16 +1,21 @@
 
 #include "global.h"
 
+f32                      render_path_base_super_sample = 1.0;
+f32                      render_path_base_last_x       = -1.0;
+f32                      render_path_base_last_y       = -1.0;
+render_target_t_array_t *render_path_base_bloom_mipmaps;
+
 void render_path_base_init() {
 	pipes_init();
 	const_data_create_screen_aligned_data();
-	render_path_base_super_sample = config_raw->rp_supersample;
+	render_path_base_super_sample = g_config->rp_supersample;
 }
 
 void render_path_base_apply_config() {
-	if (render_path_base_super_sample != config_raw->rp_supersample) {
-		render_path_base_super_sample = config_raw->rp_supersample;
-		string_t_array_t *keys        = map_keys(render_path_render_targets);
+	if (render_path_base_super_sample != g_config->rp_supersample) {
+		render_path_base_super_sample = g_config->rp_supersample;
+		string_array_t *keys          = map_keys(render_path_render_targets);
 		for (i32 i = 0; i < keys->length; ++i) {
 			render_target_t *rt = any_map_get(render_path_render_targets, keys->buffer[i]);
 			if (rt->width == 0) {
@@ -31,40 +36,40 @@ void render_path_base_draw_compass() {
 
 void render_path_base_begin() {
 	// Begin split
-	if (context_raw->split_view && !context_raw->paint2d_view) {
-		if (context_raw->view_index_last == -1 && context_raw->view_index == -1) {
+	if (g_context->split_view && !g_context->paint2d_view) {
+		if (g_context->view_index_last == -1 && g_context->view_index == -1) {
 			// Begin split, draw right viewport first
-			context_raw->view_index = 1;
+			g_context->view_index = 1;
 		}
 		else {
 			// Set current viewport
-			context_raw->view_index = mouse_view_x() > base_w() / 2.0 ? 1 : 0;
+			g_context->view_index = mouse_view_x() > base_w() / 2.0 ? 1 : 0;
 		}
 
 		camera_object_t *cam = scene_camera;
-		if (context_raw->view_index_last > -1) {
+		if (g_context->view_index_last > -1) {
 			// Save current viewport camera
-			camera_views->buffer[context_raw->view_index_last]->v = mat4_clone(cam->base->transform->local);
+			camera_views->buffer[g_context->view_index_last]->v = mat4_clone(cam->base->transform->local);
 		}
 
 		bool decal = context_is_decal();
 
-		if (context_raw->view_index_last != context_raw->view_index || decal) {
+		if (g_context->view_index_last != g_context->view_index || decal) {
 			// Redraw on current viewport change
-			context_raw->ddirty = 1;
+			g_context->ddirty = 1;
 		}
 
-		transform_set_matrix(cam->base->transform, camera_views->buffer[context_raw->view_index]->v);
+		transform_set_matrix(cam->base->transform, camera_views->buffer[g_context->view_index]->v);
 		camera_object_build_mat(cam);
 		camera_object_build_proj(cam, -1.0);
 	}
 
 	// Match projection matrix jitter
 	bool skip_taa =
-	    context_raw->split_view || context_raw->viewport_mode == VIEWPORT_MODE_PATH_TRACE || context_raw->camera_type == CAMERA_TYPE_ORTHOGRAPHIC ||
-	    ((context_raw->tool == TOOL_TYPE_CLONE || context_raw->tool == TOOL_TYPE_BLUR || context_raw->tool == TOOL_TYPE_SMUDGE) && context_raw->pdirty > 0);
+	    g_context->split_view || g_context->viewport_mode == VIEWPORT_MODE_PATH_TRACE || g_context->camera_type == CAMERA_TYPE_ORTHOGRAPHIC ||
+	    ((g_context->tool == TOOL_TYPE_CLONE || g_context->tool == TOOL_TYPE_BLUR || g_context->tool == TOOL_TYPE_SMUDGE) && g_context->pdirty > 0);
 
-	if (config_raw->brush_live) {
+	if (g_config->brush_live) {
 		render_path_base_taa_frame = 0;
 	}
 
@@ -75,19 +80,19 @@ void render_path_base_begin() {
 
 void render_path_base_end() {
 	// End split
-	context_raw->view_index_last = context_raw->view_index;
-	context_raw->view_index      = -1;
+	g_context->view_index_last = g_context->view_index;
+	g_context->view_index      = -1;
 
-	if (context_raw->foreground_event && !mouse_down("left")) {
-		context_raw->foreground_event = false;
-		context_raw->pdirty           = 0;
+	if (g_context->foreground_event && !mouse_down("left")) {
+		g_context->foreground_event = false;
+		g_context->pdirty           = 0;
 	}
 
 	render_path_base_taa_frame++;
 }
 
 bool render_path_base_ssaa4() {
-	return config_raw->rp_supersample == 4;
+	return g_config->rp_supersample == 4;
 }
 
 bool render_path_base_is_cached() {
@@ -100,18 +105,18 @@ bool render_path_base_is_cached() {
 	render_path_base_last_x = mouse_view_x();
 	render_path_base_last_y = mouse_view_y();
 
-	if (context_raw->ddirty <= 0 && context_raw->rdirty <= 0 && context_raw->pdirty <= 0) {
+	if (g_context->ddirty <= 0 && g_context->rdirty <= 0 && g_context->pdirty <= 0) {
 		if (mx != render_path_base_last_x || my != render_path_base_last_y || iron_mouse_is_locked()) {
-			context_raw->ddirty = 0;
+			g_context->ddirty = 0;
 		}
 
-		if (context_raw->ddirty > -6) {
+		if (g_context->ddirty > -6) {
 			// Accumulate taa frames
-			context_raw->ddirty--;
+			g_context->ddirty--;
 			return false;
 		}
 
-		if (context_raw->ddirty > -12) {
+		if (g_context->ddirty > -12) {
 			render_path_set_target("", NULL, NULL, GPU_CLEAR_NONE, 0, 0.0);
 			render_path_bind_target("last", "tex");
 			if (render_path_base_ssaa4()) {
@@ -121,13 +126,35 @@ bool render_path_base_is_cached() {
 				render_path_draw_shader("Scene/copy_pass/copy_pass");
 			}
 			render_path_paint_commands_cursor();
-			context_raw->ddirty--;
+			g_context->ddirty--;
 		}
 
 		render_path_base_end();
 		return true;
 	}
 	return false;
+}
+
+void render_path_base_draw_split(void (*draw_commands)(void)) {
+	if (g_context->split_view && !g_context->paint2d_view) {
+		g_context->ddirty  = 2;
+		camera_object_t *cam = scene_camera;
+
+		g_context->view_index = g_context->view_index == 0 ? 1 : 0;
+		transform_set_matrix(cam->base->transform, camera_views->buffer[g_context->view_index]->v);
+		camera_object_build_mat(cam);
+		camera_object_build_proj(cam, -1.0);
+
+		render_path_base_draw_gbuffer();
+
+		bool use_live_layer = g_context->tool == TOOL_TYPE_MATERIAL;
+		g_context->viewport_mode == VIEWPORT_MODE_PATH_TRACE ? render_path_raytrace_draw(use_live_layer) : draw_commands();
+
+		g_context->view_index = g_context->view_index == 0 ? 1 : 0;
+		transform_set_matrix(cam->base->transform, camera_views->buffer[g_context->view_index]->v);
+		camera_object_build_mat(cam);
+		camera_object_build_proj(cam, -1.0);
+	}
 }
 
 void render_path_base_commands(void (*draw_commands)(void)) {
@@ -141,10 +168,10 @@ void render_path_base_commands(void (*draw_commands)(void)) {
 	render_path_base_draw_gbuffer();
 	render_path_paint_draw();
 
-	if (context_raw->viewport_mode == VIEWPORT_MODE_PATH_TRACE) {
-		bool use_live_layer = context_raw->tool == TOOL_TYPE_MATERIAL;
+	if (g_context->viewport_mode == VIEWPORT_MODE_PATH_TRACE) {
+		bool use_live_layer = g_context->tool == TOOL_TYPE_MATERIAL;
 		render_path_raytrace_draw(use_live_layer);
-		context_raw->foreground_event = false;
+		g_context->foreground_event = false;
 		render_path_base_end();
 		return;
 	}
@@ -156,7 +183,7 @@ void render_path_base_commands(void (*draw_commands)(void)) {
 }
 
 void render_path_base_draw_bloom(char *source, char *target) {
-	if (config_raw->rp_bloom == false) {
+	if (g_config->rp_bloom == false) {
 		return;
 	}
 
@@ -203,28 +230,6 @@ void render_path_base_draw_bloom(char *source, char *target) {
 	}
 }
 
-void render_path_base_draw_split(void (*draw_commands)(void)) {
-	if (context_raw->split_view && !context_raw->paint2d_view) {
-		context_raw->ddirty  = 2;
-		camera_object_t *cam = scene_camera;
-
-		context_raw->view_index = context_raw->view_index == 0 ? 1 : 0;
-		transform_set_matrix(cam->base->transform, camera_views->buffer[context_raw->view_index]->v);
-		camera_object_build_mat(cam);
-		camera_object_build_proj(cam, -1.0);
-
-		render_path_base_draw_gbuffer();
-
-		bool use_live_layer = context_raw->tool == TOOL_TYPE_MATERIAL;
-		context_raw->viewport_mode == VIEWPORT_MODE_PATH_TRACE ? render_path_raytrace_draw(use_live_layer) : draw_commands();
-
-		context_raw->view_index = context_raw->view_index == 0 ? 1 : 0;
-		transform_set_matrix(cam->base->transform, camera_views->buffer[context_raw->view_index]->v);
-		camera_object_build_mat(cam);
-		camera_object_build_proj(cam, -1.0);
-	}
-}
-
 void render_path_base_init_ssao() {
 #if defined(IRON_MACOS) || defined(IRON_IOS) || defined(IRON_ANDROID)
 	f32 scale = 0.5;
@@ -258,8 +263,8 @@ void render_path_base_init_ssao() {
 }
 
 void render_path_base_draw_ssao() {
-	bool ssao = config_raw->rp_ssao != false && context_raw->camera_type == CAMERA_TYPE_PERSPECTIVE;
-	if (ssao && context_raw->ddirty > 0 && _render_path_frame > 0) {
+	bool ssao = g_config->rp_ssao != false && g_context->camera_type == CAMERA_TYPE_PERSPECTIVE;
+	if (ssao && g_context->ddirty > 0 && _render_path_frame > 0) {
 		if (any_map_get(render_path_render_targets, "singlea") == NULL) {
 			render_path_base_init_ssao();
 		}
@@ -286,7 +291,7 @@ void render_path_base_draw_deferred_light() {
 	render_path_bind_target("main", "gbufferD");
 	render_path_bind_target("gbuffer0", "gbuffer0");
 	render_path_bind_target("gbuffer1", "gbuffer1");
-	bool ssao = config_raw->rp_ssao != false && context_raw->camera_type == CAMERA_TYPE_PERSPECTIVE;
+	bool ssao = g_config->rp_ssao != false && g_context->camera_type == CAMERA_TYPE_PERSPECTIVE;
 	if (ssao && _render_path_frame > 0) {
 		render_path_bind_target("singlea", "ssaotex");
 	}
@@ -319,7 +324,7 @@ void render_path_base_draw_taa(char *bufa, char *bufb) {
 	render_path_set_target(bufb, NULL, NULL, GPU_CLEAR_NONE, 0, 0.0);
 	render_path_bind_target(bufa, "tex");
 
-	bool skip_taa = context_raw->split_view;
+	bool skip_taa = g_context->split_view;
 	if (skip_taa) {
 		render_path_draw_shader("Scene/copy_pass/copyRGBA64_pass");
 	}
@@ -349,63 +354,6 @@ void render_path_base_swap_buf(char *bufb) {
 	any_map_set(render_path_render_targets, bufb, last_target);
 	any_map_set(render_path_render_targets, "last", buf_target);
 	render_path_base_buf_swapped = !render_path_base_buf_swapped;
-}
-
-void render_path_base_draw_gbuffer() {
-	render_path_set_target("gbuffer0", NULL, "main", GPU_CLEAR_DEPTH, 0, 1.0); // Only clear gbuffer0
-	string_t_array_t *additional = any_array_create_from_raw(
-	    (void *[]){
-	        "gbuffer1",
-	        "gbuffer2",
-	    },
-	    2);
-	render_path_set_target("gbuffer0", additional, "main", GPU_CLEAR_NONE, 0, 0.0);
-	render_path_paint_bind_layers();
-	render_path_draw_meshes("mesh");
-	render_path_paint_unbind_layers();
-	if (make_mesh_layer_pass_count > 1) {
-		render_path_base_make_gbuffer_copy_textures();
-		for (i32 i = 1; i < make_mesh_layer_pass_count; ++i) {
-			char *ping = i % 2 == 1 ? "_copy" : "";
-			char *pong = i % 2 == 1 ? "" : "_copy";
-			if (i == make_mesh_layer_pass_count - 1) {
-				render_path_set_target(string("gbuffer2%s", ping), NULL, NULL, GPU_CLEAR_COLOR, 0xff000000, 0.0);
-			}
-			char             *g1ping     = string("gbuffer1%s", ping);
-			char             *g2ping     = string("gbuffer2%s", ping);
-			string_t_array_t *additional = any_array_create_from_raw(
-			    (void *[]){
-			        g1ping,
-			        g2ping,
-			    },
-			    2);
-			render_path_set_target(string("gbuffer0%s", ping), additional, "main", GPU_CLEAR_NONE, 0, 0.0);
-			render_path_bind_target(string("gbuffer0%s", pong), "gbuffer0");
-			render_path_bind_target(string("gbuffer1%s", pong), "gbuffer1");
-			render_path_bind_target(string("gbuffer2%s", pong), "gbuffer2");
-			render_path_paint_bind_layers();
-			render_path_draw_meshes(string("mesh%d", i));
-			render_path_paint_unbind_layers();
-		}
-		if (make_mesh_layer_pass_count % 2 == 0) {
-			render_path_base_copy_to_gbuffer();
-		}
-	}
-
-	bool hide     = operator_shortcut(any_map_get(config_keymap, "stencil_hide"), SHORTCUT_TYPE_DOWN) || keyboard_down("control");
-	bool is_decal = base_is_decal_layer();
-	if (is_decal && !hide) {
-		line_draw_color              = 0xff000000;
-		line_draw_strength           = 0.002;
-		string_t_array_t *additional = any_array_create_from_raw(
-		    (void *[]){
-		        "gbuffer1",
-		    },
-		    1);
-		render_path_set_target("gbuffer0", additional, "main", GPU_CLEAR_NONE, 0, 0.0);
-		line_draw_render(context_raw->layer->decal_mat);
-		render_path_end();
-	}
 }
 
 void render_path_base_make_gbuffer_copy_textures() {
@@ -443,7 +391,7 @@ void render_path_base_make_gbuffer_copy_textures() {
 }
 
 void render_path_base_copy_to_gbuffer() {
-	string_t_array_t *additional = any_array_create_from_raw(
+	string_array_t *additional = any_array_create_from_raw(
 	    (void *[]){
 	        "gbuffer1",
 	        "gbuffer2",
@@ -454,4 +402,61 @@ void render_path_base_copy_to_gbuffer() {
 	render_path_bind_target("gbuffer1_copy", "tex1");
 	render_path_bind_target("gbuffer2_copy", "tex2");
 	render_path_draw_shader("Scene/copy_mrt3_pass/copy_mrt3RGBA64_pass");
+}
+
+void render_path_base_draw_gbuffer() {
+	render_path_set_target("gbuffer0", NULL, "main", GPU_CLEAR_DEPTH, 0, 1.0); // Only clear gbuffer0
+	string_array_t *additional = any_array_create_from_raw(
+	    (void *[]){
+	        "gbuffer1",
+	        "gbuffer2",
+	    },
+	    2);
+	render_path_set_target("gbuffer0", additional, "main", GPU_CLEAR_NONE, 0, 0.0);
+	render_path_paint_bind_layers();
+	render_path_draw_meshes("mesh");
+	render_path_paint_unbind_layers();
+	if (make_mesh_layer_pass_count > 1) {
+		render_path_base_make_gbuffer_copy_textures();
+		for (i32 i = 1; i < make_mesh_layer_pass_count; ++i) {
+			char *ping = i % 2 == 1 ? "_copy" : "";
+			char *pong = i % 2 == 1 ? "" : "_copy";
+			if (i == make_mesh_layer_pass_count - 1) {
+				render_path_set_target(string("gbuffer2%s", ping), NULL, NULL, GPU_CLEAR_COLOR, 0xff000000, 0.0);
+			}
+			char           *g1ping     = string("gbuffer1%s", ping);
+			char           *g2ping     = string("gbuffer2%s", ping);
+			string_array_t *additional = any_array_create_from_raw(
+			    (void *[]){
+			        g1ping,
+			        g2ping,
+			    },
+			    2);
+			render_path_set_target(string("gbuffer0%s", ping), additional, "main", GPU_CLEAR_NONE, 0, 0.0);
+			render_path_bind_target(string("gbuffer0%s", pong), "gbuffer0");
+			render_path_bind_target(string("gbuffer1%s", pong), "gbuffer1");
+			render_path_bind_target(string("gbuffer2%s", pong), "gbuffer2");
+			render_path_paint_bind_layers();
+			render_path_draw_meshes(string("mesh%d", i));
+			render_path_paint_unbind_layers();
+		}
+		if (make_mesh_layer_pass_count % 2 == 0) {
+			render_path_base_copy_to_gbuffer();
+		}
+	}
+
+	bool hide     = operator_shortcut(any_map_get(config_keymap, "stencil_hide"), SHORTCUT_TYPE_DOWN) || keyboard_down("control");
+	bool is_decal = base_is_decal_layer();
+	if (is_decal && !hide) {
+		line_draw_color            = 0xff000000;
+		line_draw_strength         = 0.002;
+		string_array_t *additional = any_array_create_from_raw(
+		    (void *[]){
+		        "gbuffer1",
+		    },
+		    1);
+		render_path_set_target("gbuffer0", additional, "main", GPU_CLEAR_NONE, 0, 0.0);
+		line_draw_render(g_context->layer->decal_mat);
+		render_path_end();
+	}
 }

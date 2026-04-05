@@ -39,7 +39,7 @@ ui_node_t *neural_from_node(ui_node_socket_t *inp, i32 socket) {
 }
 
 void neural_node_button_on_next_frame(void *_) {
-	box_preferences_htab->i = PREFERENCE_TAB_NEURAL;
+	box_preferences_htab->i = PREFERENCES_TAB_NEURAL;
 	box_preferences_show();
 }
 
@@ -91,10 +91,10 @@ char *neural_node_sd_bin_ext() {
 }
 
 char *neural_node_sd_bin() {
-	if (config_raw->neural_backend == NEURAL_BACKEND_VULKAN) {
+	if (g_config->neural_backend == NEURAL_BACKEND_VULKAN) {
 		return string("sd_vulkan%s", neural_node_sd_bin_ext());
 	}
-	if (config_raw->neural_backend == NEURAL_BACKEND_CUDA) {
+	if (g_config->neural_backend == NEURAL_BACKEND_CUDA) {
 		return string("sd_cuda%s", neural_node_sd_bin_ext());
 	}
 	return string("sd_cpu%s", neural_node_sd_bin_ext());
@@ -156,7 +156,7 @@ void neural_node_download(char *url) {
 	file_download_to(url, file_path, &neural_node_download_done, 0);
 }
 
-void neural_node_download_models(string_t_array_t *models) {
+void neural_node_download_models(string_array_t *models) {
 	if (string_equals(file_read_directory(neural_node_dir())->buffer[0], "")) {
 		iron_create_directory(neural_node_dir());
 	}

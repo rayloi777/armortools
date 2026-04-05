@@ -1,15 +1,53 @@
 
 #include "global.h"
 
+i32 ui_toolbar_last_tool = 0;
+i32 _ui_toolbar_i;
+
 void ui_toolbar_init() {}
 
 void ui_toolbar_draw_tool_select_tool(void *_) {
 	context_select_tool(_ui_toolbar_i);
 }
 
+void ui_toolbar_tool_properties_menu_draw() {
+	ui->changed = false;
+	ui_header_draw_tool_properties();
+	if (ui->changed || ui->is_typing) {
+		ui_menu_keep_open = true;
+	}
+	if (base_view3d_show && ui_button(tr("Pin to Header"), UI_ALIGN_LEFT, "")) {
+		g_config->layout->buffer[LAYOUT_SIZE_HEADER] = 1;
+	}
+	if (base_view3d_show && ui_button(tr("Hide 3D View"), UI_ALIGN_LEFT, "")) {
+		ui_base_show_3d_view();
+	}
+}
+
+void ui_toolbar_tool_properties_menu() {
+	i32 y = ui->_y - 2 * UI_SCALE();
+	if (!base_view3d_show) {
+		y += ui_toolbar_w(false);
+	}
+
+#ifdef IRON_IOS
+	if (config_is_iphone() && base_view3d_show) {
+		y += ui_toolbar_w(false);
+	}
+#endif
+
+	ui_menu_draw(&ui_toolbar_tool_properties_menu_draw, ui->_x + ui->_w + 6 * UI_SCALE(), y);
+}
+
+void ui_toolbar_draw_highlight() {
+	i32 size = ui_toolbar_w(false) - 4;
+	draw_set_color(ui->ops->theme->HIGHLIGHT_COL);
+	ui_draw_rect(true, ui->_x + -1, ui->_y + 2, size + 2, size + 2);
+}
+
 void ui_toolbar_draw_tool(i32 tool, gpu_texture_t *img, i32 icon_accent) {
 	ui->_x += 2;
-	if (context_raw->tool == tool) {
+	if (g_context->tool == tool) {
 		ui_toolbar_draw_highlight();
 	}
 	i32     tile_y = math_floor(tool / 12.0);
@@ -20,7 +58,7 @@ void ui_toolbar_draw_tool(i32 tool, gpu_texture_t *img, i32 icon_accent) {
 
 	bool visible = true;
 	if (context_is_floating_toolbar()) {
-		i32 statush = config_raw->layout->buffer[LAYOUT_SIZE_STATUS_H];
+		i32 statush = g_config->layout->buffer[LAYOUT_SIZE_STATUS_H];
 		i32 statusy = iron_window_height() - statush;
 		visible     = ui->input_y < statusy;
 	}
@@ -37,7 +75,7 @@ void ui_toolbar_draw_tool(i32 tool, gpu_texture_t *img, i32 icon_accent) {
 		ui_toolbar_last_tool = tool;
 	}
 
-	if (tool == TOOL_TYPE_COLORID && context_raw->colorid_picked) {
+	if (tool == TOOL_TYPE_COLORID && g_context->colorid_picked) {
 		render_target_t *rt = any_map_get(render_path_render_targets, "texpaint_colorid");
 		draw_scaled_sub_image(rt->_image, 0, 0, 1, 1, 0, _y + 1.5 * UI_SCALE(), 5 * UI_SCALE(), 34 * UI_SCALE());
 	}
@@ -67,10 +105,10 @@ i32 ui_toolbar_w(bool screen_size_request) {
 	}
 
 	i32 w = ui_toolbar_default_w;
-	if (config_raw->touch_ui) {
+	if (g_config->touch_ui) {
 		w = ui_toolbar_default_w + 6;
 	}
-	w = math_floor(w * config_raw->window_scale);
+	w = math_floor(w * g_config->window_scale);
 	return w;
 }
 
@@ -85,7 +123,7 @@ void ui_toolbar_draw_show_3d_view() {
 		// ui.ops.theme.WINDOW_BG_COL = ui.ops.theme.SEPARATOR_COL;
 		i32 y = ui_header_h + 8 * UI_SCALE();
 
-		if ((ui_view2d_show || ui_nodes_show) && !config_raw->touch_ui) {
+		if ((ui_view2d_show || ui_nodes_show) && !g_config->touch_ui) {
 			y += toolbar_w;
 		}
 
@@ -117,7 +155,7 @@ void ui_toolbar_draw_show_3d_view() {
 void ui_toolbar_render_ui() {
 	i32 x              = 0;
 	i32 y              = ui_header_h;
-	i32 h              = iron_window_height() - ui_header_h - config_raw->layout->buffer[LAYOUT_SIZE_STATUS_H];
+	i32 h              = iron_window_height() - ui_header_h - g_config->layout->buffer[LAYOUT_SIZE_STATUS_H];
 	i32 _WINDOW_BG_COL = ui->ops->theme->WINDOW_BG_COL;
 
 	if (!base_view3d_show && !ui_view2d_show && !ui_nodes_show) {
@@ -138,7 +176,7 @@ void ui_toolbar_render_ui() {
 		y += ui_toolbar_x() + 3 * UI_SCALE();
 		h                             = (ui_toolbar_tool_names->length + 1) * (ui_toolbar_w(false) + 2);
 		ui->ops->theme->WINDOW_BG_COL = ui->ops->theme->SEPARATOR_COL;
-		if (!base_view3d_show && ui_view2d_show && !config_raw->touch_ui) {
+		if (!base_view3d_show && ui_view2d_show && !g_config->touch_ui) {
 			y += ui_toolbar_w(false);
 		}
 
@@ -161,7 +199,7 @@ void ui_toolbar_render_ui() {
 		if (!context_is_floating_toolbar()) {
 			rect_t *rect = resource_tile50(img, ICON_PROPERTIES);
 			if (ui_sub_image(img, light ? 0xff666666 : ui->ops->theme->BUTTON_COL, -1.0, rect->x, rect->y, rect->w, rect->h) == UI_STATE_RELEASED) {
-				config_raw->layout->buffer[LAYOUT_SIZE_HEADER] = 0;
+				g_config->layout->buffer[LAYOUT_SIZE_HEADER] = 0;
 			}
 		}
 		// Draw ">" button if header is hidden
@@ -204,46 +242,11 @@ void ui_toolbar_render_ui() {
 		ui->ops->theme->WINDOW_BG_COL = _WINDOW_BG_COL;
 	}
 
-	if (config_raw->touch_ui) {
+	if (g_config->touch_ui) {
 		// Hide scrollbar
 		i32 _SCROLL_W            = ui->ops->theme->SCROLL_W;
 		ui->ops->theme->SCROLL_W = 0;
 		ui_end_window();
 		ui->ops->theme->SCROLL_W = _SCROLL_W;
 	}
-}
-
-void ui_toolbar_tool_properties_menu_draw() {
-	ui->changed = false;
-	ui_header_draw_tool_properties();
-	if (ui->changed || ui->is_typing) {
-		ui_menu_keep_open = true;
-	}
-	if (base_view3d_show && ui_button(tr("Pin to Header"), UI_ALIGN_LEFT, "")) {
-		config_raw->layout->buffer[LAYOUT_SIZE_HEADER] = 1;
-	}
-	if (base_view3d_show && ui_button(tr("Hide 3D View"), UI_ALIGN_LEFT, "")) {
-		ui_base_show_3d_view();
-	}
-}
-
-void ui_toolbar_tool_properties_menu() {
-	i32 y = ui->_y - 2 * UI_SCALE();
-	if (!base_view3d_show) {
-		y += ui_toolbar_w(false);
-	}
-
-#ifdef IRON_IOS
-	if (config_is_iphone() && base_view3d_show) {
-		y += ui_toolbar_w(false);
-	}
-#endif
-
-	ui_menu_draw(&ui_toolbar_tool_properties_menu_draw, ui->_x + ui->_w + 6 * UI_SCALE(), y);
-}
-
-void ui_toolbar_draw_highlight() {
-	i32 size = ui_toolbar_w(false) - 4;
-	draw_set_color(ui->ops->theme->HIGHLIGHT_COL);
-	ui_draw_rect(true, ui->_x + -1, ui->_y + 2, size + 2, size + 2);
 }

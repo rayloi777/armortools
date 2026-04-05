@@ -1,12 +1,6 @@
 
 #include "../global.h"
 
-void geometry_node_init() {
-	any_array_push(nodes_material_input, geometry_node_def);
-	any_map_set(parser_material_node_vectors, "NEW_GEOMETRY", geometry_node_vector);
-	any_map_set(parser_material_node_values, "NEW_GEOMETRY", geometry_node_value);
-}
-
 char *geometry_node_vector(ui_node_t *node, ui_node_socket_t *socket) {
 	if (socket == node->outputs->buffer[0]) { // Position
 		parser_material_kong->frag_wposition = true;
@@ -20,11 +14,7 @@ char *geometry_node_vector(ui_node_t *node, ui_node_socket_t *socket) {
 		parser_material_kong->frag_wtangent = true;
 		return "input.wtangent";
 	}
-	else if (socket == node->outputs->buffer[3]) { // True Normal
-		parser_material_kong->frag_n = true;
-		return "n";
-	}
-	else if (socket == node->outputs->buffer[4]) { // Incoming
+	else if (socket == node->outputs->buffer[3]) { // Incoming
 		parser_material_kong->frag_vvec = true;
 		return "vvec";
 	}
@@ -35,11 +25,7 @@ char *geometry_node_vector(ui_node_t *node, ui_node_socket_t *socket) {
 }
 
 char *geometry_node_value(ui_node_t *node, ui_node_socket_t *socket) {
-	if (socket == node->outputs->buffer[6]) { // Backfacing
-		return "0.0";                         // SV_IsFrontFace
-		                                      // return "(1.0 - float(gl_FrontFacing))";
-	}
-	else if (socket == node->outputs->buffer[7]) { // Pointiness
+	if (socket == node->outputs->buffer[5]) { // Pointiness
 		f32   strength               = 1.0;
 		f32   radius                 = 1.0;
 		f32   offset                 = 0.0;
@@ -53,7 +39,87 @@ char *geometry_node_value(ui_node_t *node, ui_node_socket_t *socket) {
 		                                                   store, store, f32_to_string(radius), f32_to_string(strength), f32_to_string(offset)));
 		return string("%s_curvature", store);
 	}
-	else { // Random Per Island
-		return "0.0";
-	}
+	return "";
+}
+
+void geometry_node_init() {
+
+	ui_node_t *geometry_node_def = GC_ALLOC_INIT(ui_node_t, {.id      = 0,
+	                                                         .name    = _tr("Geometry"),
+	                                                         .type    = "NEW_GEOMETRY",
+	                                                         .x       = 0,
+	                                                         .y       = 0,
+	                                                         .color   = 0xffb34f5a,
+	                                                         .inputs  = any_array_create_from_raw((void *[]){}, 0),
+	                                                         .outputs = any_array_create_from_raw(
+	                                                             (void *[]){
+	                                                                 GC_ALLOC_INIT(ui_node_socket_t, {.id            = 0,
+	                                                                                                  .node_id       = 0,
+	                                                                                                  .name          = _tr("Position"),
+	                                                                                                  .type          = "VECTOR",
+	                                                                                                  .color         = 0xff6363c7,
+	                                                                                                  .default_value = f32_array_create_xyz(0.0, 0.0, 0.0),
+	                                                                                                  .min           = 0.0,
+	                                                                                                  .max           = 1.0,
+	                                                                                                  .precision     = 100,
+	                                                                                                  .display       = 0}),
+	                                                                 GC_ALLOC_INIT(ui_node_socket_t, {.id            = 0,
+	                                                                                                  .node_id       = 0,
+	                                                                                                  .name          = _tr("Normal"),
+	                                                                                                  .type          = "VECTOR",
+	                                                                                                  .color         = 0xff6363c7,
+	                                                                                                  .default_value = f32_array_create_xyz(0.0, 0.0, 0.0),
+	                                                                                                  .min           = 0.0,
+	                                                                                                  .max           = 1.0,
+	                                                                                                  .precision     = 100,
+	                                                                                                  .display       = 0}),
+	                                                                 GC_ALLOC_INIT(ui_node_socket_t, {.id            = 0,
+	                                                                                                  .node_id       = 0,
+	                                                                                                  .name          = _tr("Tangent"),
+	                                                                                                  .type          = "VECTOR",
+	                                                                                                  .color         = 0xff6363c7,
+	                                                                                                  .default_value = f32_array_create_xyz(0.0, 0.0, 0.0),
+	                                                                                                  .min           = 0.0,
+	                                                                                                  .max           = 1.0,
+	                                                                                                  .precision     = 100,
+	                                                                                                  .display       = 0}),
+	                                                                 GC_ALLOC_INIT(ui_node_socket_t, {.id            = 0,
+	                                                                                                  .node_id       = 0,
+	                                                                                                  .name          = _tr("Incoming"),
+	                                                                                                  .type          = "VECTOR",
+	                                                                                                  .color         = 0xff6363c7,
+	                                                                                                  .default_value = f32_array_create_xyz(0.0, 0.0, 0.0),
+	                                                                                                  .min           = 0.0,
+	                                                                                                  .max           = 1.0,
+	                                                                                                  .precision     = 100,
+	                                                                                                  .display       = 0}),
+	                                                                 GC_ALLOC_INIT(ui_node_socket_t, {.id            = 0,
+	                                                                                                  .node_id       = 0,
+	                                                                                                  .name          = _tr("Parametric"),
+	                                                                                                  .type          = "VECTOR",
+	                                                                                                  .color         = 0xff6363c7,
+	                                                                                                  .default_value = f32_array_create_xyz(0.0, 0.0, 0.0),
+	                                                                                                  .min           = 0.0,
+	                                                                                                  .max           = 1.0,
+	                                                                                                  .precision     = 100,
+	                                                                                                  .display       = 0}),
+	                                                                 GC_ALLOC_INIT(ui_node_socket_t, {.id            = 0,
+	                                                                                                  .node_id       = 0,
+	                                                                                                  .name          = _tr("Pointiness"),
+	                                                                                                  .type          = "VALUE",
+	                                                                                                  .color         = 0xffa1a1a1,
+	                                                                                                  .default_value = f32_array_create_x(0.0),
+	                                                                                                  .min           = 0.0,
+	                                                                                                  .max           = 1.0,
+	                                                                                                  .precision     = 100,
+	                                                                                                  .display       = 0}),
+	                                                             },
+	                                                             6),
+	                                                         .buttons = any_array_create_from_raw((void *[]){}, 0),
+	                                                         .width   = 0,
+	                                                         .flags   = 0});
+
+	any_array_push(nodes_material_input, geometry_node_def);
+	any_map_set(parser_material_node_vectors, "NEW_GEOMETRY", geometry_node_vector);
+	any_map_set(parser_material_node_values, "NEW_GEOMETRY", geometry_node_value);
 }

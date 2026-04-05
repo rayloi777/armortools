@@ -17,6 +17,99 @@ void export_arm_run_mesh(char *path, mesh_object_t_array_t *paint_objects) {
 	iron_file_save_bytes(path, b, b->length + 1);
 }
 
+void export_arm_export_node(ui_node_t *n, asset_t_array_t *assets) {
+	if (string_equals(n->type, "TEX_IMAGE")) {
+		i32 index = n->buttons->buffer[0]->default_value->buffer[0];
+		if (index > 9000) { // 9999 - Texture deleted
+			n->buttons->buffer[0]->data = u8_array_create_from_string("");
+		}
+		else {
+			n->buttons->buffer[0]->data = u8_array_create_from_string(base_combo_enum_texts(n->type)->buffer[index]);
+		}
+		if (assets != NULL) {
+			asset_t *asset = project_assets->buffer[index];
+			if (array_index_of(assets, asset) == -1) {
+				any_array_push(assets, asset);
+			}
+		}
+	}
+}
+
+string_array_t *export_arm_assets_to_files(char *project_path, asset_t_array_t *assets) {
+	string_array_t *texture_files = any_array_create_from_raw((void *[]){}, 0);
+	for (i32 i = 0; i < assets->length; ++i) {
+		asset_t *a = assets->buffer[i];
+#ifdef IRON_IOS
+		bool same_drive = false;
+#else
+		bool same_drive = char_at(project_path, 0) == char_at(a->file, 0);
+#endif
+		// Convert image path from absolute to relative
+		if (same_drive) {
+			any_array_push(texture_files, path_to_relative(project_path, a->file));
+		}
+		else {
+			any_array_push(texture_files, a->file);
+		}
+	}
+	return texture_files;
+}
+
+string_array_t *export_arm_meshes_to_files(char *project_path) {
+	string_array_t *mesh_files = any_array_create_from_raw((void *[]){}, 0);
+	for (i32 i = 0; i < project_mesh_assets->length; ++i) {
+		char *file = project_mesh_assets->buffer[i];
+#ifdef IRON_IOS
+		bool same_drive = false;
+#else
+		bool same_drive = char_at(project_path, 0) == char_at(file, 0);
+#endif
+		// Convert mesh path from absolute to relative
+		if (same_drive) {
+			any_array_push(mesh_files, path_to_relative(project_path, file));
+		}
+		else {
+			any_array_push(mesh_files, file);
+		}
+	}
+	return mesh_files;
+}
+
+string_array_t *export_arm_fonts_to_files(char *project_path, slot_font_t_array_t *fonts) {
+	string_array_t *font_files = any_array_create_from_raw((void *[]){}, 0);
+	for (i32 i = 1; i < fonts->length; ++i) {
+		slot_font_t *f = fonts->buffer[i];
+#ifdef IRON_IOS
+		bool same_drive = false;
+#else
+		bool same_drive = char_at(project_path, 0) == char_at(f->file, 0);
+#endif
+		// Convert font path from absolute to relative
+		if (same_drive) {
+			any_array_push(font_files, path_to_relative(project_path, f->file));
+		}
+		else {
+			any_array_push(font_files, f->file);
+		}
+	}
+	return font_files;
+}
+
+f32_array_t *export_arm_vec3f32(vec4_t v) {
+	f32_array_t *res = f32_array_create(3);
+	res->buffer[0]   = v.x;
+	res->buffer[1]   = v.y;
+	res->buffer[2]   = v.z;
+	return res;
+}
+
+buffer_t *export_arm_rgba64_to_rgba32(buffer_t *buffer) {
+	for (i32 i = 0; i < buffer->length / 2.0; ++i) {
+		buffer->buffer[i] = half_to_u8_fast(buffer_get_u16(buffer, i * 2));
+	}
+	return buffer;
+}
+
 void export_arm_run_project() {
 	ui_node_canvas_t_array_t *mnodes = any_array_create_from_raw((void *[]){}, 0);
 	for (i32 i = 0; i < project_materials->length; ++i) {
@@ -60,10 +153,10 @@ void export_arm_run_project() {
 		any_array_push(md, p->data);
 	}
 
-	string_t_array_t *texture_files = export_arm_assets_to_files(project_filepath, project_assets);
+	string_array_t *texture_files = export_arm_assets_to_files(project_filepath, project_assets);
 
-	string_t_array_t *font_files = export_arm_fonts_to_files(project_filepath, project_fonts);
-	string_t_array_t *mesh_files = export_arm_meshes_to_files(project_filepath);
+	string_array_t *font_files = export_arm_fonts_to_files(project_filepath, project_fonts);
+	string_array_t *mesh_files = export_arm_meshes_to_files(project_filepath);
 
 	i32 bits_pos = base_bits_handle->i;
 	i32 bpp      = bits_pos == TEXTURE_BITS_BITS8 ? 8 : bits_pos == TEXTURE_BITS_BITS16 ? 16 : 32;
@@ -102,49 +195,49 @@ void export_arm_run_project() {
 		any_array_push(ld, d);
 	}
 
-	packed_asset_t_array_t *packed_assets = (project_raw->packed_assets == NULL || project_raw->packed_assets->length == 0) ? NULL : project_raw->packed_assets;
+	packed_asset_t_array_t *packed_assets = (g_project->packed_assets == NULL || g_project->packed_assets->length == 0) ? NULL : g_project->packed_assets;
 #ifdef IRON_IOS
 	bool same_drive = false;
 #else
-	bool same_drive = project_raw->envmap != NULL ? char_at(project_filepath, 0) == char_at(project_raw->envmap, 0) : true;
+	bool same_drive = g_project->envmap != NULL ? char_at(project_filepath, 0) == char_at(g_project->envmap, 0) : true;
 #endif
 
-	project_raw->version         = string_copy(manifest_version_project);
-	project_raw->material_groups = mgroups;
-	project_raw->assets          = texture_files;
-	project_raw->packed_assets   = packed_assets;
-	project_raw->swatches        = project_raw->swatches;
-	project_raw->envmap = project_raw->envmap != NULL ? (same_drive ? path_to_relative(project_filepath, project_raw->envmap) : project_raw->envmap) : NULL;
-	project_raw->envmap_strength = scene_world->strength;
-	project_raw->envmap_angle    = context_raw->envmap_angle;
-	project_raw->envmap_blur     = context_raw->show_envmap_blur;
-	project_raw->camera_world    = mat4_to_f32_array(scene_camera->base->transform->local);
-	project_raw->camera_origin   = export_arm_vec3f32(camera_origins->buffer[0]->v);
-	project_raw->camera_fov      = scene_camera->data->fov;
+	g_project->version         = string_copy(manifest_version_project);
+	g_project->material_groups = mgroups;
+	g_project->assets          = texture_files;
+	g_project->packed_assets   = packed_assets;
+	g_project->swatches        = g_project->swatches;
+	g_project->envmap = g_project->envmap != NULL ? (same_drive ? path_to_relative(project_filepath, g_project->envmap) : g_project->envmap) : NULL;
+	g_project->envmap_strength = scene_world->strength;
+	g_project->envmap_angle    = g_context->envmap_angle;
+	g_project->envmap_blur     = g_context->show_envmap_blur;
+	g_project->camera_world    = mat4_to_f32_array(scene_camera->base->transform->local);
+	g_project->camera_origin   = export_arm_vec3f32(camera_origins->buffer[0]->v);
+	g_project->camera_fov      = scene_camera->data->fov;
 
-	// project_raw.mesh_datas = md; // TODO: fix GC ref
-	if (project_raw->mesh_datas == NULL) {
-		project_raw->mesh_datas = md;
+	// g_project.mesh_datas = md; // TODO: fix GC ref
+	if (g_project->mesh_datas == NULL) {
+		g_project->mesh_datas = md;
 	}
 	else {
-		project_raw->mesh_datas->length = 0;
+		g_project->mesh_datas->length = 0;
 		for (i32 i = 0; i < md->length; ++i) {
-			any_array_push(project_raw->mesh_datas, md->buffer[i]);
+			any_array_push(g_project->mesh_datas, md->buffer[i]);
 		}
 	}
 
-	project_raw->material_nodes = mnodes;
-	project_raw->brush_nodes    = bnodes;
-	project_raw->layer_datas    = ld;
-	project_raw->font_assets    = font_files;
-	project_raw->mesh_assets    = mesh_files;
-	project_raw->atlas_objects  = project_atlas_objects;
-	project_raw->atlas_names    = project_atlas_names;
+	g_project->material_nodes = mnodes;
+	g_project->brush_nodes    = bnodes;
+	g_project->layer_datas    = ld;
+	g_project->font_assets    = font_files;
+	g_project->mesh_assets    = mesh_files;
+	g_project->atlas_objects  = project_atlas_objects;
+	g_project->atlas_names    = project_atlas_names;
 
 #ifdef IRON_BGRA
-	project_raw->is_bgra = true;
+	g_project->is_bgra = true;
 #else
-	project_raw->is_bgra = false;
+	g_project->is_bgra = false;
 #endif
 
 #if defined(IRON_ANDROID) || defined(IRON_IOS)
@@ -165,11 +258,11 @@ void export_arm_run_project() {
 	gpu_delete_texture(mesh_icon);
 #endif
 
-	if (context_raw->pack_assets_on_save) { // Pack textures
-		export_arm_pack_assets(project_raw, project_assets);
+	if (g_context->pack_assets_on_save) { // Pack textures
+		export_arm_pack_assets(g_project, project_assets);
 	}
 
-	buffer_t *buffer = util_encode_project(project_raw);
+	buffer_t *buffer = util_encode_project(g_project);
 	iron_file_save_bytes(project_filepath, buffer, buffer->length + 1);
 
 	// Save to recent
@@ -182,7 +275,7 @@ void export_arm_run_project() {
 #ifdef IRON_WINDOWS
 	recent_path = string_copy(string_replace_all(recent_path, "\\", "/"));
 #endif
-	string_t_array_t *recent = config_raw->recent_projects;
+	string_array_t *recent = g_config->recent_projects;
 	string_array_remove(recent, recent_path);
 	array_insert(recent, 0, recent_path);
 	config_save();
@@ -190,22 +283,31 @@ void export_arm_run_project() {
 	console_info(tr("Project saved"));
 }
 
-void export_arm_export_node(ui_node_t *n, asset_t_array_t *assets) {
-	if (string_equals(n->type, "TEX_IMAGE")) {
-		i32 index = n->buttons->buffer[0]->default_value->buffer[0];
-		if (index > 9000) { // 9999 - Texture deleted
-			n->buttons->buffer[0]->data = u8_array_create_from_string("");
-		}
-		else {
-			n->buttons->buffer[0]->data = u8_array_create_from_string(base_enum_texts(n->type)->buffer[index]);
-		}
-		if (assets != NULL) {
-			asset_t *asset = project_assets->buffer[index];
-			if (array_index_of(assets, asset) == -1) {
-				any_array_push(assets, asset);
+packed_asset_t_array_t *export_arm_get_packed_assets(char *project_path, string_array_t *texture_files) {
+	packed_asset_t_array_t *packed_assets = NULL;
+	if (g_project->packed_assets != NULL) {
+		for (i32 i = 0; i < g_project->packed_assets->length; ++i) {
+			packed_asset_t *pa = g_project->packed_assets->buffer[i];
+#ifdef IRON_IOS
+			bool same_drive = false;
+#else
+			bool same_drive = char_at(project_path, 0) == char_at(pa->name, 0);
+#endif
+			// Convert path from absolute to relative
+			pa->name = same_drive ? path_to_relative(project_path, pa->name) : pa->name;
+			for (i32 i = 0; i < texture_files->length; ++i) {
+				char *tf = texture_files->buffer[i];
+				if (string_equals(pa->name, tf)) {
+					if (packed_assets == NULL) {
+						packed_assets = any_array_create_from_raw((void *[]){}, 0);
+					}
+					any_array_push(packed_assets, pa);
+					break;
+				}
 			}
 		}
 	}
+	return packed_assets;
 }
 
 void export_arm_run_material(char *path) {
@@ -214,7 +316,7 @@ void export_arm_run_material(char *path) {
 	}
 	ui_node_canvas_t_array_t *mnodes  = any_array_create_from_raw((void *[]){}, 0);
 	ui_node_canvas_t_array_t *mgroups = NULL;
-	slot_material_t          *m       = context_raw->material;
+	slot_material_t          *m       = g_context->material;
 	ui_node_canvas_t         *c       = util_clone_canvas(m->canvas);
 	asset_t_array_t          *assets  = any_array_create_from_raw((void *[]){}, 0);
 	if (ui_nodes_has_group(c)) {
@@ -234,13 +336,13 @@ void export_arm_run_material(char *path) {
 	}
 	any_array_push(mnodes, c);
 
-	string_t_array_t *texture_files = export_arm_assets_to_files(path, assets);
+	string_array_t *texture_files = export_arm_assets_to_files(path, assets);
 	bool              is_cloud      = ends_with(path, "_cloud_.arm");
 	if (is_cloud) {
 		path = string_copy(string_replace_all(path, "_cloud_", ""));
 	}
 	packed_asset_t_array_t *packed_assets = NULL;
-	if (!context_raw->pack_assets_on_export) {
+	if (!g_context->pack_assets_on_export) {
 		packed_assets = export_arm_get_packed_assets(path, texture_files);
 	}
 
@@ -257,13 +359,13 @@ void export_arm_run_material(char *path) {
 		    },
 		    1);
 	}
-	project_format_t *raw = GC_ALLOC_INIT(project_format_t, {.version         = manifest_version_project,
+	project_t *raw = GC_ALLOC_INIT(project_t, {.version         = manifest_version_project,
 	                                                         .material_nodes  = mnodes,
 	                                                         .material_groups = mgroups,
 	                                                         .material_icons  = micons,
 	                                                         .assets          = texture_files,
 	                                                         .packed_assets   = packed_assets});
-	if (context_raw->write_icon_on_export) { // Separate icon files
+	if (g_context->write_icon_on_export) { // Separate icon files
 		buffer_t *buf = export_arm_rgba64_to_rgba32(gpu_get_texture_pixels(m->image));
 #ifdef IRON_BGRA
 		buf = export_arm_bgra_swap(buf);
@@ -272,7 +374,7 @@ void export_arm_run_material(char *path) {
 		iron_write_jpg(string("%s_icon.jpg", substring(path, 0, string_length(path) - 4)), buf, m->image->width, m->image->height, 0, 50);
 	}
 
-	if (context_raw->pack_assets_on_export) { // Pack textures
+	if (g_context->pack_assets_on_export) { // Pack textures
 		export_arm_pack_assets(raw, assets);
 	}
 
@@ -306,7 +408,7 @@ void export_arm_run_brush(char *path) {
 		path = string("%s.arm", path);
 	}
 	ui_node_canvas_t_array_t *bnodes = any_array_create_from_raw((void *[]){}, 0);
-	slot_brush_t             *b      = context_raw->brush;
+	slot_brush_t             *b      = g_context->brush;
 	ui_node_canvas_t         *c      = util_clone_canvas(b->canvas);
 	asset_t_array_t          *assets = any_array_create_from_raw((void *[]){}, 0);
 	for (i32 i = 0; i < c->nodes->length; ++i) {
@@ -315,13 +417,13 @@ void export_arm_run_brush(char *path) {
 	}
 	any_array_push(bnodes, c);
 
-	string_t_array_t *texture_files = export_arm_assets_to_files(path, assets);
+	string_array_t *texture_files = export_arm_assets_to_files(path, assets);
 	bool              is_cloud      = ends_with(path, "_cloud_.arm");
 	if (is_cloud) {
 		path = string_copy(string_replace_all(path, "_cloud_", ""));
 	}
 	packed_asset_t_array_t *packed_assets = NULL;
-	if (!context_raw->pack_assets_on_export) {
+	if (!g_context->pack_assets_on_export) {
 		packed_assets = export_arm_get_packed_assets(path, texture_files);
 	}
 
@@ -339,11 +441,11 @@ void export_arm_run_brush(char *path) {
 		    1);
 	}
 
-	project_format_t *raw = GC_ALLOC_INIT(
-	    project_format_t,
+	project_t *raw = GC_ALLOC_INIT(
+	    project_t,
 	    {.version = manifest_version_project, .brush_nodes = bnodes, .brush_icons = bicons, .assets = texture_files, .packed_assets = packed_assets});
 
-	if (context_raw->write_icon_on_export) { // Separate icon file
+	if (g_context->write_icon_on_export) { // Separate icon file
 		buffer_t *buf = export_arm_rgba64_to_rgba32(gpu_get_texture_pixels(b->image));
 #ifdef IRON_BGRA
 		buf = export_arm_bgra_swap(buf);
@@ -351,7 +453,7 @@ void export_arm_run_brush(char *path) {
 		iron_write_png(string("%s_icon.png", substring(path, 0, string_length(path) - 4)), buf, b->image->width, b->image->height, 0);
 	}
 
-	if (context_raw->pack_assets_on_export) { // Pack textures
+	if (g_context->pack_assets_on_export) { // Pack textures
 		export_arm_pack_assets(raw, assets);
 	}
 
@@ -359,94 +461,7 @@ void export_arm_run_brush(char *path) {
 	iron_file_save_bytes(path, buffer, buffer->length + 1);
 }
 
-string_t_array_t *export_arm_assets_to_files(char *project_path, asset_t_array_t *assets) {
-	string_t_array_t *texture_files = any_array_create_from_raw((void *[]){}, 0);
-	for (i32 i = 0; i < assets->length; ++i) {
-		asset_t *a = assets->buffer[i];
-#ifdef IRON_IOS
-		bool same_drive = false;
-#else
-		bool same_drive = char_at(project_path, 0) == char_at(a->file, 0);
-#endif
-		// Convert image path from absolute to relative
-		if (same_drive) {
-			any_array_push(texture_files, path_to_relative(project_path, a->file));
-		}
-		else {
-			any_array_push(texture_files, a->file);
-		}
-	}
-	return texture_files;
-}
-
-string_t_array_t *export_arm_meshes_to_files(char *project_path) {
-	string_t_array_t *mesh_files = any_array_create_from_raw((void *[]){}, 0);
-	for (i32 i = 0; i < project_mesh_assets->length; ++i) {
-		char *file = project_mesh_assets->buffer[i];
-#ifdef IRON_IOS
-		bool same_drive = false;
-#else
-		bool same_drive = char_at(project_path, 0) == char_at(file, 0);
-#endif
-		// Convert mesh path from absolute to relative
-		if (same_drive) {
-			any_array_push(mesh_files, path_to_relative(project_path, file));
-		}
-		else {
-			any_array_push(mesh_files, file);
-		}
-	}
-	return mesh_files;
-}
-
-string_t_array_t *export_arm_fonts_to_files(char *project_path, slot_font_t_array_t *fonts) {
-	string_t_array_t *font_files = any_array_create_from_raw((void *[]){}, 0);
-	for (i32 i = 1; i < fonts->length; ++i) {
-		slot_font_t *f = fonts->buffer[i];
-#ifdef IRON_IOS
-		bool same_drive = false;
-#else
-		bool same_drive = char_at(project_path, 0) == char_at(f->file, 0);
-#endif
-		// Convert font path from absolute to relative
-		if (same_drive) {
-			any_array_push(font_files, path_to_relative(project_path, f->file));
-		}
-		else {
-			any_array_push(font_files, f->file);
-		}
-	}
-	return font_files;
-}
-
-packed_asset_t_array_t *export_arm_get_packed_assets(char *project_path, string_t_array_t *texture_files) {
-	packed_asset_t_array_t *packed_assets = NULL;
-	if (project_raw->packed_assets != NULL) {
-		for (i32 i = 0; i < project_raw->packed_assets->length; ++i) {
-			packed_asset_t *pa = project_raw->packed_assets->buffer[i];
-#ifdef IRON_IOS
-			bool same_drive = false;
-#else
-			bool same_drive = char_at(project_path, 0) == char_at(pa->name, 0);
-#endif
-			// Convert path from absolute to relative
-			pa->name = same_drive ? path_to_relative(project_path, pa->name) : pa->name;
-			for (i32 i = 0; i < texture_files->length; ++i) {
-				char *tf = texture_files->buffer[i];
-				if (string_equals(pa->name, tf)) {
-					if (packed_assets == NULL) {
-						packed_assets = any_array_create_from_raw((void *[]){}, 0);
-					}
-					any_array_push(packed_assets, pa);
-					break;
-				}
-			}
-		}
-	}
-	return packed_assets;
-}
-
-void export_arm_pack_assets(project_format_t *raw, asset_t_array_t *assets) {
+void export_arm_pack_assets(project_t *raw, asset_t_array_t *assets) {
 	if (raw->packed_assets == NULL) {
 		raw->packed_assets = any_array_create_from_raw((void *[]){}, 0);
 	}
@@ -477,22 +492,7 @@ void export_arm_run_swatches(char *path) {
 	if (!ends_with(path, ".arm")) {
 		path = string("%s.arm", path);
 	}
-	project_format_t *raw    = GC_ALLOC_INIT(project_format_t, {.version = manifest_version_project, .swatches = project_raw->swatches});
+	project_t *raw    = GC_ALLOC_INIT(project_t, {.version = manifest_version_project, .swatches = g_project->swatches});
 	buffer_t         *buffer = util_encode_project(raw);
 	iron_file_save_bytes(path, buffer, buffer->length + 1);
-}
-
-f32_array_t *export_arm_vec3f32(vec4_t v) {
-	f32_array_t *res = f32_array_create(3);
-	res->buffer[0]   = v.x;
-	res->buffer[1]   = v.y;
-	res->buffer[2]   = v.z;
-	return res;
-}
-
-buffer_t *export_arm_rgba64_to_rgba32(buffer_t *buffer) {
-	for (i32 i = 0; i < buffer->length / 2.0; ++i) {
-		buffer->buffer[i] = half_to_u8_fast(buffer_get_u16(buffer, i * 2));
-	}
-	return buffer;
 }

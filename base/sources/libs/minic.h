@@ -20,8 +20,8 @@ typedef enum {
 	MINIC_T_PTR   = 2, // void *, always holds a real host pointer
 	MINIC_T_BOOL  = 3, // used in extern-call ABI, stored as INT in vals
 	MINIC_T_CHAR  = 4, // used in extern-call ABI, stored as INT in vals
-	MINIC_T_VOID  = 5, // for void-returning functions
-	MINIC_T_ID   = 6, // uint64_t — entity/component IDs (Flecs ecs_id_t)
+	MINIC_T_VOID  = 5, // void return only; stored as INT/0 in vals
+	MINIC_T_ID    = 6, // uint64_t — entity/component IDs (Flecs ecs_id_t)
 } minic_type_t;
 
 typedef struct {

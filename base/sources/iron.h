@@ -126,17 +126,14 @@ int kickstart(int argc, char **argv) {
 	GetModuleFileNameW(hmodule, temp_wstring, 1024);
 	WideCharToMultiByte(CP_UTF8, 0, temp_wstring, -1, temp_string, 4096, NULL, NULL);
 	bindir = _substring(temp_string, 0, string_last_index_of(temp_string, "\\"));
+	// Running from Visual Studio
+	if (argc > 1 && strlen(argv[1]) > 4 && argv[1][strlen(argv[1]) - 4] == '\\' && argv[1][strlen(argv[1]) - 3] == 'o' && argv[1][strlen(argv[1]) - 2] == 'u' &&
+	    argv[1][strlen(argv[1]) - 1] == 't') {
+		bindir = argv[1];
+	}
 #else
 	bindir = _substring(bindir, 0, string_last_index_of(bindir, "/"));
 #endif
-
-	char *assetsdir = argc > 1 ? argv[1] : bindir;
-
-	// Opening a file
-	int l = strlen(assetsdir);
-	if ((l > 6 && assetsdir[l - 6] == '.') || (l > 5 && assetsdir[l - 5] == '.') || (l > 4 && assetsdir[l - 4] == '.')) {
-		assetsdir = bindir;
-	}
 
 	for (int i = 2; i < argc; ++i) {
 		if (strcmp(argv[i], "--nowindow") == 0) {
@@ -145,7 +142,7 @@ int kickstart(int argc, char **argv) {
 	}
 
 #if !defined(IRON_MACOS) && !defined(IRON_IOS)
-	iron_internal_set_files_location(assetsdir);
+	iron_internal_set_files_location(bindir);
 #endif
 
 	iron_threads_init();
@@ -901,7 +898,9 @@ gpu_texture_t *gpu_create_texture_from_encoded_bytes(buffer_t *data, char *forma
 		texture_format = GPU_TEXTURE_FORMAT_RGBA32;
 	}
 
+	// double t = iron_time(); ////
 	gpu_texture_init_from_bytes(texture, texture_data, width, height, texture_format);
+	// iron_log("gpu_texture_init_from_bytes in %fs\n", iron_time() - t); ////
 	free(texture_data);
 
 	return texture;

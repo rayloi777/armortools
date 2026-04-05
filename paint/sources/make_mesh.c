@@ -1,12 +1,86 @@
 
 #include "global.h"
 
+char *str_sh_irradiance    = "\
+fun sh_irradiance(nor: float3): float3 { \
+	var c1: float = 0.429043; \
+	var c2: float = 0.511664; \
+	var c3: float = 0.743125; \
+	var c4: float = 0.886227; \
+	var c5: float = 0.247708; \
+	var cl00: float3 = float3(constants.shirr0.x, constants.shirr0.y, constants.shirr0.z); \
+	var cl1m1: float3 = float3(constants.shirr0.w, constants.shirr1.x, constants.shirr1.y); \
+	var cl10: float3 = float3(constants.shirr1.z, constants.shirr1.w, constants.shirr2.x); \
+	var cl11: float3 = float3(constants.shirr2.y, constants.shirr2.z, constants.shirr2.w); \
+	var cl2m2: float3 = float3(constants.shirr3.x, constants.shirr3.y, constants.shirr3.z); \
+	var cl2m1: float3 = float3(constants.shirr3.w, constants.shirr4.x, constants.shirr4.y); \
+	var cl20: float3 = float3(constants.shirr4.z, constants.shirr4.w, constants.shirr5.x); \
+	var cl21: float3 = float3(constants.shirr5.y, constants.shirr5.z, constants.shirr5.w); \
+	var cl22: float3 = float3(constants.shirr6.x, constants.shirr6.y, constants.shirr6.z); \
+	return ( \
+		cl22 * c1 * (nor.y * nor.y - (-nor.z) * (-nor.z)) + \
+		cl20 * c3 * nor.x * nor.x + \
+		cl00 * c4 - \
+		cl20 * c5 + \
+		cl2m2 * 2.0 * c1 * nor.y * (-nor.z) + \
+		cl21  * 2.0 * c1 * nor.y * nor.x + \
+		cl2m1 * 2.0 * c1 * (-nor.z) * nor.x + \
+		cl11  * 2.0 * c2 * nor.y + \
+		cl1m1 * 2.0 * c2 * (-nor.z) + \
+		cl10  * 2.0 * c2 * nor.x \
+	); \
+} \
+";
+
+char *str_envmap_equirect  = "\
+fun envmap_equirect(normal: float3, angle: float): float2 { \
+	var PI: float = 3.1415926535; \
+	var PI2: float = PI * 2.0; \
+	var phi: float = acos(normal.z); \
+	var theta: float = atan2(-normal.y, normal.x) + PI + angle; \
+	return float2(theta / PI2, phi / PI); \
+} \
+";
+
+char *str_envmap_sample    = "\
+fun envmap_sample(lod: float, coord: float2): float3 { \
+	if (lod == 0.0) { \
+		return sample_lod(senvmap_radiance, sampler_linear, coord, 0.0).rgb; \
+	} \
+	if (lod == 1.0) { \
+		return sample_lod(senvmap_radiance0, sampler_linear, coord, 0.0).rgb; \
+	} \
+	if (lod == 2.0) { \
+		return sample_lod(senvmap_radiance1, sampler_linear, coord, 0.0).rgb; \
+	} \
+	if (lod == 3.0) { \
+		return sample_lod(senvmap_radiance2, sampler_linear, coord, 0.0).rgb; \
+	} \
+	if (lod == 4.0) { \
+		return sample_lod(senvmap_radiance3, sampler_linear, coord, 0.0).rgb; \
+	} \
+	return sample_lod(senvmap_radiance4, sampler_linear, coord, 0.0).rgb; \
+} \
+";
+
+// https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile
+char               *str_env_brdf_approx       = "\
+fun env_brdf_approx(specular: float3, roughness: float, dotnv: float): float3 { \
+	var c0: float4 = float4(-1.0, -0.0275, -0.572, 0.022); \
+	var c1: float4 = float4(1.0, 0.0425, 1.04, -0.04); \
+	var r: float4 = c0 * roughness + c1; \
+	var a004: float = min(r.x * r.x, exp((-9.28 * dotnv) * log(2.0))) * r.x + r.y; \
+	var ab: float2 = float2(-1.04, 1.04) * a004 + r.zw; \
+	return specular * ab.x + ab.y; \
+} \
+";
+
 node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 	char                  *context_id = layer_pass == 0 ? "mesh" : string("mesh%s", i32_to_string(layer_pass));
 	shader_context_t      *props      = GC_ALLOC_INIT(shader_context_t, {.name            = context_id,
 	                                                                     .depth_write     = layer_pass == 0 ? true : false,
 	                                                                     .compare_mode    = layer_pass == 0 ? "less" : "equal",
-	                                                                     .cull_mode       = (context_raw->cull_backfaces || layer_pass > 0) ? "clockwise" : "none",
+	                                                                     .cull_mode       = (g_context->cull_backfaces || layer_pass > 0) ? "clockwise" : "none",
 	                                                                     .vertex_elements = any_array_create_from_raw(
                                                                    (void *[]){
                                                                        GC_ALLOC_INIT(vertex_element_t, {.name = "pos", .data = "short4norm"}),
@@ -24,11 +98,11 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 	                                                                     .depth_attachment = "D32"});
 	node_shader_context_t *con_mesh   = node_shader_context_create(data, props);
 
-	if (mesh_data_get_vertex_array(context_raw->paint_object->data, "col") != NULL) {
+	if (mesh_data_get_vertex_array(g_context->paint_object->data, "col") != NULL) {
 		node_shader_context_add_elem(con_mesh, "col", "short4norm");
 	}
 
-	if (mesh_data_get_vertex_array(context_raw->paint_object->data, "tex1") != NULL) {
+	if (mesh_data_get_vertex_array(g_context->paint_object->data, "tex1") != NULL) {
 		node_shader_context_add_elem(con_mesh, "tex1", "short2norm");
 	}
 
@@ -78,7 +152,7 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 	node_shader_write_vert(kong, "output.tex_coord = input.tex;");
 	node_shader_write_attrib_frag(kong, "var tex_coord: float2 = input.tex_coord;");
 
-	if (mesh_data_get_vertex_array(context_raw->paint_object->data, "tex1") != NULL) {
+	if (mesh_data_get_vertex_array(g_context->paint_object->data, "tex1") != NULL) {
 		node_shader_add_out(kong, "tex_coord1: float2");
 		node_shader_write_vert(kong, "output.tex_coord1 = input.tex1;");
 		node_shader_write_attrib_frag(kong, "var tex_coord1: float2 = input.tex_coord1;");
@@ -94,7 +168,7 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 			sculpt_make_mesh_run(kong, l);
 		}
 	}
-	if (context_raw->tool == TOOL_TYPE_COLORID) {
+	if (g_context->tool == TOOL_TYPE_COLORID) {
 		texture_count++;
 		node_shader_add_texture(kong, "texcolorid", "_texcolorid");
 		node_shader_write_frag(kong, "output[0] = float4(n.xy, 1.0, pack_f32_i16(0.0, uint(0)));");
@@ -145,14 +219,14 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 			node_shader_write_frag(kong, "var height3: float = 0.0;");
 		}
 
-		if (context_raw->draw_wireframe) {
+		if (g_context->draw_wireframe) {
 			texture_count++;
 			node_shader_add_texture(kong, "texuvmap", "_texuvmap");
 		}
 
-		if (context_raw->viewport_mode == VIEWPORT_MODE_MASK && slot_layer_get_masks(context_raw->layer, true) != NULL) {
-			for (i32 i = 0; i < slot_layer_get_masks(context_raw->layer, true)->length; ++i) {
-				slot_layer_t *m = slot_layer_get_masks(context_raw->layer, true)->buffer[i];
+		if (g_context->viewport_mode == VIEWPORT_MODE_MASK && slot_layer_get_masks(g_context->layer, true) != NULL) {
+			for (i32 i = 0; i < slot_layer_get_masks(g_context->layer, true)->length; ++i) {
+				slot_layer_t *m = slot_layer_get_masks(g_context->layer, true)->buffer[i];
 				if (!slot_layer_is_visible(m)) {
 					continue;
 				}
@@ -162,7 +236,7 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 			}
 		}
 
-		if (context_raw->viewport_mode == VIEWPORT_MODE_LIT && config_raw->render_mode == RENDER_MODE_FORWARD) {
+		if (g_context->viewport_mode == VIEWPORT_MODE_LIT && g_config->render_mode == RENDER_MODE_FORWARD) {
 			texture_count += 6;
 			node_shader_add_texture(kong, "senvmap_radiance", "_envmap_radiance");
 			node_shader_add_texture(kong, "senvmap_radiance0", "_envmap_radiance0");
@@ -176,10 +250,10 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 		make_mesh_layer_pass_count             = 1;
 		slot_layer_t_array_t *layers           = any_array_create_from_raw((void *[]){}, 0);
 		i32                   start_count      = texture_count;
-		bool                  is_material_tool = context_raw->tool == TOOL_TYPE_MATERIAL;
+		bool                  is_material_tool = g_context->tool == TOOL_TYPE_MATERIAL;
 		for (i32 i = 0; i < project_layers->length; ++i) {
 			slot_layer_t *l = project_layers->buffer[i];
-			if (is_material_tool && l != context_raw->layer) {
+			if (is_material_tool && l != g_context->layer) {
 				continue;
 			}
 			if (!slot_layer_is_layer(l) || !slot_layer_is_visible(l)) {
@@ -230,7 +304,7 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 			node_shader_write_frag(kong, string("texpaint_sample = sample_lod(texpaint%s, sampler_linear, %s, 0.0);", i32_to_string(l->id), tex_coord));
 			node_shader_write_frag(kong, "texpaint_opac = texpaint_sample.a;");
 
-			// if (context_raw.viewport_mode == viewport_mode_t.LIT && make_material_opac_used) {
+			// if (g_context.viewport_mode == viewport_mode_t.LIT && make_material_opac_used) {
 			// 	kong.frag_wvpposition = true;
 			// 	node_shader_add_function(kong, str_dither_bayer);
 			// 	node_shader_add_constant(kong, "gbuffer_size: float2", "_gbuffer_size");
@@ -359,7 +433,7 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 			}
 		}
 
-		if (last_pass && context_raw->draw_texels) {
+		if (last_pass && g_context->draw_texels) {
 			node_shader_add_constant(kong, "texpaint_size: float2", "_texpaint_size");
 			node_shader_write_frag(kong, "var texel0: float2 = tex_coord * constants.texpaint_size * 0.01;");
 			node_shader_write_frag(kong, "var texel1: float2 = tex_coord * constants.texpaint_size * 0.1;");
@@ -378,7 +452,7 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 			node_shader_write_frag(kong, "if (texel2xmod == texel2ymod) { basecol = basecol * 0.9; }");
 		}
 
-		if (last_pass && context_raw->draw_wireframe) {
+		if (last_pass && g_context->draw_wireframe) {
 			node_shader_write_frag(kong, "var wireframe: float = sample_lod(texuvmap, sampler_linear, tex_coord, 0.0).a;");
 			node_shader_write_frag(kong, "basecol = basecol * (1.0 - wireframe * 0.25);");
 			node_shader_write_frag(kong, "roughness = max(roughness, wireframe);");
@@ -411,17 +485,17 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 		node_shader_write_frag(kong, "n.y = -n.y;");
 		node_shader_write_frag(kong, "n = normalize(TBN * n);");
 
-		if (context_raw->viewport_mode == VIEWPORT_MODE_LIT || context_raw->viewport_mode == VIEWPORT_MODE_PATH_TRACE) {
+		if (g_context->viewport_mode == VIEWPORT_MODE_LIT || g_context->viewport_mode == VIEWPORT_MODE_PATH_TRACE) {
 			node_shader_write_frag(kong, "basecol = pow3(basecol, float3(2.2, 2.2, 2.2));");
 			node_shader_write_frag(kong, "basecol = max3(basecol, float3(0.0, 0.0, 0.0));");
 
-			if (context_raw->viewport_shader != NULL) {
+			if (g_context->viewport_shader != NULL) {
 				node_shader_write_frag(kong, "var output_color: float3;");
 				minic_val_t args[1] = {minic_val_ptr(kong)};
-				minic_call_fn(context_raw->viewport_shader, args, 1);
+				minic_call_fn(g_context->viewport_shader, args, 1);
 				node_shader_write_frag(kong, "output[1] = float4(output_color, 1.0);");
 			}
-			else if (config_raw->render_mode == RENDER_MODE_FORWARD && context_raw->viewport_mode != VIEWPORT_MODE_PATH_TRACE) {
+			else if (g_config->render_mode == RENDER_MODE_FORWARD && g_context->viewport_mode != VIEWPORT_MODE_PATH_TRACE) {
 				node_shader_write_frag(kong, "var albedo: float3 = lerp3(basecol, float3(0.0, 0.0, 0.0), metallic);");
 				node_shader_write_frag(kong, "var f0: float3 = lerp3(float3(0.04, 0.04, 0.04), basecol, metallic);");
 				kong->frag_vvec = true;
@@ -468,46 +542,46 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 				node_shader_write_frag(kong, "output[1] = float4(basecol, occlusion);");
 			}
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_BASE_COLOR && context_raw->layer->paint_base) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_BASE_COLOR && g_context->layer->paint_base) {
 			node_shader_write_frag(kong, "output[1] = float4(basecol, 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_NORMAL_MAP && context_raw->layer->paint_nor) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_NORMAL_MAP && g_context->layer->paint_nor) {
 			node_shader_write_frag(kong, "output[1] = float4(ntex.rgb, 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_OCCLUSION && context_raw->layer->paint_occ) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_OCCLUSION && g_context->layer->paint_occ) {
 			node_shader_write_frag(kong, "output[1] = float4(float3(occlusion, occlusion, occlusion), 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_ROUGHNESS && context_raw->layer->paint_rough) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_ROUGHNESS && g_context->layer->paint_rough) {
 			node_shader_write_frag(kong, "output[1] = float4(float3(roughness, roughness, roughness), 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_METALLIC && context_raw->layer->paint_met) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_METALLIC && g_context->layer->paint_met) {
 			node_shader_write_frag(kong, "output[1] = float4(float3(metallic, metallic, metallic), 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_OPACITY && context_raw->layer->paint_opac) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_OPACITY && g_context->layer->paint_opac) {
 			node_shader_write_frag(kong, "output[1] = float4(float3(texpaint_sample.a, texpaint_sample.a, texpaint_sample.a), 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_HEIGHT && context_raw->layer->paint_height) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_HEIGHT && g_context->layer->paint_height) {
 			node_shader_write_frag(kong, "output[1] = float4(float3(height, height, height), 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_EMISSION) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_EMISSION) {
 			node_shader_write_frag(kong, "var matid_mod: float = float(int(matid * 255.0)) % float(3);");
 			node_shader_write_frag(kong, "var emis: float = 0.0; if (matid_mod == 1.0) { emis = 1.0; }");
 			node_shader_write_frag(kong, "output[1] = float4(float3(emis, emis, emis), 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_SUBSURFACE) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_SUBSURFACE) {
 			node_shader_write_frag(kong, "var matid_mod: float = float(int(matid * 255.0)) % float(3);");
 			node_shader_write_frag(kong, "var subs: float = 0.0; if (matid_mod == 2.0) { subs = 1.0; }");
 			node_shader_write_frag(kong, "output[1] = float4(float3(subs, subs, subs), 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_TEXCOORD) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_TEXCOORD) {
 			node_shader_write_frag(kong, "output[1] = float4(tex_coord, 0.0, 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_OBJECT_NORMAL) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_OBJECT_NORMAL) {
 			kong->frag_nattr = true;
 			node_shader_write_frag(kong, "output[1] = float4(input.nattr, 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_MATERIAL_ID) {
-			i32 id = context_raw->layer->id;
+		else if (g_context->viewport_mode == VIEWPORT_MODE_MATERIAL_ID) {
+			i32 id = g_context->layer->id;
 			node_shader_add_texture(kong, string("texpaint_nor%s", i32_to_string(id)), NULL);
 			node_shader_add_constant(kong, "texpaint_size: float2", "_texpaint_size");
 			node_shader_write_frag(kong, "var sample_matid_coord: float2 = tex_coord * constants.texpaint_size;");
@@ -522,7 +596,7 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 			                       "var matid_b: float = frac(sin(dot(float2(sample_matid, sample_matid * 40.0), float2(12.9898, 78.233))) * 43758.5453);");
 			node_shader_write_frag(kong, "output[1] = float4(matid_r, matid_g, matid_b, 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_OBJECT_ID) {
+		else if (g_context->viewport_mode == VIEWPORT_MODE_OBJECT_ID) {
 			node_shader_add_constant(kong, "object_id: float", "_object_id");
 			node_shader_write_frag(kong, "var obid: float = constants.object_id + 1.0 / 255.0;");
 			node_shader_write_frag(kong, "var id_r: float = frac(sin(dot(float2(obid, obid * 20.0), float2(12.9898, 78.233))) * 43758.5453);");
@@ -530,16 +604,16 @@ node_shader_context_t *make_mesh_run(material_t *data, i32 layer_pass) {
 			node_shader_write_frag(kong, "var id_b: float = frac(sin(dot(float2(obid, obid * 40.0), float2(12.9898, 78.233))) * 43758.5453);");
 			node_shader_write_frag(kong, "output[1] = float4(id_r, id_g, id_b, 1.0);");
 		}
-		else if (context_raw->viewport_mode == VIEWPORT_MODE_MASK &&
-		         (slot_layer_get_masks(context_raw->layer, true) != NULL || slot_layer_is_mask(context_raw->layer))) {
-			if (slot_layer_is_mask(context_raw->layer)) {
-				i32 id = context_raw->layer->id;
+		else if (g_context->viewport_mode == VIEWPORT_MODE_MASK &&
+		         (slot_layer_get_masks(g_context->layer, true) != NULL || slot_layer_is_mask(g_context->layer))) {
+			if (slot_layer_is_mask(g_context->layer)) {
+				i32 id = g_context->layer->id;
 				node_shader_write_frag(kong, string("var mask_view: float = sample_lod(texpaint%s, sampler_linear, tex_coord, 0.0).r;", i32_to_string(id)));
 			}
 			else {
 				node_shader_write_frag(kong, "var mask_view: float = 0.0;");
-				for (i32 i = 0; i < slot_layer_get_masks(context_raw->layer, true)->length; ++i) {
-					slot_layer_t *m = slot_layer_get_masks(context_raw->layer, true)->buffer[i];
+				for (i32 i = 0; i < slot_layer_get_masks(g_context->layer, true)->length; ++i) {
+					slot_layer_t *m = slot_layer_get_masks(g_context->layer, true)->buffer[i];
 					if (!slot_layer_is_visible(m)) {
 						continue;
 					}

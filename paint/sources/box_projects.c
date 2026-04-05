@@ -1,46 +1,17 @@
 
 #include "global.h"
 
-void box_projects_show_box() {
-#if defined(IRON_ANDROID) || defined(IRON_IOS)
-	box_projects_align_to_fullscreen();
-#endif
-
-#if defined(IRON_ANDROID) || defined(IRON_IOS)
-	box_projects_tab();
-	box_projects_get_started_tab();
-#else
-	box_projects_recent_tab();
-#endif
-}
-
-void box_projects_show() {
-	if (box_projects_icon_map != NULL) {
-		string_t_array_t *keys = map_keys(box_projects_icon_map);
-		for (i32 i = 0; i < keys->length; ++i) {
-			char *handle = keys->buffer[i];
-			data_delete_image(handle);
-		}
-		gc_unroot(box_projects_icon_map);
-		box_projects_icon_map = NULL;
-	}
-
-	bool draggable;
-#if defined(IRON_ANDROID) || defined(IRON_IOS)
-	draggable = false;
-#else
-	draggable = true;
-#endif
-
-	ui_box_show_custom(&box_projects_show_box, 600, 400, NULL, draggable, "");
-}
+any_map_t *box_projects_icon_map = NULL;
+char      *_box_projects_path;
+char      *_box_projects_icon_path;
+i32        _box_projects_i;
 
 void box_projects_tab_menu_on_next_frame(void *_) {
 	iron_delete_file(_box_projects_path);
 	iron_delete_file(_box_projects_icon_path);
 	char *data_path = substring(_box_projects_path, 0, string_length(_box_projects_path) - 4);
 	iron_delete_file(data_path);
-	string_t_array_t *recent_projects = config_raw->recent_projects;
+	string_array_t *recent_projects = g_config->recent_projects;
 	array_splice(recent_projects, _box_projects_i, 1);
 }
 
@@ -54,6 +25,12 @@ void box_projects_tab_menu() {
 void box_projects_tab_on_next_frame(char *path) {
 	ui_box_hide();
 	import_arm_run_project(path);
+}
+
+void box_projects_draw_badge() {
+	gpu_texture_t *img = data_get_image("badge.k");
+	ui_image(img, 0xffffffff, -1.0);
+	ui_end_element();
 }
 
 void box_projects_tab() {
@@ -71,8 +48,8 @@ void box_projects_tab() {
 			i32   i     = 0;
 			i32   j     = 0;
 			char *title = string("%s%s", tr("untitled"), i32_to_string(i));
-			while (j < config_raw->recent_projects->length) {
-				char *base = config_raw->recent_projects->buffer[j];
+			while (j < g_config->recent_projects->length) {
+				char *base = g_config->recent_projects->buffer[j];
 				base       = string_copy(substring(base, string_last_index_of(base, PATH_SEP) + 1, string_last_index_of(base, ".")));
 				j++;
 				if (string_equals(title, base)) {
@@ -91,8 +68,8 @@ void box_projects_tab() {
 		if (num == 0) {
 			return;
 		}
-		string_t_array_t *recent_projects  = config_raw->recent_projects;
-		bool              show_asset_names = true;
+		string_array_t *recent_projects  = g_config->recent_projects;
+		bool            show_asset_names = true;
 
 		for (i32 row = 0; row < math_ceil(recent_projects->length / (float)num); ++row) {
 			i32          mult = show_asset_names ? 2 : 1;
@@ -195,16 +172,78 @@ void box_projects_tab() {
 	}
 }
 
+void box_projects_get_started_tab() {
+	if (ui_tab(box_projects_htab, tr("Get Started"), true, -1, false)) {
+
+		ui_separator(UI_ELEMENT_H(), false);
+
+		if (ui_icon_button(tr("Manual"), ICON_HELP, UI_ALIGN_CENTER)) {
+			iron_load_url(string("%s/manual", manifest_url));
+		}
+		if (ui_icon_button(tr("How To"), ICON_HELP, UI_ALIGN_CENTER)) {
+			iron_load_url(string("%s/howto", manifest_url));
+		}
+		if (ui_icon_button(tr("What's New"), ICON_LINK, UI_ALIGN_CENTER)) {
+			iron_load_url(string("%s/notes", manifest_url));
+		}
+	}
+}
+
+void box_projects_align_to_fullscreen() {
+	ui_box_modalw       = math_floor(iron_window_width() / (float)UI_SCALE());
+	ui_box_modalh       = math_floor(iron_window_height() / (float)UI_SCALE());
+	i32 appw            = iron_window_width();
+	i32 apph            = iron_window_height();
+	i32 mw              = appw;
+	i32 mh              = apph;
+	ui_box_hwnd->drag_x = math_floor(-appw / 2.0 + mw / 2.0);
+	ui_box_hwnd->drag_y = math_floor(-apph / 2.0 + mh / 2.0);
+}
+
+void box_projects_show_box() {
+#if defined(IRON_ANDROID) || defined(IRON_IOS)
+	box_projects_align_to_fullscreen();
+#endif
+
+#if defined(IRON_ANDROID) || defined(IRON_IOS)
+	box_projects_tab();
+	box_projects_get_started_tab();
+#else
+	box_projects_recent_tab();
+#endif
+}
+
+void box_projects_show() {
+	if (box_projects_icon_map != NULL) {
+		string_array_t *keys = map_keys(box_projects_icon_map);
+		for (i32 i = 0; i < keys->length; ++i) {
+			char *handle = keys->buffer[i];
+			data_delete_image(handle);
+		}
+		gc_unroot(box_projects_icon_map);
+		box_projects_icon_map = NULL;
+	}
+
+	bool draggable;
+#if defined(IRON_ANDROID) || defined(IRON_IOS)
+	draggable = false;
+#else
+	draggable = true;
+#endif
+
+	ui_box_show_custom(&box_projects_show_box, 600, 400, NULL, draggable, "");
+}
+
 void box_projects_recent_tab() {
 	if (ui_tab(box_projects_htab, tr("Recent"), true, -1, false)) {
 
 		box_projects_draw_badge();
 
-		ui->enabled                = config_raw->recent_projects->length > 0;
+		ui->enabled                = g_config->recent_projects->length > 0;
 		box_projects_hsearch->text = string_copy(ui_text_input(box_projects_hsearch, tr("Search"), UI_ALIGN_LEFT, true, true));
 		ui->enabled                = true;
-		for (i32 i = 0; i < config_raw->recent_projects->length; ++i) {
-			char *path = config_raw->recent_projects->buffer[i];
+		for (i32 i = 0; i < g_config->recent_projects->length; ++i) {
+			char *path = g_config->recent_projects->buffer[i];
 #ifdef IRON_WINDOWS
 			path = string_copy(string_replace_all(path, "/", "\\"));
 #else
@@ -232,9 +271,9 @@ void box_projects_recent_tab() {
 			}
 		}
 
-		ui->enabled = config_raw->recent_projects->length > 0;
+		ui->enabled = g_config->recent_projects->length > 0;
 		if (ui_icon_button(tr("Clear"), ICON_ERASE, UI_ALIGN_LEFT)) {
-			config_raw->recent_projects = any_array_create_from_raw((void *[]){}, 0);
+			g_config->recent_projects = any_array_create_from_raw((void *[]){}, 0);
 			config_save();
 		}
 		ui->enabled = true;
@@ -247,38 +286,4 @@ void box_projects_recent_tab() {
 			project_open();
 		}
 	}
-}
-
-void box_projects_draw_badge() {
-	gpu_texture_t *img = data_get_image("badge.k");
-	ui_image(img, 0xffffffff, -1.0);
-	ui_end_element();
-}
-
-void box_projects_get_started_tab() {
-	if (ui_tab(box_projects_htab, tr("Get Started"), true, -1, false)) {
-
-		ui_separator(UI_ELEMENT_H(), false);
-
-		if (ui_icon_button(tr("Manual"), ICON_HELP, UI_ALIGN_CENTER)) {
-			iron_load_url(string("%s/manual", manifest_url));
-		}
-		if (ui_icon_button(tr("How To"), ICON_HELP, UI_ALIGN_CENTER)) {
-			iron_load_url(string("%s/howto", manifest_url));
-		}
-		if (ui_icon_button(tr("What's New"), ICON_LINK, UI_ALIGN_CENTER)) {
-			iron_load_url(string("%s/notes", manifest_url));
-		}
-	}
-}
-
-void box_projects_align_to_fullscreen() {
-	ui_box_modalw       = math_floor(iron_window_width() / (float)UI_SCALE());
-	ui_box_modalh       = math_floor(iron_window_height() / (float)UI_SCALE());
-	i32 appw            = iron_window_width();
-	i32 apph            = iron_window_height();
-	i32 mw              = appw;
-	i32 mh              = apph;
-	ui_box_hwnd->drag_x = math_floor(-appw / 2.0 + mw / 2.0);
-	ui_box_hwnd->drag_y = math_floor(-apph / 2.0 + mh / 2.0);
 }

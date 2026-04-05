@@ -65,7 +65,7 @@ void render_path_preview_init() {
 
 void render_path_preview_commands_preview() {
 	render_path_set_target("mgbuffer0", NULL, "mmain", GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xffffffff, 1.0);
-	string_t_array_t *additional = any_array_create_from_raw(
+	string_array_t *additional = any_array_create_from_raw(
 	    (void *[]){
 	        "mgbuffer1",
 	    },
@@ -85,7 +85,7 @@ void render_path_preview_commands_preview() {
 	render_path_draw_skydome("Scene/world_pass/world_pass");
 
 	char        *framebuffer     = "texpreview";
-	slot_material_t *selected_mat    = context_raw->material;
+	slot_material_t *selected_mat    = g_context->material;
 	render_target_t *texpreview      = any_map_get(render_path_render_targets, "texpreview");
 	render_target_t *texpreview_icon = any_map_get(render_path_render_targets, "texpreview_icon");
 	texpreview->_image               = selected_mat->image;
@@ -102,7 +102,7 @@ void render_path_preview_commands_preview() {
 
 void render_path_preview_commands_decal() {
 	render_path_set_target("gbuffer0", NULL, "main", GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xffffffff, 1.0);
-	string_t_array_t *additional = any_array_create_from_raw(
+	string_array_t *additional = any_array_create_from_raw(
 	    (void *[]){
 	        "gbuffer1",
 	    },
@@ -124,7 +124,7 @@ void render_path_preview_commands_decal() {
 
 	char        *framebuffer = "texpreview";
 	render_target_t *texpreview  = any_map_get(render_path_render_targets, "texpreview");
-	texpreview->_image           = context_raw->decal_image;
+	texpreview->_image           = g_context->decal_image;
 
 	render_path_set_target(framebuffer, NULL, NULL, GPU_CLEAR_NONE, 0, 0.0);
 

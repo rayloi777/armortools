@@ -27,6 +27,7 @@ char           *ui_clipboard                             = "";
 string_array_t *ui_nodes_exclude_remove                  = NULL; // No removal for listed node types
 bool            ui_nodes_socket_released                 = false;
 string_array_t *(*ui_nodes_enum_texts)(char *)           = NULL; // Retrieve combo items for buttons of type ENUM
+any_array_t *(*ui_nodes_enum_images)(char *)             = NULL;
 gpu_texture_t *(*ui_nodes_preview_image)(ui_node_t *)    = NULL; // Retrieve preview image
 void (*ui_nodes_on_custom_button)(int, char *)           = NULL; // Call external function
 ui_canvas_control_t *(*ui_nodes_on_canvas_control)(void) = NULL;
@@ -397,13 +398,13 @@ static float ui_nodes_snap(float f) {
 
 static string_array_t enum_ar;
 static char           enum_label[64];
-static char           enum_texts_data[64][64];
-static char          *enum_texts[64];
+static char           enum_texts_data[256][64];
+static char          *enum_texts[256];
 
-static string_array_t temp_ar;
+static string_array_t temp_ar; // Used by open combo
 static char           temp_label[64];
-static char           temp_texts_data[64][64];
-static char          *temp_texts[64];
+static char           temp_texts_data[256][64];
+static char          *temp_texts[256];
 
 void ui_node_draw_body(ui_node_t *node, ui_node_canvas_t *canvas, float nx, float ny) {
 	ui_t *current = ui_get_current();
@@ -441,13 +442,13 @@ void ui_node_draw_body(ui_node_t *node, ui_node_canvas_t *canvas, float nx, floa
 	ny -= lineh / 3.0; // Fix align
 	for (int buti = 0; buti < node->buttons->length; ++buti) {
 		ui_node_button_t *but = node->buttons->buffer[buti];
+		float            *val = but->output == -1 ? but->default_value->buffer : node->outputs->buffer[but->output]->default_value->buffer;
 
 		if (strcmp(but->type, "RGBA") == 0) {
 			ny += lineh;             // 18 + 2 separator
 			current->_x    = nx + 1; // Offset for node selection border
 			current->_y    = ny;
 			current->_w    = w;
-			float *val     = node->outputs->buffer[but->output]->default_value->buffer;
 			nhandle->color = ui_color(val[0] * 255.0, val[1] * 255.0, val[2] * 255.0, 255.0);
 			ui_color_wheel(nhandle, false, -1, -1, true, &ui_color_wheel_picker, val);
 			val[0] = ui_color_r(nhandle->color) / 255.0f;
@@ -464,7 +465,6 @@ void ui_node_draw_body(ui_node_t *node, ui_node_canvas_t *canvas, float nx, floa
 			float text_off                   = current->ops->theme->TEXT_OFFSET;
 			current->ops->theme->TEXT_OFFSET = 6;
 			ui_text(ui_tr(but->name), UI_ALIGN_LEFT, 0);
-			float *val = (float *)but->default_value->buffer;
 
 			ui_handle_t *h  = ui_nest(nhandle, buti);
 			ui_handle_t *h0 = ui_nest(h, 0);
@@ -484,9 +484,6 @@ void ui_node_draw_body(ui_node_t *node, ui_node_canvas_t *canvas, float nx, floa
 			val[1]                           = ui_slider(h1, "Y", min, max, true, 100, true, UI_ALIGN_LEFT, true);
 			val[2]                           = ui_slider(h2, "Z", min, max, true, 100, true, UI_ALIGN_LEFT, true);
 			current->ops->theme->TEXT_OFFSET = text_off;
-			if (but->output >= 0) {
-				node->outputs->buffer[but->output]->default_value->buffer = but->default_value->buffer;
-			}
 			ny += lineh * 3.0;
 		}
 		else if (strcmp(but->type, "VALUE") == 0) {
@@ -494,34 +491,27 @@ void ui_node_draw_body(ui_node_t *node, ui_node_canvas_t *canvas, float nx, floa
 			current->_x                      = nx;
 			current->_y                      = ny;
 			current->_w                      = w;
-			ui_node_socket_t *soc            = node->outputs->buffer[but->output];
-			float             min            = but->min;
-			float             max            = but->max;
-			float             prec           = but->precision;
-			float             text_off       = current->ops->theme->TEXT_OFFSET;
+			float min                        = but->min;
+			float max                        = but->max;
+			float prec                       = but->precision;
+			float text_off                   = current->ops->theme->TEXT_OFFSET;
 			current->ops->theme->TEXT_OFFSET = 6;
 			ui_handle_t *soc_handle          = ui_nest(nhandle, buti);
 			if (soc_handle->init) {
-				soc_handle->f = ((float *)soc->default_value->buffer)[0];
+				soc_handle->f = val[0];
 			}
-			((float *)soc->default_value->buffer)[0] = ui_slider(soc_handle, "Value", min, max, true, prec, true, UI_ALIGN_LEFT, true);
-			current->ops->theme->TEXT_OFFSET         = text_off;
+			val[0]                           = ui_slider(soc_handle, ui_tr(but->name), min, max, true, prec, true, UI_ALIGN_LEFT, true);
+			current->ops->theme->TEXT_OFFSET = text_off;
 		}
 		else if (strcmp(but->type, "STRING") == 0) {
 			ny += lineh;
 			current->_x           = nx;
 			current->_y           = ny;
 			current->_w           = w;
-			ui_node_socket_t *soc = but->output >= 0 ? node->outputs->buffer[but->output] : NULL;
 			ui_handle_t      *h   = ui_nest(nhandle, buti);
-			if (h->init) {
-				h->text = soc != NULL ? (char *)soc->default_value->buffer : but->default_value->buffer != NULL ? (char *)but->default_value->buffer : "";
-			}
+			h->text = val != NULL ? (char *)val : "";
 			but->default_value->buffer = ui_text_input(h, ui_tr(but->name), UI_ALIGN_LEFT, true, false);
 			but->default_value->length = strlen(but->default_value->buffer) + 1;
-			if (soc != NULL) {
-				soc->default_value->buffer = but->default_value->buffer;
-			}
 		}
 		else if (strcmp(but->type, "ENUM") == 0) {
 			ny += lineh;
@@ -532,16 +522,21 @@ void ui_node_draw_body(ui_node_t *node, ui_node_canvas_t *canvas, float nx, floa
 			ui_handle_t *but_handle = ui_nest(nhandle, buti);
 			but_handle->i           = ((float *)but->default_value->buffer)[0];
 
-			bool  combo_select    = current->combo_selected_handle == NULL && ui_get_released(UI_ELEMENT_H());
-			char *label           = combo_select ? temp_label : enum_label;
-			char(*texts_data)[64] = combo_select ? temp_texts_data : enum_texts_data;
-			char          **texts = combo_select ? temp_texts : enum_texts;
-			string_array_t *ar    = combo_select ? &temp_ar : &enum_ar;
+			bool  combo_select      = current->combo_selected_handle == NULL && ui_get_released(UI_ELEMENT_H());
+			char *label             = combo_select ? temp_label : enum_label;
+			char (*texts_data)[256] = combo_select ? temp_texts_data : enum_texts_data;
+			char          **texts   = combo_select ? temp_texts : enum_texts;
+			string_array_t *ar      = combo_select ? &temp_ar : &enum_ar;
+			any_array_t    *images  = NULL;
 
-			int texts_count = 0;
-			if (but->data != NULL && but->data->length > 1) {
+			int  texts_count  = 0;
+			bool has_but_data = but->data != NULL && but->data->length > 1;
+			if (has_but_data) {
 				int wi = 0;
 				for (int i = 0; i < but->data->length; ++i) {
+					if (texts_count == 255) {
+						break;
+					}
 					char c = ((char *)but->data->buffer)[i];
 					if (c == '\0') {
 						texts_data[texts_count][wi] = '\0';
@@ -574,6 +569,9 @@ void ui_node_draw_body(ui_node_t *node, ui_node_canvas_t *canvas, float nx, floa
 			strcpy(label, ui_tr(but->name));
 
 			((float *)but->default_value->buffer)[0] = ui_combo(but_handle, ar, label, false, UI_ALIGN_LEFT, true);
+			if (current->combo_selected_handle == but_handle && !has_but_data && ui_nodes_enum_images != NULL) {
+				current->combo_selected_images = (*ui_nodes_enum_images)(node->type);
+			}
 		}
 		else if (strcmp(but->type, "BOOL") == 0) {
 			ny += lineh;

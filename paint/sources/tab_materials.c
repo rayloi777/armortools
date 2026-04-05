@@ -1,48 +1,7 @@
 
 #include "global.h"
 
-void tab_materials_draw(ui_handle_t *htab) {
-	bool mini = ui->_window_w <= ui_sidebar_w_mini;
-	mini ? tab_materials_draw_mini(htab) : tab_materials_draw_full(htab);
-}
-
-void tab_materials_draw_mini(ui_handle_t *htab) {
-	ui_set_hovered_tab_name(tr("Materials"));
-
-	ui_begin_sticky();
-	ui_separator(5, true);
-
-	tab_materials_button_nodes();
-	tab_materials_button_new("");
-
-	ui_end_sticky();
-	ui_separator(3, false);
-	tab_materials_draw_slots(true);
-}
-
-void tab_materials_draw_full(ui_handle_t *htab) {
-	if (ui_tab(htab, tr("Materials"), false, -1, false)) {
-		ui_begin_sticky();
-		f32_array_t *row = f32_array_create_from_raw(
-		    (f32[]){
-		        -70,
-		        -70,
-		        -70,
-		    },
-		    3);
-		ui_row(row);
-
-		tab_materials_button_new(tr("New"));
-		if (ui_icon_button(tr("Import"), ICON_IMPORT, UI_ALIGN_CENTER)) {
-			project_import_material();
-		}
-		tab_materials_button_nodes();
-
-		ui_end_sticky();
-		ui_separator(3, false);
-		tab_materials_draw_slots(false);
-	}
-}
+i32 _tab_materials_draw_slots;
 
 void tab_materials_button_nodes() {
 	if (ui_button(tr("Nodes"), UI_ALIGN_CENTER, "")) {
@@ -53,14 +12,68 @@ void tab_materials_button_nodes() {
 	}
 }
 
+void tab_materials_draw_slots_update_fill_layers(void *_) {
+	layers_update_fill_layers();
+}
+
+void tab_materials_update_material() {
+	ui_header_handle->redraws = 2;
+	ui_nodes_hwnd->redraws    = 2;
+	gc_unroot(ui_nodes_group_stack);
+	ui_nodes_group_stack = any_array_create_from_raw((void *[]){}, 0);
+	gc_root(ui_nodes_group_stack);
+	make_material_parse_paint_material(true);
+	util_render_make_material_preview();
+	bool decal = context_is_decal();
+	if (decal) {
+		util_render_make_decal_preview();
+	}
+}
+
 void tab_materials_draw_slots_duplicate(void *_) {
 	i32 i                 = _tab_materials_draw_slots;
-	context_raw->material = slot_material_create(project_materials->buffer[0]->data, NULL);
-	any_array_push(project_materials, context_raw->material);
+	g_context->material = slot_material_create(project_materials->buffer[0]->data, NULL);
+	any_array_push(project_materials, g_context->material);
 	ui_node_canvas_t *cloned      = util_clone_canvas(project_materials->buffer[i]->canvas);
-	context_raw->material->canvas = cloned;
+	g_context->material->canvas = cloned;
 	tab_materials_update_material();
 	history_duplicate_material();
+}
+
+void tab_materials_update_material_pointers(ui_node_t_array_t *nodes, i32 i) {
+	for (i32 i = 0; i < nodes->length; ++i) {
+		ui_node_t *n = nodes->buffer[i];
+		if (string_equals(n->type, "MATERIAL")) {
+			if (n->buttons->buffer[0]->default_value->buffer[0] == i) {
+				n->buttons->buffer[0]->default_value->buffer[0] = 9999; // Material deleted
+			}
+			else if (n->buttons->buffer[0]->default_value->buffer[0] > i) {
+				n->buttons->buffer[0]->default_value->buffer[0]--; // Offset by deleted material
+			}
+		}
+	}
+}
+
+void tab_materials_delete_material(slot_material_t *m) {
+	i32 i = array_index_of(project_materials, m);
+	for (i32 i = 0; i < project_layers->length; ++i) {
+		slot_layer_t *l = project_layers->buffer[i];
+		if (l->fill_layer == m) {
+			l->fill_layer = NULL;
+		}
+	}
+	history_delete_material();
+	context_select_material(i == project_materials->length - 1 ? i - 1 : i + 1);
+	array_splice(project_materials, i, 1);
+	ui_base_hwnds->buffer[1]->redraws = 2;
+	for (i32 i = 0; i < project_materials->length; ++i) {
+		slot_material_t *m = project_materials->buffer[i];
+		tab_materials_update_material_pointers(m->canvas->nodes, i);
+	}
+	for (i32 i = 0; i < m->canvas->nodes->length; ++i) {
+		ui_node_t *n = m->canvas->nodes->buffer[i];
+		ui_viewnodes_on_node_remove(n);
+	}
 }
 
 void tab_materials_draw_slots_menu() {
@@ -143,7 +156,7 @@ void tab_materials_draw_slots_menu() {
 	m->paint_base = ui_check(base_handle, tr("Base Color"), "");
 	m->paint_opac = ui_check(opac_handle, tr("Opacity"), "");
 
-	if (config_raw->workflow == WORKFLOW_PBR) {
+	if (g_config->workflow == WORKFLOW_PBR) {
 		ui_row2();
 		m->paint_nor    = ui_check(nor_handle, tr("Normal"), "");
 		m->paint_height = ui_check(height_handle, tr("Height"), "");
@@ -163,19 +176,15 @@ void tab_materials_draw_slots_menu() {
 	}
 }
 
-void tab_materials_draw_slots_update_fill_layers(void *_) {
-	layers_update_fill_layers();
-}
-
 void tab_materials_draw_slots(bool mini) {
-	i32 slotw = math_floor(51 * UI_SCALE() + config_raw->window_scale * 2);
+	i32 slotw = math_floor(51 * UI_SCALE() + g_config->window_scale * 2);
 	i32 num   = math_floor(ui->_window_w / (float)slotw);
 	if (num == 0) {
 		return;
 	}
 
 	for (i32 row = 0; row < math_floor(math_ceil(project_materials->length / (float)num)); ++row) {
-		i32          mult = config_raw->show_asset_names ? 2 : 1;
+		i32          mult = g_config->show_asset_names ? 2 : 1;
 		f32_array_t *ar   = f32_array_create_from_raw((f32[]){}, 0);
 		for (i32 i = 0; i < num * mult; ++i) {
 			f32_array_push(ar, 1 / (float)num);
@@ -183,7 +192,7 @@ void tab_materials_draw_slots(bool mini) {
 		ui_row(ar);
 
 		ui->_x += 2;
-		f32 off = config_raw->show_asset_names ? UI_ELEMENT_OFFSET() * 10.0 : 6;
+		f32 off = g_config->show_asset_names ? UI_ELEMENT_OFFSET() * 10.0 : 6;
 		if (row > 0) {
 			ui->_y += off;
 		}
@@ -193,7 +202,7 @@ void tab_materials_draw_slots(bool mini) {
 			i32 i    = j + row * num;
 			if (i >= project_materials->length) {
 				ui_end_element_of_size(imgw);
-				if (config_raw->show_asset_names) {
+				if (g_config->show_asset_names) {
 					ui_end_element_of_size(0);
 				}
 				continue;
@@ -202,14 +211,14 @@ void tab_materials_draw_slots(bool mini) {
 			gpu_texture_t *img_full = project_materials->buffer[i]->image;
 
 			// Highligh selected
-			if (context_raw->material == project_materials->buffer[i]) {
+			if (g_context->material == project_materials->buffer[i]) {
 				if (mini) {
 					f32 w = ui->_w / (float)UI_SCALE();
 					ui_rect(0, -2, w - 2, w - 4, ui->ops->theme->HIGHLIGHT_COL, 3);
 				}
 				else {
 					i32 off = row % 2 == 1 ? 1 : 0;
-					i32 w   = 50 + math_floor(config_raw->window_scale * 2);
+					i32 w   = 50 + math_floor(g_config->window_scale * 2);
 					ui_fill(-1, -2, w + 3, 2, ui->ops->theme->HIGHLIGHT_COL);
 					ui_fill(-1, w - off, w + 3, 2 + off, ui->ops->theme->HIGHLIGHT_COL);
 					ui_fill(-1, -2, 2, w + 3, ui->ops->theme->HIGHLIGHT_COL);
@@ -241,25 +250,25 @@ void tab_materials_draw_slots(bool mini) {
 
 			// Select material
 			if (state == UI_STATE_STARTED && ui->input_y > ui->_window_y) {
-				if (context_raw->material != project_materials->buffer[i]) {
+				if (g_context->material != project_materials->buffer[i]) {
 					context_select_material(i);
-					if (context_raw->tool == TOOL_TYPE_MATERIAL) {
+					if (g_context->tool == TOOL_TYPE_MATERIAL) {
 						sys_notify_on_next_frame(&tab_materials_draw_slots_update_fill_layers, NULL);
 					}
 				}
 				base_drag_off_x = -(mouse_x - uix - ui->_window_x - 3);
 				base_drag_off_y = -(mouse_y - uiy - ui->_window_y + 1);
 				gc_unroot(base_drag_material);
-				base_drag_material = context_raw->material;
+				base_drag_material = g_context->material;
 				gc_root(base_drag_material);
 				// Double click to show nodes
-				if (sys_time() - context_raw->select_time < 0.2) {
+				if (sys_time() - g_context->select_time < 0.2) {
 					ui_base_show_material_nodes();
 					gc_unroot(base_drag_material);
 					base_drag_material = NULL;
 					base_is_dragging   = false;
 				}
-				context_raw->select_time = sys_time();
+				g_context->select_time = sys_time();
 			}
 
 			// Context menu
@@ -278,7 +287,7 @@ void tab_materials_draw_slots(bool mini) {
 					ui_tooltip(project_materials->buffer[i]->canvas->name);
 				}
 			}
-			if (config_raw->show_asset_names) {
+			if (g_config->show_asset_names) {
 				ui->_x = uix;
 				ui->_y += slotw * 0.9;
 				ui_text(project_materials->buffer[i]->canvas->name, UI_ALIGN_CENTER, 0x00000000);
@@ -306,13 +315,13 @@ void tab_materials_draw_slots(bool mini) {
 	                ui->input_y < ui->_window_y + ui->_window_h;
 	if (in_focus && ui->is_delete_down && project_materials->length > 1) {
 		ui->is_delete_down = false;
-		tab_materials_delete_material(context_raw->material);
+		tab_materials_delete_material(g_context->material);
 	}
 }
 
 void tab_materials_button_new_on_next_frame(void *_) {
-	context_raw->material = slot_material_create(project_materials->buffer[0]->data, NULL);
-	any_array_push(project_materials, context_raw->material);
+	g_context->material = slot_material_create(project_materials->buffer[0]->data, NULL);
+	any_array_push(project_materials, g_context->material);
 	tab_materials_update_material();
 	history_new_material();
 }
@@ -323,38 +332,53 @@ void tab_materials_button_new(char *text) {
 	}
 }
 
-void tab_materials_update_material() {
-	ui_header_handle->redraws = 2;
-	ui_nodes_hwnd->redraws    = 2;
-	gc_unroot(ui_nodes_group_stack);
-	ui_nodes_group_stack = any_array_create_from_raw((void *[]){}, 0);
-	gc_root(ui_nodes_group_stack);
-	make_material_parse_paint_material(true);
-	util_render_make_material_preview();
-	bool decal = context_is_decal();
-	if (decal) {
-		util_render_make_decal_preview();
+void tab_materials_draw_mini(ui_handle_t *htab) {
+	ui_set_hovered_tab_name(tr("Materials"));
+
+	ui_begin_sticky();
+	ui_separator(5, true);
+
+	tab_materials_button_nodes();
+	tab_materials_button_new("");
+
+	ui_end_sticky();
+	ui_separator(3, false);
+	tab_materials_draw_slots(true);
+}
+
+void tab_materials_draw_full(ui_handle_t *htab) {
+	if (ui_tab(htab, tr("Materials"), false, -1, false)) {
+		ui_begin_sticky();
+		f32_array_t *row = f32_array_create_from_raw(
+		    (f32[]){
+		        -70,
+		        -70,
+		        -70,
+		    },
+		    3);
+		ui_row(row);
+
+		tab_materials_button_new(tr("New"));
+		if (ui_icon_button(tr("Import"), ICON_IMPORT, UI_ALIGN_CENTER)) {
+			project_import_material();
+		}
+		tab_materials_button_nodes();
+
+		ui_end_sticky();
+		ui_separator(3, false);
+		tab_materials_draw_slots(false);
 	}
 }
 
-void tab_materials_update_material_pointers(ui_node_t_array_t *nodes, i32 i) {
-	for (i32 i = 0; i < nodes->length; ++i) {
-		ui_node_t *n = nodes->buffer[i];
-		if (string_equals(n->type, "MATERIAL")) {
-			if (n->buttons->buffer[0]->default_value->buffer[0] == i) {
-				n->buttons->buffer[0]->default_value->buffer[0] = 9999; // Material deleted
-			}
-			else if (n->buttons->buffer[0]->default_value->buffer[0] > i) {
-				n->buttons->buffer[0]->default_value->buffer[0]--; // Offset by deleted material
-			}
-		}
-	}
+void tab_materials_draw(ui_handle_t *htab) {
+	bool mini = ui->_window_w <= ui_sidebar_w_mini;
+	mini ? tab_materials_draw_mini(htab) : tab_materials_draw_full(htab);
 }
 
 void tab_materials_accept_swatch_drop(swatch_color_t *swatch) {
-	context_raw->material = slot_material_create(project_materials->buffer[0]->data, NULL);
-	for (i32 i = 0; i < context_raw->material->canvas->nodes->length; ++i) {
-		ui_node_t *node = context_raw->material->canvas->nodes->buffer[i];
+	g_context->material = slot_material_create(project_materials->buffer[0]->data, NULL);
+	for (i32 i = 0; i < g_context->material->canvas->nodes->length; ++i) {
+		ui_node_t *node = g_context->material->canvas->nodes->buffer[i];
 		if (string_equals(node->type, "RGB")) {
 			node->outputs->buffer[0]->default_value = f32_array_create_xyzw(color_get_rb(swatch->base) / 255.0, color_get_gb(swatch->base) / 255.0,
 			                                                                color_get_bb(swatch->base) / 255.0, color_get_ab(swatch->base) / 255.0);
@@ -367,29 +391,7 @@ void tab_materials_accept_swatch_drop(swatch_color_t *swatch) {
 			node->inputs->buffer[7]->default_value->buffer[0] = swatch->height;
 		}
 	}
-	any_array_push(project_materials, context_raw->material);
+	any_array_push(project_materials, g_context->material);
 	tab_materials_update_material();
 	history_new_material();
-}
-
-void tab_materials_delete_material(slot_material_t *m) {
-	i32 i = array_index_of(project_materials, m);
-	for (i32 i = 0; i < project_layers->length; ++i) {
-		slot_layer_t *l = project_layers->buffer[i];
-		if (l->fill_layer == m) {
-			l->fill_layer = NULL;
-		}
-	}
-	history_delete_material();
-	context_select_material(i == project_materials->length - 1 ? i - 1 : i + 1);
-	array_splice(project_materials, i, 1);
-	ui_base_hwnds->buffer[1]->redraws = 2;
-	for (i32 i = 0; i < project_materials->length; ++i) {
-		slot_material_t *m = project_materials->buffer[i];
-		tab_materials_update_material_pointers(m->canvas->nodes, i);
-	}
-	for (i32 i = 0; i < m->canvas->nodes->length; ++i) {
-		ui_node_t *n = m->canvas->nodes->buffer[i];
-		ui_viewnodes_on_node_remove(n);
-	}
 }

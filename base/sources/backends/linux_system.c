@@ -367,7 +367,9 @@ void iron_window_create(iron_window_options_t *win) {
 	window->mode = IRON_WINDOW_MODE_WINDOW;
 	iron_window_change_mode(win->mode);
 
-	XMapWindow(x11_ctx.display, window->window);
+	if (win->visible) {
+		XMapWindow(x11_ctx.display, window->window);
+	}
 
 	Atom XdndVersion = 5;
 	XChangeProperty(x11_ctx.display, window->window, XdndAware, XA_ATOM, 32, PropModeReplace, (unsigned char *)&XdndVersion, 1);
@@ -1193,13 +1195,10 @@ void iron_init(iron_window_options_t *ops) {
 	iron_window_create(ops);
 }
 
-void iron_internal_shutdown(void) {
-	gpu_destroy();
-
+void iron_internal_shutdown() {
 #ifdef WITH_GAMEPAD
 	iron_linux_closeHIDGamepads();
 #endif
-
 	free(clipboardString);
 	XCloseDisplay(x11_ctx.display);
 	iron_internal_shutdown_callback();

@@ -131,9 +131,7 @@ if (graphics == "metal" || (graphics == "vulkan" && platform != "android")) {
 
 if (flags.with_kong) {
 	project.add_define("WITH_KONG");
-	project.add_cfiles("sources/kong/libs/*.c");
 	project.add_cfiles("sources/kong/*.c");
-	project.add_cfiles("sources/kong/backends/*.c");
 }
 
 if (flags.with_plugins) {
@@ -209,6 +207,11 @@ if (flags.with_eval) {
 	project.add_cfiles("sources/libs/minic_ext.c");
 	project.add_cfiles("sources/libs/minic_api.c");
 	project.add_cfiles("sources/libs/minic_tests.c");
+}
+
+if (flags.with_bc7) {
+	project.add_define("WITH_BC7");
+	project.add_cfiles("sources/libs/bc7enc.c");
 }
 
 if (flags.with_gamepad) {
