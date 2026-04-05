@@ -59,7 +59,7 @@ Iron Engine (base/)             # Rendering, platform, UI — never modified
 
 ### Key Modules in engine/sources/
 
-- **core/** — Minic-facing APIs. Each `*_api.c` registers functions callable from `.minic` scripts via `minic_register()`. `runtime_api.c` is the unified registration entry point. `engine_world.c` holds the global world state.
+- **core/** — Minic-facing APIs. Each `*_api.c` registers functions callable from `.minic` scripts via `minic_register()`. `runtime_api.c` is the unified registration entry point. `engine_world.c` holds the global world state. `minic_system.c` manages system lifecycle (loading, init/step/draw callbacks, manifest parsing).
 - **ecs/** — Flecs ECS internals. `ecs_world.c` manages the Flecs world lifecycle. `ecs_dynamic.c` handles runtime component registration. `*_bridge.c` files sync ECS state to Iron (render bridge, sprite bridge, camera bridge).
 - **components/** — Built-in component definitions (Transform, MeshRenderer, Camera).
 - `game_engine.c` — Top-level init/shutdown/start. Wires together ECS world, API registration, Iron callbacks, and script loading.
@@ -70,7 +70,9 @@ Bridge systems (`ecs_bridge.c`, `sprite_bridge.c`, `render2d_bridge.c`, `camera_
 
 ### Minic Script System
 
-Minic is a tree-walking interpreter bundled in `base/sources/libs/minic.c` with 500+ Iron API bindings. Game scripts live in `engine/assets/scripts/` and `engine/assets/systems/`. Scripts define components, entities, and systems at runtime. The entry point is loaded via `load_and_run_script()` in `game_engine.c`.
+Minic is a tree-walking interpreter bundled in `base/sources/libs/minic.c` with 500+ Iron API bindings. Game scripts live in `engine/assets/scripts/` and `engine/assets/systems/`. Scripts define components, entities, and systems at runtime.
+
+Systems are loaded via a manifest file `engine/assets/systems.manifest`. At startup, `_kickstart()` in `game_engine.c` calls `minic_system_load_manifest("data/systems.manifest")`, which reads the manifest and loads each listed system. To add or toggle systems, edit the manifest — no C code changes needed, just re-export assets with `base/make`.
 
 #### Minic Types
 

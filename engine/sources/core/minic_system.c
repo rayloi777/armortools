@@ -85,6 +85,46 @@ int minic_system_load(const char *name, const char *path) {
     return 0;
 }
 
+int minic_system_load_manifest(const char *manifest_path) {
+    iron_file_reader_t reader;
+    if (!iron_file_reader_open(&reader, manifest_path, IRON_FILE_TYPE_ASSET)) {
+        fprintf(stderr, "[minic_system] No manifest at '%s'\n", manifest_path);
+        return -1;
+    }
+    size_t size = iron_file_reader_size(&reader);
+    char *buf = malloc(size + 1);
+    if (!buf) {
+        fprintf(stderr, "[minic_system] Error: failed to allocate manifest buffer\n");
+        iron_file_reader_close(&reader);
+        return -1;
+    }
+    iron_file_reader_read(&reader, buf, size);
+    buf[size] = '\0';
+    iron_file_reader_close(&reader);
+
+    int loaded = 0;
+    char *line = strtok(buf, "\n");
+    while (line) {
+        while (*line == ' ' || *line == '\t' || *line == '\r') line++;
+        if (*line == '#' || *line == '\0') {
+            line = strtok(NULL, "\n");
+            continue;
+        }
+        char name[64] = {0};
+        char path[256] = {0};
+        if (sscanf(line, "%63s %255s", name, path) >= 1) {
+            if (path[0] == '\0') {
+                snprintf(path, sizeof(path), "data/systems/%s.minic", name);
+            }
+            if (minic_system_load(name, path) == 0) loaded++;
+        }
+        line = strtok(NULL, "\n");
+    }
+    free(buf);
+    printf("[minic_system] Manifest loaded %d systems\n", loaded);
+    return loaded;
+}
+
 void minic_system_unload_all(void) {
     for (int i = 0; i < g_minic_system_count; i++) {
         if (g_minic_systems[i].ctx) {

@@ -14,6 +14,7 @@ typedef struct {
 } minic_system_t;
 
 int minic_system_load(const char *name, const char *path);
+int minic_system_load_manifest(const char *manifest_path);
 void minic_system_unload_all(void);
 void minic_system_call_step(void);
 void minic_system_call_init(void);

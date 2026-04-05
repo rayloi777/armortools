@@ -1,0 +1,10 @@
+# Systems manifest — one system per line
+# Lines starting with # are comments (disabled)
+# Format: SystemName [path/to/script.minic]
+#   If path omitted, defaults to data/systems/<name>.minic
+
+keyboard_test
+frog_system
+perf_overlay
+# VampireSystem
+
