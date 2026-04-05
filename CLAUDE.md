@@ -103,6 +103,40 @@ entity_add(g_player, g_pos_comp);
 - **Headers**: `#pragma once` for include guards. System includes first, then project headers.
 - **Platform guards**: `IRON_WINDOWS`, `IRON_LINUX`, `IRON_MACOS`, `IRON_IOS`, `IRON_ANDROID`, `IRON_WASM`.
 
+## Upstream API Notes
+
+### BC7 Texture Compression
+
+The upstream Iron engine now includes BC7 texture compression support via `base/sources/libs/bc7enc.c`. The engine layer can optionally use these APIs:
+
+- `GPU_TEXTURE_FORMAT_RGBA32_BC7` — texture format enum for BC7-compressed textures.
+- `gpu_bc7_supported()` — returns whether the GPU supports BC7 (always true on desktop).
+- `gpu_bc7_compress(image_data, width, height)` — multi-threaded BC7 compression.
+
+### Removed APIs
+
+- `gpu_destroy()` has been removed from the Iron GPU API. Resources are now cleaned up through their respective destroy functions or via the scene/object lifecycle.
+
+### Paint Variable Naming
+
+ArmorPaint globals were renamed for consistency. If engine code references paint internals:
+- `context_raw` is now `g_context`
+- `config_raw` is now `g_config`
+- `project_raw` is now `g_project`
+
+### Kong Shader Compiler
+
+Kong was rewritten to a single-file architecture. The shader compiler is now `base/sources/kong/kong.c` + `kong.h` with individual backend files `kong_spirv.c`, `kong_metal.c`, `kong_hlsl.c`, `kong_cstyle.c`, `kong_wgsl.c`. The old `backends/` subdirectory no longer exists.
+
+## Upstream Sync
+
+When merging upstream Iron changes into `base/`, conflicts typically arise in:
+
+- `base/sources/libs/minic.c` — our `MINIC_T_ID` type (enum value 6) and `id`-type operators. Resolve by re-applying our additions after accepting upstream changes.
+- `base/project.js` — our engine `add_cfiles()` and `add_libs()` entries. Keep both upstream and engine entries.
+
+After resolving conflicts, rebuild with both steps: `base/make` then `xcodebuild`.
+
 ## Critical Rule
 
 **Never modify files in `base/`.** All new engine functionality goes in `engine/`. The base directory is the upstream Iron engine and must remain untouched.

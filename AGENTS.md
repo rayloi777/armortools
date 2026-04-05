@@ -74,6 +74,7 @@ The amake build system (based on kmake) supports these common flags:
 | `--target` | Specify target platform for cross-compilation |
 | `--compile` | Compile without building (WASM) |
 | `--embed` | Embed data files using C23 #embed |
+| `--nowindow` | Run without creating a window (Linux) |
 | `--js` | Run JavaScript tool from tools/ |
 
 ## Code Style Guidelines
@@ -192,13 +193,15 @@ armortools/
 ├── base/                    # Core 3D engine
 │   ├── sources/             # C source files
 │   │   ├── iron_*.c/h      # Core engine modules
+│   │   ├── kong/           # Kong shader compiler (kong.c + kong_spirv.c, kong_metal.c, kong_hlsl.c, kong_cstyle.c, kong_wgsl.c)
 │   │   ├── backends/       # Platform-specific code
-│   │   └── libs/           # Third-party libraries
+│   │   └── libs/           # Third-party libraries (includes bc7enc.c/h for BC7 compression)
 │   ├── shaders/            # Shader sources (.kong)
 │   ├── assets/             # Textures, fonts, themes
 │   ├── tests/              # Test projects
 │   └── tools/              # Build tools (amake)
 ├── paint/                  # ArmorPaint application
+├── engine/                 # Game engine layer (ECS, scripting, 2D)
 └── .clang-format           # Code formatting rules
 ```
 

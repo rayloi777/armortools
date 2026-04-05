@@ -1,5 +1,11 @@
 # ECS 功能完整化計劃
 
+## Upstream Sync — 2026-04-05
+
+Merged upstream (70 commits): BC7 texture compression, Kong shader rewrite, camera pivot, material nodes. All changes landed in `base/` and `paint/` only. **No files in `engine/` were modified by the merge.**
+
+---
+
 ## 概述
 
 將 engine/ 的 ECS 功能完成至 95%，專注於核心 ECS 功能，暫不包含渲染、Prefab 系統。

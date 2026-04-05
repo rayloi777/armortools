@@ -1,5 +1,11 @@
 # Mesh Rendering Test Plan (Option A)
 
+## Upstream Sync — 2026-04-05
+
+Merged upstream (70 commits): BC7 texture compression, Kong shader rewrite, camera pivot, material nodes. All changes landed in `base/` and `paint/` only. **No files in `engine/` were modified by the merge.**
+
+---
+
 ## Goal
 
 Create a programmatic cube mesh and verify the ECS→Iron bridge works correctly.

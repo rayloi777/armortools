@@ -1,5 +1,11 @@
 # Minic Scripting Language
 
+## Upstream Sync — 2026-04-05
+
+Merged upstream (70 commits): BC7 texture compression, Kong shader rewrite, camera pivot, material nodes. All changes landed in `base/` and `paint/` only. **No files in `engine/` were modified by the merge.** Upstream added `MINIC_T_VOID = 5` to minic.h; our `MINIC_T_ID` is now 6.
+
+---
+
 Minic is a lightweight C-like scripting language embedded in the Iron engine. Scripts are written in `.minic` files, loaded at runtime, and compiled to bytecode executed by a register-based VM. No separate compilation step is needed — edit a script and reload to see changes.
 
 ## Where Scripts Live
@@ -40,14 +46,24 @@ All three are optional. Return values are currently ignored.
 
 ### Types
 
-| Type    | Description                        |
-|---------|------------------------------------|
-| `int`   | 32-bit signed integer              |
-| `float` | 32-bit floating-point              |
-| `bool`  | Boolean (stored as `int`: 0 or 1)  |
-| `char`  | Character (stored as `int`)        |
-| `void`  | No return value                    |
-| `ptr`   | Generic pointer (maps to `void *`) |
+| Type    | Description                                          |
+|---------|------------------------------------------------------|
+| `int`   | 32-bit signed integer                                |
+| `float` | 32-bit floating-point                                |
+| `bool`  | Boolean (stored as `int`: 0 or 1)                    |
+| `char`  | Character (stored as `int`)                          |
+| `id`    | 64-bit entity/component ID (Flecs `ecs_id_t`)        |
+| `void`  | No return value                                      |
+| `ptr`   | Generic pointer (maps to `void *`)                   |
+
+The `id` type stores 64-bit Flecs entity/component IDs natively (`uint64_t`). It supports comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) via a fast path that compares `uint64_t` directly. It does **not** support arithmetic. Use it for variables that hold entity or component IDs returned by `entity_create()`, `component_lookup()`, `query_foreach()` callbacks, etc.
+
+```c
+// Example:
+id g_player = entity_create();
+id g_pos_comp = component_lookup("comp_2d_position");
+entity_add(g_player, g_pos_comp);
+```
 
 ### Variables
 

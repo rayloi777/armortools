@@ -1,5 +1,11 @@
 # 2D 青蛙測試計劃 (Plan A)
 
+## Upstream Sync — 2026-04-05
+
+Merged upstream (70 commits): BC7 texture compression, Kong shader rewrite, camera pivot, material nodes. All changes landed in `base/` and `paint/` only. **No files in `engine/` were modified by the merge.**
+
+---
+
 ## 目標
 
 驗證 ECS 系統 + 渲染 2D 圖片 - 1000 隻青蛙在畫面反彈。
@@ -244,8 +250,8 @@ cd engine && ../base/make macos metal
 
 ## 驗證清單
 
-- [ ] `runtime_api.c` 添加了 4 個新 API
-- [ ] `frog_system.minic` 使用 `sprite_load/draw_begin/sprite_draw/draw_end`
-- [ ] `project.js` 配置了 PNG 資源
-- [ ] 構建成功
-- [ ] 運行時看到 1000 隻青蛙在屏幕內移動/反彈
+- [x] `runtime_api.c` 添加了 4 個新 API
+- [x] `frog_system.minic` 使用 `sprite_load/draw_begin/sprite_draw/draw_end`
+- [x] `project.js` 配置了 PNG 資源
+- [x] 構建成功
+- [x] 運行時看到青蛙在屏幕內移動/反彈 (current: 15 AI frogs + 1 player-controlled)

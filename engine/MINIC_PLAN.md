@@ -1,5 +1,15 @@
 # Minic + Flecs Optimization Plan
 
+## Upstream Sync — 2026-04-05
+
+Merged upstream (70 commits): BC7 texture compression, Kong shader rewrite, camera pivot, material nodes. Upstream changes to note:
+
+- **`MINIC_T_VOID = 5`** was added to `minic.h` by upstream. Our `MINIC_T_ID` is now **6** (not 5). Both coexist correctly.
+- Upstream formatting changes in `minic.c` were merged (clang-format style). No functional changes to the interpreter.
+- All changes landed in `base/` and `paint/` only. **No files in `engine/` were modified by the merge.**
+
+---
+
 ## Architecture
 
 ```

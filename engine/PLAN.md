@@ -1,5 +1,11 @@
 # Iron 3D 遊戲引擎完善計劃
 
+## Upstream Sync — 2026-04-05
+
+Merged upstream (70 commits): BC7 texture compression, Kong shader rewrite, camera pivot, material nodes. All changes landed in `base/` and `paint/` only. **No files in `engine/` were modified by the merge.** The engine layer is entirely local code.
+
+---
+
 ## 概述
 
 將 Iron 引擎從 3D 繪畫工具引擎升級為完整的遊戲開發引擎，目標類似 Godot 的易用性。
@@ -214,7 +220,7 @@ return project;
 | 1.2.1 | 創建 ecs_world.h 類型定義 | `engine/sources/ecs/ecs_world.h` | ✓ 完成 |
 | 1.2.2 | 實現 ecs_world.c 初始化 (Flecs v4.0.0) | `engine/sources/ecs/ecs_world.c` | ✓ 完成 |
 | 1.2.3 | 下載 flecs.c 實現 | `engine/sources/ecs/flecs/flecs.c` | ✓ 完成 |
-| 1.2.4 | 實現 ecs_dynamic.c 動態組件 | `engine/sources/ecs/ecs_dynamic.h/c` | 待辦 |
+| 1.2.4 | 實現 ecs_dynamic.c 動態組件 | `engine/sources/ecs/ecs_dynamic.h/c` | ✓ 完成 |
 | 1.2.5 | 測試：創建 Flecs World | - | ✓ 完成 |
 
 **API 函數清單**:
@@ -501,10 +507,10 @@ system_register("RenderBridge", render_bridge, "Position, Rotation, IronObject",
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.6.1 | 實現 ecs_bridge.c | `engine/sources/ecs/ecs_bridge.h/c` | 待辦 |
-| 1.6.2 | 實現 MeshRenderer 組件 | `engine/sources/components/mesh_renderer.h/c` | 待辦 |
-| 1.6.3 | 實現 Transform 同步 | `engine/sources/components/transform.h/c` | 待辦 |
-| 1.6.4 | 測試：渲染帶 MeshRenderer 的 Entity | - | 待辦 |
+| 1.6.1 | 實現 ecs_bridge.c | `engine/sources/ecs/ecs_bridge.h/c` | ✓ 完成 |
+| 1.6.2 | 實現 MeshRenderer 組件 | `engine/sources/components/mesh_renderer.h/c` | ✓ 完成 |
+| 1.6.3 | 實現 Transform 同步 | `engine/sources/components/transform.h/c` | ✓ 完成 |
+| 1.6.4 | 測試：渲染帶 MeshRenderer 的 Entity | - | ✓ 完成 |
 
 **Bridge 工作流程**:
 
@@ -538,10 +544,10 @@ if (IronObject.object == NULL) {
 
 | # | 任務 | 檔案 | 狀態 |
 |---|------|------|------|
-| 1.7.1 | 實現 game_loop.c | `engine/sources/core/game_loop.h/c` | 待辦 |
-| 1.7.2 | 實現 update_phase.h | `engine/sources/core/update_phase.h` | 待辦 |
-| 1.7.3 | 連接到 Iron 更新回調 | `engine/sources/game_engine.c` | 待辦 |
-| 1.7.4 | 測試固定時間步長 | - | 待辦 |
+| 1.7.1 | 實現 game_loop.c | `engine/sources/core/game_loop.h/c` | ✓ 完成 |
+| 1.7.2 | 實現 update_phase.h | `engine/sources/core/update_phase.h` | ✓ 完成 |
+| 1.7.3 | 連接到 Iron 更新回調 | `engine/sources/game_engine.c` | ✓ 完成 |
+| 1.7.4 | 測試固定時間步長 | - | ✓ 完成 |
 
 **API 函數清單**:
 
@@ -799,6 +805,9 @@ printf("Game loaded: %s\n", "Hello World");
 | Transform 組件 | ✓ |
 | MeshRenderer 組件 | ✓ |
 | Iron Bridge (Flecs → Iron) | ✓ |
+| 2D Sprite System (ECS) | ✓ |
+| 2D Camera System | ✓ |
+| 2D 渲染 (render2d_bridge) | ✓ |
 | 遊戲循環 | ✓ |
 | 鍵盤輸入 (Minic) | ✓ |
 | 滑鼠輸入 (Minic) | ✓ |

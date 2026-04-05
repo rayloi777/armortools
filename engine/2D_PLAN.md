@@ -1,5 +1,11 @@
 # 2D Game Engine Extension Plan
 
+## Upstream Sync — 2026-04-05
+
+Merged upstream (70 commits): BC7 texture compression, Kong shader rewrite, camera pivot, material nodes. All changes landed in `base/` and `paint/` only. **No files in `engine/` were modified by the merge.**
+
+---
+
 ## Table of Contents
 1. [ECS Architecture Overview](#ecs-architecture-overview)
 2. [ECS Component Reference](#ecs-component-reference)
@@ -461,19 +467,19 @@ bool aabb2d_contains_point(aabb2d_t a, vec2_t p);
 # Implementation Order
 
 ## Phase 1: Sprite System
-- [ ] Add `RenderSprite` to ecs_components.h
-- [ ] Register in ecs_components.c
-- [ ] Enhance sprite_api.c (region, flip, layer, width/height cache)
-- [ ] Create sprite_bridge.c
-- [ ] Add sprite rendering to game loop
-- [ ] Sort sprites by layer before rendering
+- [x] Add `RenderSprite` to ecs_components.h
+- [x] Register in ecs_components.c
+- [x] Enhance sprite_api.c (region, flip, layer, width/height cache)
+- [x] Create sprite_bridge.c
+- [x] Add sprite rendering to game loop
+- [x] Sort sprites by layer before rendering
 
 ## Phase 2: 2D Camera
-- [ ] Add `Camera2D` to ecs_components.h
-- [ ] Create camera2d.c/h
-- [ ] Implement follow, zoom, bounds
-- [ ] Integrate with draw_set_transform()
-- [ ] Add camera update to game loop
+- [x] Add `Camera2D` to ecs_components.h
+- [x] Create camera2d.c/h
+- [x] Implement follow, zoom, bounds
+- [x] Integrate with draw_set_transform()
+- [x] Add camera update to game loop
 
 ## Phase 3: Tilemap
 - [ ] Create tilemap.h/c
