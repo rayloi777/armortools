@@ -3,6 +3,7 @@
 #include "entity_api.h"
 #include "system_api.h"
 #include "query_api.h"
+#include "ui_ext_api.h"
 #include "game_loop.h"
 #include "ecs/ecs_world.h"
 #include "ecs/flecs/flecs.h"
@@ -763,14 +764,13 @@ static minic_val_t minic_bench_time_native(minic_val_t *args, int argc) {
     return minic_val_float((float)elapsed);
 }
 // Performance overlay API — expose Flecs ECS stats to Minic scripts
-static ecs_world_stats_t g_perf_stats;
 
 static minic_val_t minic_perf_entity_count(minic_val_t *args, int argc) {
     (void)args; (void)argc;
     if (!g_runtime_world) return minic_val_int(0);
     ecs_world_t *world = (ecs_world_t *)game_world_get_ecs(g_runtime_world);
-    ecs_world_stats_get(world, &g_perf_stats);
-    return minic_val_int((int)g_perf_stats.entities.count.gauge.avg[g_perf_stats.t]);
+    ecs_entities_t ents = ecs_get_entities(world);
+    return minic_val_int((int)ents.alive_count);
 }
 
 static minic_val_t minic_perf_component_count(minic_val_t *args, int argc) {
@@ -1387,6 +1387,9 @@ void runtime_api_register(void) {
     minic_register_native("gamepad_stick_right_y", minic_gamepad_stick_right_y);
     minic_register_native("gamepad_stick_delta_x", minic_gamepad_stick_delta_x);
     minic_register_native("gamepad_stick_delta_y", minic_gamepad_stick_delta_y);
-    
+
+    // Iron UI widget API
+    ui_ext_api_register();
+
     printf("Runtime APIs registered\n");
 }

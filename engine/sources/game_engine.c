@@ -5,6 +5,7 @@
 #include "core/system_api.h"
 #include "core/minic_system.h"
 #include "core/sprite_api.h"
+#include "core/ui_ext_api.h"
 #include "ecs/ecs_world.h"
 #include "ecs/ecs_components.h"
 #include "ecs/ecs_dynamic.h"
@@ -133,6 +134,8 @@ void game_engine_init(void) {
     runtime_api_set_world(g_world);
     runtime_api_register();
 
+    ui_ext_api_init();
+
     input_register();
     gamepad_reset();
 
@@ -153,6 +156,7 @@ void game_engine_shutdown(void) {
     printf("Game Engine Shutting Down...\n");
 
     sys_2d_shutdown();
+    ui_ext_api_shutdown();
     sprite_bridge_shutdown();
     sprite_texture_cache_shutdown();
     camera_bridge_shutdown();

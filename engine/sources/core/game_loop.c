@@ -3,6 +3,7 @@
 #include "ecs/camera_bridge.h"
 #include "ecs/render2d_bridge.h"
 #include "minic_system.h"
+#include "ui_ext_api.h"
 #include <iron.h>
 #include <iron_draw.h>
 #include <stdio.h>
@@ -42,6 +43,12 @@ void game_loop_update(void) {
     minic_system_call_draw();
     minic_system_call_draw_ui();
     draw_end();
+
+    // Iron UI widgets (windows, menubars, trees, etc.)
+    ui_ext_api_update_input();
+    ui_ext_api_begin();
+    minic_system_call_draw_ui_ext();
+    ui_ext_api_end();
 }
 
 float game_loop_get_delta_time(void) {

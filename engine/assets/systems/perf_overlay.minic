@@ -1,6 +1,6 @@
 // perf_overlay.minic - Performance overlay (toggle with F3)
 
-int g_show_overlay = 0;
+int g_show_overlay = 1;
 float g_delta_ms = 0.0;
 
 int init(void) {

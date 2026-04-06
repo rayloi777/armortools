@@ -4,7 +4,8 @@
 #   If path omitted, defaults to data/systems/<name>.minic
 
 # keyboard_test
-# frog_system
-# perf_overlay
-vampire_system
+#frog_system
+perf_overlay
+draw_ui_ext_system
+# vampire_system
 

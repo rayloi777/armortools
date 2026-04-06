@@ -29,6 +29,9 @@
 #include "ecs/camera_bridge.c"
 #include "ecs/render2d_bridge.c"
 
+// UI Extension
+#include "core/ui_ext_api.c"
+
 // Base minic library
 #include "../../base/sources/libs/minic.c"
 #include "../../base/sources/libs/minic_ext.c"

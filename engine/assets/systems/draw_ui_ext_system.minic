@@ -1,0 +1,114 @@
+// draw_ui_ext_system.minic — Menubar demo using Iron UI
+// Toggle with F2
+
+int g_show = 1;
+int g_menu_open = 0;    // 0=none 1=File 2=Edit
+int g_click_count = 0;
+
+int init(void) {
+    printf("UIExtDemo: loaded (F2 to toggle)\n");
+    return 0;
+}
+
+int step(void) {
+    if (keyboard_started("f2")) {
+        g_show = 1 - g_show;
+    }
+    return 0;
+}
+
+int draw_ui_ext(void) {
+    if (g_show == 0) { return 0; }
+
+    float sw = sys_width();
+    float mbh = ui_ext_menubar_h();
+
+    // Full-screen region so menubar knows the width
+    ui_ext_begin_region(0, 0, sw);
+
+    // ── Menubar (horizontal layout) ──
+    ui_ext_begin_hlayout();
+    ui_ext_begin_menu();
+    if (ui_ext_menubar_button("File")) {
+        if (g_menu_open == 1) {
+            g_menu_open = 0;
+        } else {
+            g_menu_open = 1;
+        }
+    }
+    if (ui_ext_menubar_button("Edit")) {
+        if (g_menu_open == 2) {
+            g_menu_open = 0;
+        } else {
+            g_menu_open = 2;
+        }
+    }
+    ui_ext_end_menu();
+    ui_ext_end_hlayout();
+    ui_ext_end_region();
+
+    // ── File dropdown ──
+    if (g_menu_open == 1) {
+        ui_ext_begin_region(0, mbh, 150);
+        if (ui_ext_button("New", 0, "")) {
+            g_click_count = g_click_count + 1;
+            printf("File > New (count=%d)\n", g_click_count);
+            g_menu_open = 0;
+        }
+        if (ui_ext_button("Open", 0, "")) {
+            g_click_count = g_click_count + 1;
+            printf("File > Open (count=%d)\n", g_click_count);
+            g_menu_open = 0;
+        }
+        if (ui_ext_button("Save", 0, "")) {
+            g_click_count = g_click_count + 1;
+            printf("File > Save (count=%d)\n", g_click_count);
+            g_menu_open = 0;
+        }
+        ui_ext_separator(4, 1);
+        if (ui_ext_button("Quit", 0, "")) {
+            printf("File > Quit\n");
+            g_menu_open = 0;
+        }
+        ui_ext_end_region();
+    }
+
+    // ── Edit dropdown ──
+    if (g_menu_open == 2) {
+        ui_ext_begin_region(50, mbh, 150);
+        if (ui_ext_button("Undo", 0, "")) {
+            printf("Edit > Undo\n");
+            g_menu_open = 0;
+        }
+        if (ui_ext_button("Redo", 0, "")) {
+            printf("Edit > Redo\n");
+            g_menu_open = 0;
+        }
+        ui_ext_separator(4, 1);
+        if (ui_ext_button("Cut", 0, "")) {
+            printf("Edit > Cut\n");
+            g_menu_open = 0;
+        }
+        if (ui_ext_button("Copy", 0, "")) {
+            printf("Edit > Copy\n");
+            g_menu_open = 0;
+        }
+        if (ui_ext_button("Paste", 0, "")) {
+            printf("Edit > Paste\n");
+            g_menu_open = 0;
+        }
+        ui_ext_end_region();
+    }
+
+    // Close menu on click outside menubar + dropdown area
+    if (ui_ext_input_released()) {
+        float dropdown_bottom = mbh + 200.0;
+        if (g_menu_open != 0) {
+            if (ui_ext_input_in_rect(0.0, 0.0, sw, dropdown_bottom) == 0) {
+                g_menu_open = 0;
+            }
+        }
+    }
+
+    return 0;
+}
