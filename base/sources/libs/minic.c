@@ -2510,16 +2510,32 @@ static void minic_register_funcs(minic_env_t *e) {
 
 		if (e->lex.cur.type != TOK_LPAREN) {
 			// Global variable declaration: type [*] ident [= expr] ;
+			// Also handles: type ident[count] ;
 			if (decl_struct[0] != '\0') {
 				minic_vartype_set(e, fname, decl_struct);
 			}
-			minic_val_t init = minic_val_coerce(0.0, ret_type);
-			if (e->lex.cur.type == TOK_ASSIGN) {
-				minic_lex_next(&e->lex); // Consume '='
-				e->decl_type = ret_type;
-				init         = minic_parse_expr(e);
+			if (e->lex.cur.type == TOK_LBRACKET) {
+				// Global array declaration: type ident[count] ;
+				minic_lex_next(&e->lex); // Consume '['
+				int count = 0;
+				if (e->lex.cur.type == TOK_NUMBER) {
+					count = (int)minic_val_to_d(e->lex.cur.val);
+					minic_lex_next(&e->lex);
+				}
+				if (e->lex.cur.type == TOK_RBRACKET) {
+					minic_lex_next(&e->lex);
+				}
+				minic_arr_decl(e, fname, count, false ? MINIC_T_PTR : ret_type);
 			}
-			minic_var_decl(e, fname, ret_type, init);
+			else {
+				minic_val_t init = minic_val_coerce(0.0, ret_type);
+				if (e->lex.cur.type == TOK_ASSIGN) {
+					minic_lex_next(&e->lex); // Consume '='
+					e->decl_type = ret_type;
+					init         = minic_parse_expr(e);
+				}
+				minic_var_decl(e, fname, ret_type, init);
+			}
 			while (e->lex.cur.type != TOK_SEMICOLON && e->lex.cur.type != TOK_EOF) {
 				minic_lex_next(&e->lex);
 			}

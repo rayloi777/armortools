@@ -7,6 +7,7 @@ struct game_world_t;
 
 #define MAX_QUERIES 64
 #define MAX_QUERY_COMPONENTS 16
+#define ITER_STACK_DEPTH 4
 
 typedef struct {
     uint64_t flecs_query;
@@ -25,6 +26,10 @@ typedef struct {
     void *cached_comp_data[MAX_QUERY_COMPONENTS];
     size_t cached_comp_sizes[MAX_QUERY_COMPONENTS];
     int cached_comp_count;
+
+    // Iterator save stack (for nested iteration)
+    void *iter_stack[ITER_STACK_DEPTH];
+    int iter_stack_top;
 } runtime_query_t;
 
 void query_api_register(void);
