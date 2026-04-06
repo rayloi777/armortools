@@ -98,6 +98,7 @@ float g_gem_sx[20];
 float g_gem_sy[20];
 int g_gem_scount = 0;
 
+
 // ==========================================================================
 // COMPONENT REGISTRATION
 // ==========================================================================
@@ -624,7 +625,7 @@ int step(void) {
     g_player_y = py;
     camera_follow(px, py);
 
-    // Move enemies + update flash
+    // Move enemies toward player
     query_iter_begin(g_enemy_query);
     while (query_iter_next(g_enemy_query)) {
         int n = query_iter_count(g_enemy_query);
