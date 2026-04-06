@@ -1,59 +1,141 @@
-// Vampire System
+// Vampire Survivors - Complete Game
+// WASD/Arrows = move | Auto-fires at nearest enemy | Survive!
 
+// ==========================================================================
+// CONSTANTS
+// ==========================================================================
 float WORLD_SIZE    = 4000.0;
 float PLAYER_SPEED  = 220.0;
 float PLAYER_RADIUS = 14.0;
+float PLAYER_MAX_HP = 100.0;
 float ENEMY_RADIUS  = 10.0;
 float ENEMY_SPEED   = 100.0;
-int   ENEMY_COUNT   = 10;
 float BULLET_SPEED  = 450.0;
 float BULLET_RADIUS = 4.0;
 float BULLET_LIFETIME = 2.5;
 float BULLET_HIT_SQ = 625.0;
 float FIRE_RATE     = 0.35;
 float SPAWN_DIST    = 500.0;
+float INVULN_TIME   = 0.8;
+float CONTACT_DIST_SQ = 576.0;
+float ENEMY_DMG     = 8.0;
+float GEM_ATTRACT   = 300.0;
+float GEM_PICKUP_SQ = 900.0;
+float GEM_RADIUS    = 5.0;
+int   MAX_GEMS      = 200;
+int   STATE_TITLE   = 0;
+int   STATE_PLAYING = 1;
+int   STATE_GAMEOVER = 2;
 
+// ==========================================================================
+// COMPONENT IDS & QUERIES
+// ==========================================================================
 id g_player_comp = 0;
 id g_enemy_comp  = 0;
 id g_bullet_comp = 0;
+id g_gem_comp    = 0;
 int g_enemy_query  = -1;
 int g_bullet_query = -1;
+int g_gem_query    = -1;
 
-int g_dead_enemies[20];
-int g_dead_enemy_count = 0;
-int g_dead_bullets[50];
-int g_dead_bullet_count = 0;
-
-float g_near_x = 0.0;
-float g_near_y = 0.0;
-int   g_near_found = 0;
-
-void register_components(void) {
-    g_player_comp = component_register("PlayerBody", 12);
-    component_add_field(g_player_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(g_player_comp, "y", TYPE_FLOAT, 4);
-    component_add_field(g_player_comp, "speed", TYPE_FLOAT, 8);
-    g_enemy_comp = component_register("EnemyBody", 12);
-    component_add_field(g_enemy_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(g_enemy_comp, "y", TYPE_FLOAT, 4);
-    component_add_field(g_enemy_comp, "speed", TYPE_FLOAT, 8);
-    g_bullet_comp = component_register("BulletBody", 20);
-    component_add_field(g_bullet_comp, "x", TYPE_FLOAT, 0);
-    component_add_field(g_bullet_comp, "y", TYPE_FLOAT, 4);
-    component_add_field(g_bullet_comp, "vx", TYPE_FLOAT, 8);
-    component_add_field(g_bullet_comp, "vy", TYPE_FLOAT, 12);
-    component_add_field(g_bullet_comp, "lifetime", TYPE_FLOAT, 16);
-    g_enemy_query  = query_create("EnemyBody");
-    g_bullet_query = query_create("BulletBody");
-}
-
+// ==========================================================================
+// GLOBAL STATE
+// ==========================================================================
 id g_player = 0;
 float g_dt = 0.016;
 float g_screen_w = 1280.0;
 float g_screen_h = 720.0;
 float g_ox = 0.0;
 float g_oy = 0.0;
+
+// Game state
+int g_state = 0;
+
+// Player stats
+float g_hp = 100.0;
+float g_max_hp = 100.0;
+float g_invuln = 0.0;
+float g_player_x = 0.0;
+float g_player_y = 0.0;
+
+// Scoring
+int g_kills = 0;
+float g_game_time = 0.0;
+
+// XP / Level
+int g_xp = 0;
+int g_xp_next = 10;
+int g_level = 1;
+int g_show_upgrades = 0;
+
+// Upgrade multipliers
+float g_speed_mult  = 1.0;
+float g_fire_mult   = 1.0;
+float g_bullet_dmg  = 1.0;
+float g_magnet_mult = 1.0;
+
+// Upgrade screen
+int g_upg_types[3];
+
+// Fire timer
 float g_fire_timer = 0.0;
+
+// Find nearest result
+float g_near_x = 0.0;
+float g_near_y = 0.0;
+int   g_near_found = 0;
+
+// Deferred entity destruction
+id g_dead_enemies[200];
+int g_dead_enemy_count = 0;
+id g_dead_bullets[200];
+int g_dead_bullet_count = 0;
+id g_dead_gems[200];
+int g_dead_gem_count = 0;
+
+// Gem spawn buffer (filled during nested queries, processed after)
+float g_gem_sx[20];
+float g_gem_sy[20];
+int g_gem_scount = 0;
+
+// ==========================================================================
+// COMPONENT REGISTRATION
+// ==========================================================================
+void register_components(void) {
+    g_player_comp = component_register("PlayerBody", 12);
+    component_add_field(g_player_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(g_player_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(g_player_comp, "speed", TYPE_FLOAT, 8);
+
+    g_enemy_comp = component_register("EnemyBody", 24);
+    component_add_field(g_enemy_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(g_enemy_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(g_enemy_comp, "speed", TYPE_FLOAT, 8);
+    component_add_field(g_enemy_comp, "hp", TYPE_FLOAT, 12);
+    component_add_field(g_enemy_comp, "max_hp", TYPE_FLOAT, 16);
+    component_add_field(g_enemy_comp, "flash", TYPE_FLOAT, 20);
+
+    g_bullet_comp = component_register("BulletBody", 20);
+    component_add_field(g_bullet_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(g_bullet_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(g_bullet_comp, "vx", TYPE_FLOAT, 8);
+    component_add_field(g_bullet_comp, "vy", TYPE_FLOAT, 12);
+    component_add_field(g_bullet_comp, "lifetime", TYPE_FLOAT, 16);
+
+    g_gem_comp = component_register("XPGem", 16);
+    component_add_field(g_gem_comp, "x", TYPE_FLOAT, 0);
+    component_add_field(g_gem_comp, "y", TYPE_FLOAT, 4);
+    component_add_field(g_gem_comp, "value", TYPE_FLOAT, 8);
+    component_add_field(g_gem_comp, "lifetime", TYPE_FLOAT, 12);
+
+    g_enemy_query  = query_create("EnemyBody");
+    g_bullet_query = query_create("BulletBody");
+    g_gem_query    = query_create("XPGem");
+}
+
+// ==========================================================================
+// ENTITY SPAWNING
+// ==========================================================================
 void player_spawn(void) {
     g_player = entity_create();
     entity_add(g_player, g_player_comp);
@@ -62,19 +144,34 @@ void player_spawn(void) {
     comp_set_float(g_player_comp, d, "y", WORLD_SIZE / 2.0);
     comp_set_float(g_player_comp, d, "speed", PLAYER_SPEED);
 }
+
 void spawn_enemy(float x, float y) {
     id e = entity_create();
     entity_add(e, g_enemy_comp);
     void *data = entity_get(e, g_enemy_comp);
     comp_set_float(g_enemy_comp, data, "x", x);
     comp_set_float(g_enemy_comp, data, "y", y);
-    comp_set_float(g_enemy_comp, data, "speed", ENEMY_SPEED);
+    float minutes = g_game_time / 60.0;
+    float spd = ENEMY_SPEED + 5.0 * minutes;
+    comp_set_float(g_enemy_comp, data, "speed", spd);
+    float hp = 3.0 + 2.0 * minutes;
+    comp_set_float(g_enemy_comp, data, "hp", hp);
+    comp_set_float(g_enemy_comp, data, "max_hp", hp);
+    comp_set_float(g_enemy_comp, data, "flash", 0.0);
 }
+
 void spawn_enemy_random(float px, float py) {
     float angle = rand_float() * 6.28318;
     float dist = SPAWN_DIST + rand_float() * 100.0;
-    spawn_enemy(px + cos(angle) * dist, py + sin(angle) * dist);
+    float sx = px + cos(angle) * dist;
+    float sy = py + sin(angle) * dist;
+    if (sx < 20.0) { sx = 20.0; }
+    if (sx > WORLD_SIZE - 20.0) { sx = WORLD_SIZE - 20.0; }
+    if (sy < 20.0) { sy = 20.0; }
+    if (sy > WORLD_SIZE - 20.0) { sy = WORLD_SIZE - 20.0; }
+    spawn_enemy(sx, sy);
 }
+
 void spawn_bullet(float x, float y, float vx, float vy) {
     id e = entity_create();
     entity_add(e, g_bullet_comp);
@@ -85,6 +182,20 @@ void spawn_bullet(float x, float y, float vx, float vy) {
     comp_set_float(g_bullet_comp, data, "vy", vy);
     comp_set_float(g_bullet_comp, data, "lifetime", BULLET_LIFETIME);
 }
+
+void spawn_gem(float x, float y) {
+    id e = entity_create();
+    entity_add(e, g_gem_comp);
+    void *data = entity_get(e, g_gem_comp);
+    comp_set_float(g_gem_comp, data, "x", x);
+    comp_set_float(g_gem_comp, data, "y", y);
+    comp_set_float(g_gem_comp, data, "value", 1.0);
+    comp_set_float(g_gem_comp, data, "lifetime", 30.0);
+}
+
+// ==========================================================================
+// HELPERS
+// ==========================================================================
 void find_nearest(float px, float py) {
     g_near_found = 0;
     float best_sq = 999999.0;
@@ -111,7 +222,30 @@ void find_nearest(float px, float py) {
         }
     }
 }
+
+int count_enemies(void) {
+    int count = 0;
+    query_iter_begin(g_enemy_query);
+    while (query_iter_next(g_enemy_query)) {
+        count = count + query_iter_count(g_enemy_query);
+    }
+    return count;
+}
+
+int count_gems(void) {
+    int count = 0;
+    query_iter_begin(g_gem_query);
+    while (query_iter_next(g_gem_query)) {
+        count = count + query_iter_count(g_gem_query);
+    }
+    return count;
+}
+
+// ==========================================================================
+// COLLISION: BULLETS vs ENEMIES
+// ==========================================================================
 void check_bullet_hits(void) {
+    g_gem_scount = 0;
     query_iter_begin(g_bullet_query);
     while (query_iter_next(g_bullet_query)) {
         int bn = query_iter_count(g_bullet_query);
@@ -136,11 +270,26 @@ void check_bullet_hits(void) {
                                 float dy = by - ey;
                                 float dsq = dx * dx + dy * dy;
                                 if (dsq < BULLET_HIT_SQ) {
-                                    entity_destroy(query_iter_entity_id(g_enemy_query, ei));
+                                    float ehp = comp_get_float(g_enemy_comp, edata, "hp");
+                                    ehp = ehp - g_bullet_dmg;
+                                    comp_set_float(g_enemy_comp, edata, "hp", ehp);
+                                    comp_set_float(g_enemy_comp, edata, "flash", 0.1);
                                     comp_set_float(g_bullet_comp, bdata, "lifetime", 0.0);
-                                    if (g_dead_bullet_count < 50) {
+                                    if (g_dead_bullet_count < 200) {
                                         g_dead_bullets[g_dead_bullet_count] = query_iter_entity_id(g_bullet_query, bi);
                                         g_dead_bullet_count++;
+                                    }
+                                    if (ehp <= 0.0) {
+                                        if (g_gem_scount < 20) {
+                                            g_gem_sx[g_gem_scount] = ex;
+                                            g_gem_sy[g_gem_scount] = ey;
+                                            g_gem_scount++;
+                                        }
+                                        if (g_dead_enemy_count < 200) {
+                                            g_dead_enemies[g_dead_enemy_count] = query_iter_entity_id(g_enemy_query, ei);
+                                            g_dead_enemy_count++;
+                                        }
+                                        g_kills++;
                                     }
                                     break;
                                 }
@@ -154,54 +303,315 @@ void check_bullet_hits(void) {
         }
     }
 }
-void destroy_dead_bullets(void) {
+
+// ==========================================================================
+// PROCESS BUFFERED GEM SPAWNS (called after nested queries)
+// ==========================================================================
+void process_gem_spawns(void) {
     int i = 0;
+    while (i < g_gem_scount) {
+        if (count_gems() < MAX_GEMS) {
+            spawn_gem(g_gem_sx[i], g_gem_sy[i]);
+        }
+        i++;
+    }
+    g_gem_scount = 0;
+}
+
+// ==========================================================================
+// DESTROY DEAD ENTITIES
+// ==========================================================================
+void destroy_dead(void) {
+    int i = 0;
+    while (i < g_dead_enemy_count) {
+        entity_destroy(g_dead_enemies[i]);
+        i++;
+    }
+    g_dead_enemy_count = 0;
+    i = 0;
     while (i < g_dead_bullet_count) {
         entity_destroy(g_dead_bullets[i]);
         i++;
     }
     g_dead_bullet_count = 0;
+    i = 0;
+    while (i < g_dead_gem_count) {
+        entity_destroy(g_dead_gems[i]);
+        i++;
+    }
+    g_dead_gem_count = 0;
 }
-int count_enemies(void) {
-    int count = 0;
+
+// ==========================================================================
+// ENEMY-PLAYER CONTACT DAMAGE
+// ==========================================================================
+void check_enemy_contact(void) {
+    if (g_invuln > 0.0) { return; }
     query_iter_begin(g_enemy_query);
     while (query_iter_next(g_enemy_query)) {
-        count = count + query_iter_count(g_enemy_query);
+        int n = query_iter_count(g_enemy_query);
+        int i = 0;
+        while (i < n) {
+            void *data = query_iter_comp_ptr(g_enemy_query, i, 0);
+            if (data) {
+                float ex = comp_get_float(g_enemy_comp, data, "x");
+                float ey = comp_get_float(g_enemy_comp, data, "y");
+                float dx = g_player_x - ex;
+                float dy = g_player_y - ey;
+                if (dx * dx + dy * dy < CONTACT_DIST_SQ) {
+                    g_hp = g_hp - ENEMY_DMG;
+                    g_invuln = INVULN_TIME;
+                    if (g_hp <= 0.0) {
+                        g_hp = 0.0;
+                        g_state = STATE_GAMEOVER;
+                        g_show_upgrades = 0;
+                        printf("GAME OVER! kills=%d level=%d time=%.1f\n", g_kills, g_level, g_game_time);
+                    }
+                    return;
+                }
+            }
+            i++;
+        }
     }
-    return count;
 }
-int init(void) {
-    printf("VampireTest: Init\n");
-    register_components();
+
+// ==========================================================================
+// GEM UPDATE: attraction + pickup
+// ==========================================================================
+void update_gems(void) {
+    float px = g_player_x;
+    float py = g_player_y;
+    float attract = GEM_ATTRACT * g_magnet_mult;
+    query_iter_begin(g_gem_query);
+    while (query_iter_next(g_gem_query)) {
+        int n = query_iter_count(g_gem_query);
+        int i = 0;
+        while (i < n) {
+            void *data = query_iter_comp_ptr(g_gem_query, i, 0);
+            if (data) {
+                float gx = comp_get_float(g_gem_comp, data, "x");
+                float gy = comp_get_float(g_gem_comp, data, "y");
+                float lt = comp_get_float(g_gem_comp, data, "lifetime");
+                lt = lt - g_dt;
+                comp_set_float(g_gem_comp, data, "lifetime", lt);
+                if (lt <= 0.0) {
+                    if (g_dead_gem_count < 200) {
+                        g_dead_gems[g_dead_gem_count] = query_iter_entity_id(g_gem_query, i);
+                        g_dead_gem_count++;
+                    }
+                    i++;
+                    continue;
+                }
+                float dx = px - gx;
+                float dy = py - gy;
+                float dist = sqrt(dx * dx + dy * dy);
+                if (dist < attract && dist > 1.0) {
+                    float spd = 400.0 + (attract - dist) * 2.0;
+                    gx = gx + (dx / dist) * spd * g_dt;
+                    gy = gy + (dy / dist) * spd * g_dt;
+                    comp_set_float(g_gem_comp, data, "x", gx);
+                    comp_set_float(g_gem_comp, data, "y", gy);
+                }
+                dx = px - gx;
+                dy = py - gy;
+                if (dx * dx + dy * dy < GEM_PICKUP_SQ) {
+                    g_xp++;
+                    if (g_dead_gem_count < 200) {
+                        g_dead_gems[g_dead_gem_count] = query_iter_entity_id(g_gem_query, i);
+                        g_dead_gem_count++;
+                    }
+                    if (g_xp >= g_xp_next) {
+                        g_level++;
+                        g_xp = 0;
+                        g_xp_next = 8 + g_level * 4;
+                        g_show_upgrades = 1;
+                    }
+                }
+            }
+            i++;
+        }
+    }
+}
+
+// ==========================================================================
+// UPGRADE SYSTEM
+// ==========================================================================
+void generate_upgrades(void) {
+    int i = 0;
+    while (i < 3) {
+        g_upg_types[i] = (int)(rand_float() * 4.0);
+        if (g_upg_types[i] >= 4) { g_upg_types[i] = 3; }
+        i++;
+    }
+}
+
+void apply_upgrade(int idx) {
+    int t = g_upg_types[idx];
+    if (t == 0) {
+        g_max_hp = g_max_hp + 20.0;
+        g_hp = g_max_hp;
+    }
+    if (t == 1) { g_speed_mult = g_speed_mult + 0.15; }
+    if (t == 2) { g_fire_mult = g_fire_mult * 0.85; }
+    if (t == 3) { g_bullet_dmg = g_bullet_dmg + 0.5; }
+    g_show_upgrades = 0;
+}
+
+// ==========================================================================
+// GAME INIT / RESET
+// ==========================================================================
+void init_gameplay(void) {
     player_spawn();
     int i = 0;
-    while (i < ENEMY_COUNT) {
+    while (i < 10) {
         float angle = rand_float() * 6.28318;
         float dist = 100.0 + rand_float() * 300.0;
         spawn_enemy(WORLD_SIZE / 2.0 + cos(angle) * dist, WORLD_SIZE / 2.0 + sin(angle) * dist);
         i++;
     }
+    g_hp = PLAYER_MAX_HP;
+    g_max_hp = PLAYER_MAX_HP;
+    g_invuln = 0.0;
+    g_kills = 0;
+    g_game_time = 0.0;
+    g_xp = 0;
+    g_xp_next = 10;
+    g_level = 1;
+    g_fire_timer = 0.0;
+    g_speed_mult = 1.0;
+    g_fire_mult = 1.0;
+    g_bullet_dmg = 1.0;
+    g_magnet_mult = 1.0;
+    g_show_upgrades = 0;
+    g_dead_enemy_count = 0;
+    g_dead_bullet_count = 0;
+    g_dead_gem_count = 0;
+    g_state = STATE_PLAYING;
     camera_set_position(WORLD_SIZE / 2.0, WORLD_SIZE / 2.0);
     camera_set_zoom(1.0);
-    printf("VampireTest: Ready enemies=%d\n", count_enemies());
+}
+
+void clear_all_entities(void) {
+    int i;
+    query_iter_begin(g_enemy_query);
+    while (query_iter_next(g_enemy_query)) {
+        int n = query_iter_count(g_enemy_query);
+        i = 0;
+        while (i < n) {
+            if (g_dead_enemy_count < 200) {
+                g_dead_enemies[g_dead_enemy_count] = query_iter_entity_id(g_enemy_query, i);
+                g_dead_enemy_count++;
+            }
+            i++;
+        }
+    }
+    query_iter_begin(g_bullet_query);
+    while (query_iter_next(g_bullet_query)) {
+        int n = query_iter_count(g_bullet_query);
+        i = 0;
+        while (i < n) {
+            if (g_dead_bullet_count < 200) {
+                g_dead_bullets[g_dead_bullet_count] = query_iter_entity_id(g_bullet_query, i);
+                g_dead_bullet_count++;
+            }
+            i++;
+        }
+    }
+    query_iter_begin(g_gem_query);
+    while (query_iter_next(g_gem_query)) {
+        int n = query_iter_count(g_gem_query);
+        i = 0;
+        while (i < n) {
+            if (g_dead_gem_count < 200) {
+                g_dead_gems[g_dead_gem_count] = query_iter_entity_id(g_gem_query, i);
+                g_dead_gem_count++;
+            }
+            i++;
+        }
+    }
+    destroy_dead();
+    if (g_player) { entity_destroy(g_player); g_player = 0; }
+}
+
+void reset_game(void) {
+    clear_all_entities();
+    init_gameplay();
+}
+
+// ==========================================================================
+// INIT
+// ==========================================================================
+int init(void) {
+    printf("VampireSurvivor: Init\n");
+    register_components();
+    g_state = STATE_TITLE;
+    camera_set_position(WORLD_SIZE / 2.0, WORLD_SIZE / 2.0);
+    camera_set_zoom(1.0);
     return 0;
 }
+
+// ==========================================================================
+// STEP
+// ==========================================================================
 int step(void) {
     g_dt = sys_delta_time();
     if (g_dt <= 0.0) { g_dt = 0.016; }
     if (g_dt > 0.05) { g_dt = 0.05; }
+    g_screen_w = sys_width();
+    g_screen_h = sys_height();
+
+    // ---- TITLE ----
+    if (g_state == STATE_TITLE) {
+        if (keyboard_started("space") || keyboard_started("enter")) {
+            init_gameplay();
+        }
+        return 0;
+    }
+
+    // ---- GAME OVER ----
+    if (g_state == STATE_GAMEOVER) {
+        if (keyboard_started("space") || keyboard_started("enter")) {
+            reset_game();
+        }
+        return 0;
+    }
+
+    // ---- UPGRADE PAUSE ----
+    if (g_show_upgrades) {
+        if (keyboard_started("1")) { apply_upgrade(0); }
+        if (keyboard_started("2")) { apply_upgrade(1); }
+        if (keyboard_started("3")) { apply_upgrade(2); }
+        return 0;
+    }
+
+    // ==== PLAYING ====
+    // Debug: press K to die instantly
+    if (keyboard_started("k")) {
+        g_hp = 0.0;
+        g_state = STATE_GAMEOVER;
+        g_show_upgrades = 0;
+        printf("DEBUG: Instant death\n");
+        return 0;
+    }
+    g_game_time = g_game_time + g_dt;
+    if (g_invuln > 0.0) { g_invuln = g_invuln - g_dt; }
+
+    // Player movement
     float dx = 0.0;
     float dy = 0.0;
     if (keyboard_down("left")  || keyboard_down("a")) { dx = dx - 1.0; }
     if (keyboard_down("right") || keyboard_down("d")) { dx = dx + 1.0; }
     if (keyboard_down("up")    || keyboard_down("w")) { dy = dy - 1.0; }
     if (keyboard_down("down")  || keyboard_down("s")) { dy = dy + 1.0; }
+    float glx = gamepad_stick_left_x(0);
+    float gly = gamepad_stick_left_y(0);
+    if (glx * glx + gly * gly > 0.01) { dx = glx; dy = gly; }
     float len = sqrt(dx * dx + dy * dy);
     if (len > 0.0) { dx = dx / len; dy = dy / len; }
     void *d = entity_get(g_player, g_player_comp);
     float px = comp_get_float(g_player_comp, d, "x");
     float py = comp_get_float(g_player_comp, d, "y");
-    float spd = comp_get_float(g_player_comp, d, "speed");
+    float spd = comp_get_float(g_player_comp, d, "speed") * g_speed_mult;
     px = px + dx * spd * g_dt;
     py = py + dy * spd * g_dt;
     if (px < 20.0) { px = 20.0; }
@@ -210,8 +620,11 @@ int step(void) {
     if (py > WORLD_SIZE - 20.0) { py = WORLD_SIZE - 20.0; }
     comp_set_float(g_player_comp, d, "x", px);
     comp_set_float(g_player_comp, d, "y", py);
+    g_player_x = px;
+    g_player_y = py;
     camera_follow(px, py);
-    // Chase enemies toward player
+
+    // Move enemies + update flash
     query_iter_begin(g_enemy_query);
     while (query_iter_next(g_enemy_query)) {
         int n = query_iter_count(g_enemy_query);
@@ -235,14 +648,23 @@ int step(void) {
                 if (ey > WORLD_SIZE - 10.0) { ey = WORLD_SIZE - 10.0; }
                 comp_set_float(g_enemy_comp, data, "x", ex);
                 comp_set_float(g_enemy_comp, data, "y", ey);
+                float ft = comp_get_float(g_enemy_comp, data, "flash");
+                if (ft > 0.0) {
+                    ft = ft - g_dt;
+                    if (ft < 0.0) { ft = 0.0; }
+                    comp_set_float(g_enemy_comp, data, "flash", ft);
+                }
             }
             i++;
         }
     }
+
     // Reset dead lists
- g_dead_enemy_count = 0;
+    g_dead_enemy_count = 0;
     g_dead_bullet_count = 0;
-    // Auto-fire at nearest enemy
+    g_dead_gem_count = 0;
+
+    // Auto-fire
     g_fire_timer = g_fire_timer - g_dt;
     if (g_fire_timer <= 0.0) {
         find_nearest(px, py);
@@ -252,12 +674,13 @@ int step(void) {
             float tdist = sqrt(tdx * tdx + tdy * tdy);
             if (tdist > 1.0) {
                 spawn_bullet(px, py, (tdx / tdist) * BULLET_SPEED, (tdy / tdist) * BULLET_SPEED);
-                g_fire_timer = FIRE_RATE;
+                g_fire_timer = FIRE_RATE * g_fire_mult;
             }
         }
     }
+
     // Move bullets
- query_iter_begin(g_bullet_query);
+    query_iter_begin(g_bullet_query);
     while (query_iter_next(g_bullet_query)) {
         int n = query_iter_count(g_bullet_query);
         int i = 0;
@@ -276,7 +699,7 @@ int step(void) {
                 comp_set_float(g_bullet_comp, data, "y", by);
                 comp_set_float(g_bullet_comp, data, "lifetime", blt);
                 if (blt <= 0.0 || bx < -100.0 || bx > WORLD_SIZE + 100.0 || by < -100.0 || by > WORLD_SIZE + 100.0) {
-                    if (g_dead_bullet_count < 50) {
+                    if (g_dead_bullet_count < 200) {
                         g_dead_bullets[g_dead_bullet_count] = query_iter_entity_id(g_bullet_query, i);
                         g_dead_bullet_count++;
                     }
@@ -285,25 +708,47 @@ int step(void) {
             i++;
         }
     }
-    // Collision
- check_bullet_hits();
-    // Destroy dead bullets
- destroy_dead_bullets();
+
+    // Bullet-enemy collision
+    check_bullet_hits();
+    // Process gem spawns (safe: no active queries)
+    process_gem_spawns();
+    // Destroy all dead entities
+    destroy_dead();
+    // Enemy contact damage
+    check_enemy_contact();
+    // Update gems (attraction + pickup)
+    update_gems();
+    // Destroy collected/expired gems
+    destroy_dead();
+
     // Respawn enemies to maintain count
+    float target = 10.0 + g_game_time * 0.1;
+    if (target > 80.0) { target = 80.0; }
     int alive = count_enemies();
-    while (alive < ENEMY_COUNT) { spawn_enemy_random(px, py); alive++; }
+    while (alive < (int)target) {
+        spawn_enemy_random(px, py);
+        alive++;
+    }
+
     return 0;
 }
+
+// ==========================================================================
+// DRAW HELPERS
+// ==========================================================================
 void update_screen_offset(void) {
     float cam_x = camera_get_x();
     float cam_y = camera_get_y();
-    g_screen_w = sys_width();
-    g_screen_h = sys_height();
     g_ox = -cam_x + g_screen_w / 2.0;
     g_oy = -cam_y + g_screen_h / 2.0;
 }
 float wx(float world_x) { return world_x + g_ox; }
 float wy(float world_y) { return world_y + g_oy; }
+
+// ==========================================================================
+// WORLD-SPACE DRAWING
+// ==========================================================================
 void draw_background(void) {
     draw_set_color(0xff1a2e1a);
     float grid = 100.0;
@@ -318,8 +763,26 @@ void draw_background(void) {
     draw_set_color(0xff662222);
     draw_rect(wx(0.0), wy(0.0), WORLD_SIZE, WORLD_SIZE, 3.0);
 }
+
+void draw_gems_world(void) {
+    draw_set_color(0xff44ffff);
+    query_iter_begin(g_gem_query);
+    while (query_iter_next(g_gem_query)) {
+        int n = query_iter_count(g_gem_query);
+        int i = 0;
+        while (i < n) {
+            void *data = query_iter_comp_ptr(g_gem_query, i, 0);
+            if (data) {
+                float gx = comp_get_float(g_gem_comp, data, "x");
+                float gy = comp_get_float(g_gem_comp, data, "y");
+                draw_filled_circle(wx(gx), wy(gy), GEM_RADIUS, 6);
+            }
+            i++;
+        }
+    }
+}
+
 void draw_enemies(void) {
-    draw_set_color(0xff44bb44);
     query_iter_begin(g_enemy_query);
     while (query_iter_next(g_enemy_query)) {
         int n = query_iter_count(g_enemy_query);
@@ -329,12 +792,39 @@ void draw_enemies(void) {
             if (data) {
                 float ex = comp_get_float(g_enemy_comp, data, "x");
                 float ey = comp_get_float(g_enemy_comp, data, "y");
+                float ft = comp_get_float(g_enemy_comp, data, "flash");
+                if (ft > 0.0) {
+                    draw_set_color(0xffffffff);
+                } else {
+                    draw_set_color(0xff44bb44);
+                }
                 draw_filled_circle(wx(ex), wy(ey), ENEMY_RADIUS, 10);
+                float ehp = comp_get_float(g_enemy_comp, data, "hp");
+                float emhp = comp_get_float(g_enemy_comp, data, "max_hp");
+                if (ehp < emhp) {
+                    float bar_w = 20.0;
+                    float bar_h = 3.0;
+                    float bar_x = wx(ex) - bar_w / 2.0;
+                    float bar_y = wy(ey) - ENEMY_RADIUS - 8.0;
+                    draw_set_color(0xff333333);
+                    draw_filled_rect(bar_x, bar_y, bar_w, bar_h);
+                    float pct = ehp / emhp;
+                    if (pct < 0.0) { pct = 0.0; }
+                    if (pct > 0.5) {
+                        draw_set_color(0xff44ff44);
+                    } else if (pct > 0.25) {
+                        draw_set_color(0xffffff44);
+                    } else {
+                        draw_set_color(0xff4444ff);
+                    }
+                    draw_filled_rect(bar_x, bar_y, bar_w * pct, bar_h);
+                }
             }
             i++;
         }
     }
 }
+
 void draw_bullets(void) {
     draw_set_color(0xffffee44);
     query_iter_begin(g_bullet_query);
@@ -352,19 +842,204 @@ void draw_bullets(void) {
         }
     }
 }
+
 void draw_player(void) {
+    if (g_invuln > 0.0) {
+        int blink = (int)(g_invuln * 10.0) % 2;
+        if (blink == 0) { return; }
+    }
     void *d = entity_get(g_player, g_player_comp);
     float px = comp_get_float(g_player_comp, d, "x");
     float py = comp_get_float(g_player_comp, d, "y");
     draw_set_color(0xff4488ff);
     draw_filled_circle(wx(px), wy(py), PLAYER_RADIUS, 14);
+    // Direction indicator toward nearest enemy
+    find_nearest(px, py);
+    if (g_near_found) {
+        float tdx = g_near_x - px;
+        float tdy = g_near_y - py;
+        float tdist = sqrt(tdx * tdx + tdy * tdy);
+        if (tdist > 1.0) {
+            draw_set_color(0xffffffff);
+            float nx = tdx / tdist;
+            float ny = tdy / tdist;
+            draw_filled_circle(wx(px) + nx * (PLAYER_RADIUS + 5.0), wy(py) + ny * (PLAYER_RADIUS + 5.0), 3.0, 6);
+        }
+    }
 }
+
 int draw(void) {
     update_screen_offset();
     draw_background();
-    draw_enemies();
-    draw_bullets();
-    draw_player();
-    draw_fps(10.0, 10.0);
+    if (g_state == STATE_PLAYING || g_state == STATE_GAMEOVER) {
+        draw_gems_world();
+        draw_enemies();
+        draw_bullets();
+        draw_player();
+    }
+    return 0;
+}
+
+// ==========================================================================
+// UI DRAWING (screen-space)
+// ==========================================================================
+void draw_bar(float x, float y, float w, float h, float pct, int fg, int bg) {
+    draw_set_color(bg);
+    draw_filled_rect(x, y, w, h);
+    if (pct < 0.0) { pct = 0.0; }
+    if (pct > 1.0) { pct = 1.0; }
+    draw_set_color(fg);
+    draw_filled_rect(x, y, w * pct, h);
+}
+
+int draw_ui(void) {
+    // ---- TITLE SCREEN ----
+    if (g_state == STATE_TITLE) {
+        float sw = sys_width();
+        float sh = sys_height();
+        draw_set_color(0xcc1a1a2e);
+        draw_filled_rect(0.0, 0.0, sw, sh);
+        draw_set_font("font.ttf", 32);
+        draw_set_color(0xff4488ff);
+        draw_string("VAMPIRE SURVIVOR", sw / 2.0 - 180.0, sh / 2.0 - 60.0);
+        draw_set_font("font.ttf", 16);
+        draw_set_color(0xffffffff);
+        draw_string("Press SPACE to start", sw / 2.0 - 100.0, sh / 2.0 + 10.0);
+        draw_set_color(0xff888888);
+        draw_string("WASD/Arrows = Move | Auto-fire | Survive!", sw / 2.0 - 170.0, sh / 2.0 + 40.0);
+        return 0;
+    }
+
+    // ---- UPGRADE SELECTION ----
+    if (g_show_upgrades) {
+        float sw = sys_width();
+        float sh = sys_height();
+        draw_set_color(0x881a1a2e);
+        draw_filled_rect(0.0, 0.0, sw, sh);
+        draw_set_font("font.ttf", 24);
+        draw_set_color(0xff44aaff);
+        draw_string("LEVEL UP!", sw / 2.0 - 70.0, sh / 2.0 - 90.0);
+        draw_set_font("font.ttf", 16);
+        int i = 0;
+        while (i < 3) {
+            float y = sh / 2.0 - 40.0 + (float)i * 45.0;
+            draw_set_color(0xcc333344);
+            draw_filled_rect(sw / 2.0 - 150.0, y - 4.0, 300.0, 36.0);
+            draw_set_color(0xffffffff);
+            if (i == 0) { draw_string("[1] ", sw / 2.0 - 140.0, y); }
+            if (i == 1) { draw_string("[2] ", sw / 2.0 - 140.0, y); }
+            if (i == 2) { draw_string("[3] ", sw / 2.0 - 140.0, y); }
+            int t = g_upg_types[i];
+            if (t == 0) { draw_string("+20 Max HP & Full Heal", sw / 2.0 - 90.0, y); }
+            if (t == 1) { draw_string("+15% Move Speed", sw / 2.0 - 90.0, y); }
+            if (t == 2) { draw_string("+15% Fire Rate", sw / 2.0 - 90.0, y); }
+            if (t == 3) { draw_string("+0.5 Bullet Damage", sw / 2.0 - 90.0, y); }
+            i++;
+        }
+        return 0;
+    }
+
+    // ---- HUD (playing or game over) ----
+    if (g_state == STATE_PLAYING || g_state == STATE_GAMEOVER) {
+        float m = 10.0;
+        float bar_w = 180.0;
+        float bar_h = 14.0;
+        float y = g_screen_h - m - bar_h;
+
+        // HP bar
+        draw_set_font("font.ttf", 12);
+        draw_set_color(0xffffffff);
+        draw_string("HP", m, y);
+        float hp_pct = g_hp / g_max_hp;
+        if (hp_pct > 0.5) {
+            draw_bar(m + 25.0, y, bar_w, bar_h, hp_pct, 0xff44ff44, 0xff333333);
+        } else if (hp_pct > 0.25) {
+            draw_bar(m + 25.0, y, bar_w, bar_h, hp_pct, 0xffffff44, 0xff333333);
+        } else {
+            draw_bar(m + 25.0, y, bar_w, bar_h, hp_pct, 0xff4444ff, 0xff333333);
+        }
+        draw_set_color(0xffffffff);
+        draw_string(str_float1(g_hp), m + 25.0 + bar_w + 4.0, y);
+
+        // XP bar
+        y = y - bar_h - 6.0;
+        draw_set_color(0xffffffff);
+        draw_string("XP", m, y);
+        float xp_pct = (float)g_xp / (float)g_xp_next;
+        draw_bar(m + 25.0, y, bar_w, bar_h, xp_pct, 0xff44aaff, 0xff333333);
+
+        // Level
+        y = y - bar_h - 4.0;
+        draw_set_color(0xff44aaff);
+        draw_string("Lv.", m, y);
+        draw_set_color(0xffffffff);
+        draw_string(str_int(g_level), m + 30.0, y);
+
+        // Stats (top-left)
+        float sy = 10.0;
+        draw_set_color(0xffffffff);
+        draw_string("Kills: ", m, sy);
+        draw_string(str_int(g_kills), m + 50.0, sy);
+        sy = sy + 16.0;
+        int total_secs = (int)g_game_time;
+        int mins = total_secs / 60;
+        int secs = total_secs % 60;
+        draw_string("Time: ", m, sy);
+        draw_string(str_int(mins), m + 45.0, sy);
+        draw_string(":", m + 45.0 + (float)(mins >= 10 ? 14 : 7), sy);
+        if (secs < 10) {
+            draw_string("0", m + 60.0, sy);
+            draw_string(str_int(secs), m + 67.0, sy);
+        } else {
+            draw_string(str_int(secs), m + 60.0, sy);
+        }
+
+        // FPS
+        draw_fps(g_screen_w - 80.0, 10.0);
+    }
+
+    // ---- GAME OVER OVERLAY ----
+    if (g_state == STATE_GAMEOVER) {
+        float sw = sys_width();
+        float sh = sys_height();
+        // Fully opaque dark overlay
+        draw_set_color(0xff0a0a1e);
+        draw_filled_rect(0.0, 0.0, sw, sh);
+        // Center panel background
+        float pw = 360.0;
+        float ph = 260.0;
+        float px = sw / 2.0 - pw / 2.0;
+        float py = sh / 2.0 - ph / 2.0;
+        draw_set_color(0xff1a1a3e);
+        draw_filled_rect(px, py, pw, ph);
+        draw_set_color(0xff4444ff);
+        draw_filled_rect(px, py, pw, 2.0);
+        draw_set_font("font.ttf", 28);
+        draw_set_color(0xffff4444);
+        draw_string("GAME OVER", sw / 2.0 - 100.0, sh / 2.0 - 100.0);
+        draw_set_font("font.ttf", 16);
+        draw_set_color(0xffffffff);
+        draw_string("Kills: ", sw / 2.0 - 80.0, sh / 2.0 - 40.0);
+        draw_string(str_int(g_kills), sw / 2.0 + 10.0, sh / 2.0 - 40.0);
+        draw_string("Level: ", sw / 2.0 - 80.0, sh / 2.0 - 15.0);
+        draw_string(str_int(g_level), sw / 2.0 + 10.0, sh / 2.0 - 15.0);
+        int total_secs = (int)g_game_time;
+        int mins = total_secs / 60;
+        int secs = total_secs % 60;
+        draw_string("Time: ", sw / 2.0 - 80.0, sh / 2.0 + 10.0);
+        if (secs < 10) {
+            draw_string(str_int(mins), sw / 2.0 + 10.0, sh / 2.0 + 10.0);
+            draw_string(":0", sw / 2.0 + 25.0, sh / 2.0 + 10.0);
+            draw_string(str_int(secs), sw / 2.0 + 40.0, sh / 2.0 + 10.0);
+        } else {
+            draw_string(str_int(mins), sw / 2.0 + 10.0, sh / 2.0 + 10.0);
+            draw_string(":", sw / 2.0 + 25.0, sh / 2.0 + 10.0);
+            draw_string(str_int(secs), sw / 2.0 + 32.0, sh / 2.0 + 10.0);
+        }
+        draw_set_color(0xffffaa44);
+        draw_set_font("font.ttf", 18);
+        draw_string("Press SPACE to restart", sw / 2.0 - 120.0, sh / 2.0 + 70.0);
+    }
+
     return 0;
 }

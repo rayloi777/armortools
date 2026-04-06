@@ -3,7 +3,7 @@
 # Format: SystemName [path/to/script.minic]
 #   If path omitted, defaults to data/systems/<name>.minic
 
-keyboard_test
+# keyboard_test
 # frog_system
 # perf_overlay
 vampire_system
