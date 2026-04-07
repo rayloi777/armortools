@@ -22,6 +22,22 @@ void camera_bridge_3d_init(void) {
         return;
     }
 
+    // Initialize minimal Iron scene infrastructure if not already done.
+    // We can't call scene_create() with an empty scene because it tries to
+    // load scene files and access scene_cameras->buffer[0] on an empty array.
+    if (!_scene_root) {
+        scene_meshes = any_array_create(0);
+        gc_root(scene_meshes);
+        scene_cameras = any_array_create(0);
+        gc_root(scene_cameras);
+        scene_empties = any_array_create(0);
+        gc_root(scene_empties);
+        scene_embedded = any_map_create();
+        gc_root(scene_embedded);
+        _scene_root = object_create(true);
+        _scene_root->name = "Root";
+    }
+
     // Create camera data with defaults
     g_camera_3d_data = GC_ALLOC_INIT(camera_data_t, {
         .name = "Camera3D",
@@ -38,14 +54,11 @@ void camera_bridge_3d_init(void) {
         return;
     }
 
-    // Ensure scene root exists
-    if (!_scene_root) {
-        scene_t *empty_scene = GC_ALLOC_INIT(scene_t, {0});
-        scene_create(empty_scene);
-    }
-
     // Parent camera to scene root
     object_set_parent(g_camera_3d->base, _scene_root);
+
+    // Set as active scene camera so Iron's rendering uses it
+    scene_camera = g_camera_3d;
 
     // Build initial projection
     f32 aspect = (f32)iron_window_width() / (f32)iron_window_height();

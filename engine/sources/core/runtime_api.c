@@ -4,6 +4,8 @@
 #include "system_api.h"
 #include "query_api.h"
 #include "ui_ext_api.h"
+#include "scene_api.h"
+#include "scene_3d_api.h"
 #include "game_loop.h"
 #include "ecs/ecs_world.h"
 #include "ecs/flecs/flecs.h"
@@ -1390,6 +1392,12 @@ void runtime_api_register(void) {
 
     // Iron UI widget API
     ui_ext_api_register();
+
+    // Scene/3D asset loading API
+    scene_api_register();
+
+    // 3D scene API (camera, mesh, entity transforms)
+    scene_3d_api_register();
 
     printf("Runtime APIs registered\n");
 }

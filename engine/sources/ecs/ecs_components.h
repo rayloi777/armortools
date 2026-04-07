@@ -60,6 +60,13 @@ typedef struct {
     bool  dirty;
 } RenderObject3D;
 
+typedef struct {
+    float dir_x, dir_y, dir_z;
+    float color_r, color_g, color_b;
+    float strength;
+    bool  enabled;
+} comp_directional_light;
+
 void ecs_register_components(void *world);
 void ecs_register_builtin_fields(void);
 
@@ -82,3 +89,4 @@ uint64_t ecs_component_comp_3d_scale(void);
 uint64_t ecs_component_comp_3d_camera(void);
 uint64_t ecs_component_comp_3d_mesh_renderer(void);
 uint64_t ecs_component_RenderObject3D(void);
+uint64_t ecs_component_comp_directional_light(void);

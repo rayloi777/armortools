@@ -126,7 +126,7 @@ uint64_t asset_loader_load_scene(const char *path) {
 }
 
 int asset_loader_load_mesh(uint64_t entity, const char *mesh_path, const char *material_path) {
-    if (!g_asset_loader_world || !entity || !mesh_path) return -1;
+    if (!g_asset_loader_world || !entity || !mesh_path || mesh_path[0] == '\0') return -1;
 
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_asset_loader_world);
     if (!ecs) return -1;
@@ -134,10 +134,18 @@ int asset_loader_load_mesh(uint64_t entity, const char *mesh_path, const char *m
     ecs_entity_t e = (ecs_entity_t)entity;
     if (!ecs_is_alive(ecs, e)) return -1;
 
-    // Ensure scene root exists
+    // Ensure scene root exists (manual init, not via scene_create which needs valid file)
     if (!_scene_root) {
-        scene_t *empty = GC_ALLOC_INIT(scene_t, {0});
-        scene_create(empty);
+        scene_meshes = any_array_create(0);
+        gc_root(scene_meshes);
+        scene_cameras = any_array_create(0);
+        gc_root(scene_cameras);
+        scene_empties = any_array_create(0);
+        gc_root(scene_empties);
+        scene_embedded = any_map_create();
+        gc_root(scene_embedded);
+        _scene_root = object_create(true);
+        _scene_root->name = "Root";
     }
 
     mesh_data_t *mesh_data = data_get_mesh(mesh_path, mesh_path);

@@ -15,6 +15,9 @@
 #include "ecs/render2d_bridge.h"
 #include "ecs/camera_bridge_3d.h"
 #include "ecs/mesh_bridge_3d.h"
+#include "ecs/render3d_bridge.h"
+#include "core/asset_loader.h"
+#include "core/scene_api.h"
 #include <iron_input.h>
 #include <iron.h>
 #include <stdio.h>
@@ -133,6 +136,12 @@ void game_engine_init(void) {
     mesh_bridge_3d_set_world(g_world);
     mesh_bridge_3d_init();
 
+    sys_3d_set_world(g_world);
+    sys_3d_init();
+
+    asset_loader_set_world(g_world);
+    scene_api_set_world(g_world);
+
     sys_2d_set_world(g_world);
     sys_2d_init();
 
@@ -164,6 +173,7 @@ void game_engine_shutdown(void) {
     printf("Game Engine Shutting Down...\n");
 
     sys_2d_shutdown();
+    sys_3d_shutdown();
     ui_ext_api_shutdown();
     sprite_bridge_shutdown();
     sprite_texture_cache_shutdown();

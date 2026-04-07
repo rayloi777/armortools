@@ -32,6 +32,10 @@
 // 3D Systems
 #include "ecs/camera_bridge_3d.c"
 #include "ecs/mesh_bridge_3d.c"
+#include "ecs/render3d_bridge.c"
+#include "core/asset_loader.c"
+#include "core/scene_api.c"
+#include "core/scene_3d_api.c"
 
 // UI Extension
 #include "core/ui_ext_api.c"

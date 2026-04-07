@@ -4,6 +4,7 @@
 #include "ecs/render2d_bridge.h"
 #include "ecs/camera_bridge_3d.h"
 #include "ecs/mesh_bridge_3d.h"
+#include "ecs/render3d_bridge.h"
 #include "minic_system.h"
 #include "ui_ext_api.h"
 #include <iron.h>
@@ -39,7 +40,11 @@ void game_loop_update(void) {
     minic_system_call_step();
 
     sys_render();
-    draw_begin(NULL, true, 0xff1a1a2e);
+
+    // If 3D was rendered, don't clear framebuffer — 2D draws on top of 3D
+    bool has_3d = sys_3d_was_rendered();
+    draw_begin(NULL, !has_3d, has_3d ? 0 : 0xff1a1a2e);
+
     camera_bridge_3d_update();
     mesh_bridge_3d_sync_transforms();
     camera2d_update(camera_bridge_get_camera(), g_delta_time);
@@ -53,6 +58,7 @@ void game_loop_update(void) {
     ui_ext_api_begin();
     minic_system_call_draw_ui_ext();
     ui_ext_api_end();
+    sys_3d_reset_frame();
 }
 
 float game_loop_get_delta_time(void) {
