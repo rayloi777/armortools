@@ -148,15 +148,71 @@ int asset_loader_load_mesh(uint64_t entity, const char *mesh_path, const char *m
         _scene_root->name = "Root";
     }
 
-    mesh_data_t *mesh_data = data_get_mesh(mesh_path, mesh_path);
+    mesh_data_t *mesh_data = data_get_mesh(mesh_path, "");
     if (!mesh_data) {
         fprintf(stderr, "Asset Loader: failed to load mesh '%s'\n", mesh_path);
         return -1;
     }
 
     material_data_t *mat_data = NULL;
-    if (material_path != NULL) {
-        mat_data = data_get_material(material_path, material_path);
+    if (material_path != NULL && material_path[0] != '\0') {
+        mat_data = data_get_material(material_path, "");
+    }
+    else {
+        // Try loading material from the same .arm file, if it has any
+        scene_t *scene_raw = data_get_scene_raw(mesh_path);
+        if (scene_raw && scene_raw->material_datas && scene_raw->material_datas->length > 0) {
+            mat_data = data_get_material(mesh_path, "");
+        }
+    }
+
+    // If no material found, create a default one with "mesh" context
+    if (!mat_data) {
+        shader_data_t *shader_data = GC_ALLOC_INIT(shader_data_t, {
+            .name = "DefaultShader",
+            .contexts = any_array_create_from_raw(
+                (void *[]){
+                    GC_ALLOC_INIT(shader_context_t, {
+                        .name = "mesh",
+                        .vertex_shader = "mesh.vert",
+                        .fragment_shader = "mesh.frag",
+                        .compare_mode = "less",
+                        .cull_mode = "none",
+                        .depth_write = true,
+                        .vertex_elements = any_array_create_from_raw(
+                            (void *[]){
+                                GC_ALLOC_INIT(vertex_element_t, {.name = "pos", .data = "short4norm"}),
+                            },
+                            1),
+                        .constants = any_array_create_from_raw(
+                            (void *[]){
+                                GC_ALLOC_INIT(shader_const_t, {.name = "WVP", .type = "mat4", .link = "_world_view_proj_matrix"}),
+                            },
+                            1),
+                        .depth_attachment = "D32"
+                    }),
+                },
+                1)
+        });
+        shader_data = shader_data_create(shader_data);
+
+        mat_data = GC_ALLOC_INIT(material_data_t, {
+            .name = "DefaultMaterial",
+            .shader = "DefaultShader",
+            .contexts = any_array_create_from_raw(
+                (void *[]){
+                    GC_ALLOC_INIT(material_context_t, {.name = "mesh"}),
+                },
+                1)
+        });
+        mat_data->_ = gc_alloc(sizeof(material_data_runtime_t));
+        mat_data->_->uid = 1.0f;
+        mat_data->_->shader = shader_data;
+        // Load material contexts
+        for (int i = 0; i < (int)mat_data->contexts->length; i++) {
+            material_context_t *c = (material_context_t *)mat_data->contexts->buffer[i];
+            material_context_load(c);
+        }
     }
 
     mesh_object_t *mesh_obj = mesh_object_create(mesh_data, mat_data);
@@ -166,6 +222,11 @@ int asset_loader_load_mesh(uint64_t entity, const char *mesh_path, const char *m
     }
 
     object_set_parent(mesh_obj->base, _scene_root);
+
+    // Root transform to prevent GC collection during frame rendering
+    if (mesh_obj->base->transform) {
+        gc_root(mesh_obj->base->transform);
+    }
 
     // Update or add RenderObject3D
     RenderObject3D robj = {

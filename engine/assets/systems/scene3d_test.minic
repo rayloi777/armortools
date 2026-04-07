@@ -14,7 +14,7 @@ int init(void) {
     printf("Camera created\n");
 
     // Create a mesh entity (no mesh file for now, just testing ECS)
-    id mesh_ent = mesh_create("");
+    id mesh_ent = mesh_create("cube.arm");
     entity_set_position(mesh_ent, 0.0, 0.0, 0.0);
     entity_set_scale(mesh_ent, 1.0, 1.0, 1.0);
     printf("Mesh entity created\n");

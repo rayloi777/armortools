@@ -39,14 +39,16 @@ void game_loop_update(void) {
     game_world_progress(g_loop_world, g_delta_time);
     minic_system_call_step();
 
+    // Sync 3D transforms BEFORE rendering so GPU gets up-to-date data
+    camera_bridge_3d_update();
+    mesh_bridge_3d_sync_transforms();
+
     sys_render();
 
     // If 3D was rendered, don't clear framebuffer — 2D draws on top of 3D
     bool has_3d = sys_3d_was_rendered();
     draw_begin(NULL, !has_3d, has_3d ? 0 : 0xff1a1a2e);
 
-    camera_bridge_3d_update();
-    mesh_bridge_3d_sync_transforms();
     camera2d_update(camera_bridge_get_camera(), g_delta_time);
     sys_2d_draw();
     minic_system_call_draw();

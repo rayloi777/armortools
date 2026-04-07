@@ -33,7 +33,7 @@ void mesh_bridge_3d_init(void) {
     sync_desc.terms[0].id = ecs_component_comp_3d_position();
     sync_desc.terms[1].id = ecs_component_comp_3d_rotation();
     sync_desc.terms[2].id = ecs_component_comp_3d_scale();
-    sync_desc.terms[3].id = ecs_component_RenderObject3D();
+    sync_desc.terms[3].id = ecs_component_comp_3d_mesh_renderer();
     g_sync_query = ecs_query_init(ecs, &sync_desc);
 
     ecs_query_desc_t cleanup_desc = {0};
@@ -68,22 +68,30 @@ void mesh_bridge_3d_shutdown(void) {
 
 void mesh_bridge_3d_sync_transforms(void) {
     if (!g_mesh_3d_world || !g_sync_query) return;
+    if (!scene_meshes || scene_meshes->length == 0) return;
 
+    // Sync transforms by matching scene_meshes to ECS entities
+    // using position/rotation/scale query
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_mesh_3d_world);
     if (!ecs) return;
 
     ecs_iter_t it = ecs_query_iter(ecs, g_sync_query);
+    int mesh_idx = 0;
 
     while (ecs_query_next(&it)) {
         comp_3d_position *pos = ecs_field(&it, comp_3d_position, 1);
         comp_3d_rotation *rot = ecs_field(&it, comp_3d_rotation, 2);
         comp_3d_scale *scale = ecs_field(&it, comp_3d_scale, 3);
-        RenderObject3D *robj = ecs_field(&it, RenderObject3D, 4);
 
         for (int i = 0; i < it.count; i++) {
-            if (!robj[i].iron_transform) continue;
+            if (mesh_idx >= scene_meshes->length) break;
 
-            transform_t *t = (transform_t *)robj[i].iron_transform;
+            mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[mesh_idx];
+            mesh_idx++;
+
+            if (!mesh_obj || !mesh_obj->base || !mesh_obj->base->transform) continue;
+
+            transform_t *t = mesh_obj->base->transform;
             t->loc.x = pos[i].x;
             t->loc.y = pos[i].y;
             t->loc.z = pos[i].z;
@@ -96,7 +104,6 @@ void mesh_bridge_3d_sync_transforms(void) {
             t->scale.z = scale[i].z;
             t->dirty = true;
             transform_build_matrix(t);
-            robj[i].dirty = true;
         }
     }
 }
