@@ -189,6 +189,11 @@ int asset_loader_load_mesh(uint64_t entity, const char *mesh_path, const char *m
                                 GC_ALLOC_INIT(shader_const_t, {.name = "WVP", .type = "mat4", .link = "_world_view_proj_matrix"}),
                             },
                             1),
+                        .color_attachments = any_array_create_from_raw(
+                            (void *[]){
+                                "RGBA32",
+                            },
+                            1),
                         .depth_attachment = "D32"
                     }),
                 },

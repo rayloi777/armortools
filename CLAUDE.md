@@ -142,3 +142,21 @@ After resolving conflicts, rebuild with both steps: `base/make` then `xcodebuild
 ## Critical Rule
 
 **Never modify files in `base/`.** All new engine functionality goes in `engine/`. The base directory is the upstream Iron engine and must remain untouched.
+
+## Known Issues
+
+### Metal Viewport Depth Range Bug
+
+`render_path_set_target()` calls `gpu_viewport()` which hardcodes `znear=0.1, zfar=100.0`, breaking Metal's depth range mapping. On Metal, the default viewport correctly maps NDC z [-1,1] to depth buffer [0,1], but these hardcoded values override it and cause all 3D fragments to fail depth testing.
+
+**Workaround:** Use `_gpu_begin()` + `render_path_submit_draw()` + `gpu_end()` instead of `render_path_set_target()` + `render_path_draw_meshes()`:
+
+```c
+void render_commands() {
+    _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff6495ed, 1.0);
+    render_path_submit_draw("mesh");
+    gpu_end();
+}
+```
+
+Also initialize `render_path_current_w`/`h` in `scene_ready()` before the first frame to prevent division-by-zero in `camera_object_proj_jitter()`.

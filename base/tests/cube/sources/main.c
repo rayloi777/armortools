@@ -4,17 +4,22 @@
 #include <iron.h>
 
 void render_commands() {
-	render_path_set_target("", NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff6495ed, 1.0);
-	render_path_draw_meshes("mesh");
+	// Use _gpu_begin directly — render_path_set_target calls gpu_viewport
+	// with znear=0.1/zfar=100.0 which breaks Metal's depth range
+	_gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff6495ed, 1.0);
+	render_path_submit_draw("mesh");
+	gpu_end();
 }
 
 void scene_ready() {
 	transform_t *t = scene_camera->base->transform;
-	t->loc         = vec4_create(0, 0, -5.0, 1.0);
+	t->loc         = vec4_create(0, 0, 5.0, 1.0);
 	t->rot         = quat_create(0, 0, 0, 1);
 	transform_build_matrix(t);
 	camera_object_build_proj(scene_camera, (f32)sys_w() / (f32)sys_h());
 	camera_object_build_mat(scene_camera);
+	render_path_current_w = sys_w();
+	render_path_current_h = sys_h();
 }
 
 void ready() {
@@ -25,7 +30,7 @@ void ready() {
 	gc_unroot(data_cached_scene_raws);
 	data_cached_scene_raws = any_map_create();
 	gc_root(data_cached_scene_raws);
-	
+
 	scene_t *scene = GC_ALLOC_INIT(
 	    scene_t,
 	    {.name    = "Scene",
@@ -80,49 +85,49 @@ void ready() {
 	                                                                      },
 	                                                                      1),
 	                                                                  .depth_attachment = "D32"}),
-	                                               },
-	                                               1)}),
-	         },
-	         1),
-	     .mesh_datas = any_array_create_from_raw(
-	         (void *[]){
-	             GC_ALLOC_INIT(mesh_data_t,
-	                           {.name        = "Cube",
-	                            .scale_pos   = 1.0,
-	                            .vertex_arrays = any_array_create_from_raw(
-	                                (void *[]){
-	                                    GC_ALLOC_INIT(vertex_array_t,
-	                                                  {.attrib = "pos",
-	                                                   .data   = "short4norm",
-	                                                   .values = i16_array_create_from_raw(
-	                                                       (i16[]){
-	                                                           32767,  32767,  32767, 32767,
-	                                                          -32767,  32767,  32767, 32767,
-	                                                          -32767, -32767,  32767, 32767,
-	                                                           32767, -32767,  32767, 32767,
-	                                                           32767,  32767, -32767, 32767,
-	                                                          -32767,  32767, -32767, 32767,
-	                                                          -32767, -32767, -32767, 32767,
-	                                                           32767, -32767, -32767, 32767,
-	                                                       },
-	                                                       32)
-	                                    }),
-	                                },
-	                                1),
-	                            .index_array = u32_array_create_from_raw(
-	                                (u32[]){
-	                                    0, 1, 2, 0, 2, 3,
-	                                    4, 5, 6, 4, 6, 7,
-	                                    0, 4, 5, 0, 5, 1,
-	                                    2, 6, 7, 2, 7, 3,
-	                                    0, 2, 6, 0, 6, 4,
-	                                    1, 5, 7, 1, 7, 3
-	                                },
-	                                36)
-	                           }),
-	         },
-	         1)
-	    });
+                                               },
+                                               1)}),
+         },
+         1),
+         .mesh_datas = any_array_create_from_raw(
+             (void *[]){
+                 GC_ALLOC_INIT(mesh_data_t,
+                               {.name        = "Cube",
+                                .scale_pos   = 1.0,
+                                .vertex_arrays = any_array_create_from_raw(
+                                    (void *[]){
+                                        GC_ALLOC_INIT(vertex_array_t,
+                                                      {.attrib = "pos",
+                                                       .data   = "short4norm",
+                                                       .values = i16_array_create_from_raw(
+                                                           (i16[]){
+                                                               32767,  32767,  32767, 32767,
+                                                              -32767,  32767,  32767, 32767,
+                                                              -32767, -32767,  32767, 32767,
+                                                               32767, -32767,  32767, 32767,
+                                                               32767,  32767, -32767, 32767,
+                                                              -32767,  32767, -32767, 32767,
+                                                              -32767, -32767, -32767, 32767,
+                                                               32767, -32767, -32767, 32767,
+                                                           },
+                                                           32)
+                                        }),
+                                    },
+                                    1),
+                                .index_array = u32_array_create_from_raw(
+                                    (u32[]){
+                                        0, 1, 2, 0, 2, 3,
+                                        4, 5, 6, 4, 6, 7,
+                                        0, 4, 5, 0, 5, 1,
+                                        2, 6, 7, 2, 7, 3,
+                                        0, 2, 6, 0, 6, 4,
+                                        1, 5, 7, 1, 7, 3
+                                    },
+                                    36)
+                               }),
+             },
+             1)
+        });
 
 	any_map_set(data_cached_scene_raws, scene->name, scene);
 	scene_create(scene);
@@ -157,8 +162,8 @@ char      *strings_check_internet_connection() {
 void  console_error(char *s) {}
 void  console_info(char *s) {}
 char *tr(char *id) {
-	return id;
+    return id;
 }
 i32 pipes_get_constant_location(char *s) {
-	return 0;
+    return 0;
 }

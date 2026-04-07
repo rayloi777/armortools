@@ -70,8 +70,6 @@ void mesh_bridge_3d_sync_transforms(void) {
     if (!g_mesh_3d_world || !g_sync_query) return;
     if (!scene_meshes || scene_meshes->length == 0) return;
 
-    // Sync transforms by matching scene_meshes to ECS entities
-    // using position/rotation/scale query
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_mesh_3d_world);
     if (!ecs) return;
 
@@ -79,10 +77,6 @@ void mesh_bridge_3d_sync_transforms(void) {
     int mesh_idx = 0;
 
     while (ecs_query_next(&it)) {
-        comp_3d_position *pos = ecs_field(&it, comp_3d_position, 1);
-        comp_3d_rotation *rot = ecs_field(&it, comp_3d_rotation, 2);
-        comp_3d_scale *scale = ecs_field(&it, comp_3d_scale, 3);
-
         for (int i = 0; i < it.count; i++) {
             if (mesh_idx >= scene_meshes->length) break;
 
@@ -91,17 +85,24 @@ void mesh_bridge_3d_sync_transforms(void) {
 
             if (!mesh_obj || !mesh_obj->base || !mesh_obj->base->transform) continue;
 
+            // Read fresh component data via ecs_get_id (bypasses stale iterator
+            // after Flecs archetype moves triggered by ecs_set_id)
+            const comp_3d_position *pos = ecs_get_id(ecs, it.entities[i], ecs_component_comp_3d_position());
+            const comp_3d_rotation *rot = ecs_get_id(ecs, it.entities[i], ecs_component_comp_3d_rotation());
+            const comp_3d_scale *scale = ecs_get_id(ecs, it.entities[i], ecs_component_comp_3d_scale());
+            if (!pos || !rot || !scale) continue;
+
             transform_t *t = mesh_obj->base->transform;
-            t->loc.x = pos[i].x;
-            t->loc.y = pos[i].y;
-            t->loc.z = pos[i].z;
-            t->rot.x = rot[i].x;
-            t->rot.y = rot[i].y;
-            t->rot.z = rot[i].z;
-            t->rot.w = rot[i].w;
-            t->scale.x = scale[i].x;
-            t->scale.y = scale[i].y;
-            t->scale.z = scale[i].z;
+            t->loc.x = pos->x;
+            t->loc.y = pos->y;
+            t->loc.z = pos->z;
+            t->rot.x = rot->x;
+            t->rot.y = rot->y;
+            t->rot.z = rot->z;
+            t->rot.w = rot->w;
+            t->scale.x = scale->x;
+            t->scale.y = scale->y;
+            t->scale.z = scale->z;
             t->dirty = true;
             transform_build_matrix(t);
         }
