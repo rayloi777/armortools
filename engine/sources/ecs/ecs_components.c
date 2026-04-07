@@ -1,5 +1,8 @@
 #include "ecs_components.h"
 #include "ecs_dynamic.h"
+#include "../components/transform.h"
+#include "../components/camera.h"
+#include "../components/mesh_renderer.h"
 #include "flecs.h"
 #include <stddef.h>
 #include <string.h>
@@ -14,6 +17,12 @@ static ecs_entity_t comp_RenderMesh_entity = 0;
 static ecs_entity_t comp_EntityScript_entity = 0;
 static ecs_entity_t comp_2d_sprite_entity = 0;
 static ecs_entity_t comp_2d_camera_entity = 0;
+static ecs_entity_t comp_3d_position_entity = 0;
+static ecs_entity_t comp_3d_rotation_entity = 0;
+static ecs_entity_t comp_3d_scale_entity = 0;
+static ecs_entity_t comp_3d_camera_entity = 0;
+static ecs_entity_t comp_3d_mesh_renderer_entity = 0;
+static ecs_entity_t comp_RenderObject3D_entity = 0;
 
 ecs_entity_t ecs_component_comp_2d_position(void) { return comp_2d_position_entity; }
 ecs_entity_t ecs_component_comp_2d_rotation(void) { return comp_2d_rotation_entity; }
@@ -25,6 +34,12 @@ ecs_entity_t ecs_component_RenderMesh(void) { return comp_RenderMesh_entity; }
 ecs_entity_t ecs_component_EntityScript(void) { return comp_EntityScript_entity; }
 ecs_entity_t ecs_component_comp_2d_sprite(void) { return comp_2d_sprite_entity; }
 ecs_entity_t ecs_component_comp_2d_camera(void) { return comp_2d_camera_entity; }
+ecs_entity_t ecs_component_comp_3d_position(void) { return comp_3d_position_entity; }
+ecs_entity_t ecs_component_comp_3d_rotation(void) { return comp_3d_rotation_entity; }
+ecs_entity_t ecs_component_comp_3d_scale(void) { return comp_3d_scale_entity; }
+ecs_entity_t ecs_component_comp_3d_camera(void) { return comp_3d_camera_entity; }
+ecs_entity_t ecs_component_comp_3d_mesh_renderer(void) { return comp_3d_mesh_renderer_entity; }
+ecs_entity_t ecs_component_RenderObject3D(void) { return comp_RenderObject3D_entity; }
 
 static ecs_entity_t register_component(ecs_world_t *ecs, const char *name, size_t size, size_t alignment) {
     ecs_component_desc_t desc = {0};
@@ -61,6 +76,12 @@ void ecs_register_components(void *world) {
     comp_EntityScript_entity = register_component(ecs, "EntityScript", sizeof(EntityScript), _Alignof(EntityScript));
     comp_2d_sprite_entity = register_component(ecs, "comp_2d_sprite", sizeof(comp_2d_sprite), _Alignof(comp_2d_sprite));
     comp_2d_camera_entity = register_component(ecs, "comp_2d_camera", sizeof(comp_2d_camera), _Alignof(comp_2d_camera));
+    comp_3d_position_entity = register_component(ecs, "comp_3d_position", sizeof(comp_3d_position), _Alignof(comp_3d_position));
+    comp_3d_rotation_entity = register_component(ecs, "comp_3d_rotation", sizeof(comp_3d_rotation), _Alignof(comp_3d_rotation));
+    comp_3d_scale_entity = register_component(ecs, "comp_3d_scale", sizeof(comp_3d_scale), _Alignof(comp_3d_scale));
+    comp_3d_camera_entity = register_component(ecs, "comp_3d_camera", sizeof(comp_3d_camera), _Alignof(comp_3d_camera));
+    comp_3d_mesh_renderer_entity = register_component(ecs, "comp_3d_mesh_renderer", sizeof(comp_3d_mesh_renderer), _Alignof(comp_3d_mesh_renderer));
+    comp_RenderObject3D_entity = register_component(ecs, "RenderObject3D", sizeof(RenderObject3D), _Alignof(RenderObject3D));
 }
 
 void ecs_register_builtin_fields(void) {
@@ -137,6 +158,39 @@ void ecs_register_builtin_fields(void) {
     ecs_dynamic_component_add_field(id, "bounds_max_x", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_camera, bounds_max_x));
     ecs_dynamic_component_add_field(id, "bounds_max_y", DYNAMIC_TYPE_FLOAT, offsetof(comp_2d_camera, bounds_max_y));
     ecs_dynamic_component_add_field(id, "has_bounds", DYNAMIC_TYPE_BOOL, offsetof(comp_2d_camera, has_bounds));
+
+    id = comp_3d_position_entity;
+    ecs_dynamic_component_add_field(id, "x", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_position, x));
+    ecs_dynamic_component_add_field(id, "y", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_position, y));
+    ecs_dynamic_component_add_field(id, "z", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_position, z));
+
+    id = comp_3d_rotation_entity;
+    ecs_dynamic_component_add_field(id, "x", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_rotation, x));
+    ecs_dynamic_component_add_field(id, "y", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_rotation, y));
+    ecs_dynamic_component_add_field(id, "z", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_rotation, z));
+    ecs_dynamic_component_add_field(id, "w", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_rotation, w));
+
+    id = comp_3d_scale_entity;
+    ecs_dynamic_component_add_field(id, "x", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_scale, x));
+    ecs_dynamic_component_add_field(id, "y", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_scale, y));
+    ecs_dynamic_component_add_field(id, "z", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_scale, z));
+
+    id = comp_3d_camera_entity;
+    ecs_dynamic_component_add_field(id, "fov", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_camera, fov));
+    ecs_dynamic_component_add_field(id, "near_plane", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_camera, near_plane));
+    ecs_dynamic_component_add_field(id, "far_plane", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_camera, far_plane));
+    ecs_dynamic_component_add_field(id, "perspective", DYNAMIC_TYPE_BOOL, offsetof(comp_3d_camera, perspective));
+    ecs_dynamic_component_add_field(id, "active", DYNAMIC_TYPE_BOOL, offsetof(comp_3d_camera, active));
+
+    id = comp_3d_mesh_renderer_entity;
+    ecs_dynamic_component_add_field(id, "mesh_path", DYNAMIC_TYPE_PTR, offsetof(comp_3d_mesh_renderer, mesh_path));
+    ecs_dynamic_component_add_field(id, "material_path", DYNAMIC_TYPE_PTR, offsetof(comp_3d_mesh_renderer, material_path));
+    ecs_dynamic_component_add_field(id, "visible", DYNAMIC_TYPE_BOOL, offsetof(comp_3d_mesh_renderer, visible));
+
+    id = comp_RenderObject3D_entity;
+    ecs_dynamic_component_add_field(id, "iron_mesh_object", DYNAMIC_TYPE_PTR, offsetof(RenderObject3D, iron_mesh_object));
+    ecs_dynamic_component_add_field(id, "iron_transform", DYNAMIC_TYPE_PTR, offsetof(RenderObject3D, iron_transform));
+    ecs_dynamic_component_add_field(id, "dirty", DYNAMIC_TYPE_BOOL, offsetof(RenderObject3D, dirty));
 }
 
 uint64_t ecs_get_builtin_component(const char *name) {
@@ -151,6 +205,12 @@ uint64_t ecs_get_builtin_component(const char *name) {
     if (strcmp(name, "EntityScript") == 0) return comp_EntityScript_entity;
     if (strcmp(name, "comp_2d_sprite") == 0) return comp_2d_sprite_entity;
     if (strcmp(name, "comp_2d_camera") == 0) return comp_2d_camera_entity;
+    if (strcmp(name, "comp_3d_position") == 0) return comp_3d_position_entity;
+    if (strcmp(name, "comp_3d_rotation") == 0) return comp_3d_rotation_entity;
+    if (strcmp(name, "comp_3d_scale") == 0) return comp_3d_scale_entity;
+    if (strcmp(name, "comp_3d_camera") == 0) return comp_3d_camera_entity;
+    if (strcmp(name, "comp_3d_mesh_renderer") == 0) return comp_3d_mesh_renderer_entity;
+    if (strcmp(name, "RenderObject3D") == 0) return comp_RenderObject3D_entity;
     return 0;
 }
 
@@ -165,5 +225,11 @@ const char *ecs_get_builtin_component_name(uint64_t component_id) {
     if (component_id == comp_EntityScript_entity) return "EntityScript";
     if (component_id == comp_2d_sprite_entity) return "comp_2d_sprite";
     if (component_id == comp_2d_camera_entity) return "comp_2d_camera";
+    if (component_id == comp_3d_position_entity) return "comp_3d_position";
+    if (component_id == comp_3d_rotation_entity) return "comp_3d_rotation";
+    if (component_id == comp_3d_scale_entity) return "comp_3d_scale";
+    if (component_id == comp_3d_camera_entity) return "comp_3d_camera";
+    if (component_id == comp_3d_mesh_renderer_entity) return "comp_3d_mesh_renderer";
+    if (component_id == comp_RenderObject3D_entity) return "RenderObject3D";
     return NULL;
 }

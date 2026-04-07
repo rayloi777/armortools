@@ -54,6 +54,12 @@ typedef struct {
     bool has_bounds;
 } comp_2d_camera;
 
+typedef struct {
+    void *iron_mesh_object;
+    void *iron_transform;
+    bool  dirty;
+} RenderObject3D;
+
 void ecs_register_components(void *world);
 void ecs_register_builtin_fields(void);
 
@@ -70,3 +76,9 @@ uint64_t ecs_component_RenderMesh(void);
 uint64_t ecs_component_EntityScript(void);
 uint64_t ecs_component_comp_2d_sprite(void);
 uint64_t ecs_component_comp_2d_camera(void);
+uint64_t ecs_component_comp_3d_position(void);
+uint64_t ecs_component_comp_3d_rotation(void);
+uint64_t ecs_component_comp_3d_scale(void);
+uint64_t ecs_component_comp_3d_camera(void);
+uint64_t ecs_component_comp_3d_mesh_renderer(void);
+uint64_t ecs_component_RenderObject3D(void);
