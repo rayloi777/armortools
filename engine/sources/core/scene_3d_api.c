@@ -77,13 +77,13 @@ static minic_val_t minic_camera_3d_set_position(minic_val_t *args, int argc) {
     float y = (float)minic_val_to_d(args[2]);
     float z = (float)minic_val_to_d(args[3]);
 
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_runtime_world);
+    if (!ecs) return minic_val_void();
+
     uint64_t pos_id = ecs_component_comp_3d_position();
-    comp_3d_position *pos = (comp_3d_position *)entity_get_component_data(g_runtime_world, entity, pos_id);
-    if (pos) {
-        pos->x = x;
-        pos->y = y;
-        pos->z = z;
-    }
+    comp_3d_position pos = {x, y, z};
+    ecs_set_id(ecs, (ecs_entity_t)entity, (ecs_id_t)pos_id, sizeof(comp_3d_position), &pos);
+
     return minic_val_void();
 }
 
@@ -99,8 +99,7 @@ static minic_val_t minic_camera_3d_look_at(minic_val_t *args, int argc) {
     uint64_t rot_id = ecs_component_comp_3d_rotation();
 
     comp_3d_position *pos = (comp_3d_position *)entity_get_component_data(g_runtime_world, entity, pos_id);
-    comp_3d_rotation *rot = (comp_3d_rotation *)entity_get_component_data(g_runtime_world, entity, rot_id);
-    if (!pos || !rot) return minic_val_void();
+    if (!pos) return minic_val_void();
 
     // Direction from camera to target
     float dx = tx - pos->x;
@@ -132,31 +131,34 @@ static minic_val_t minic_camera_3d_look_at(minic_val_t *args, int argc) {
     float m02 = fx, m12 = fy, m22 = fz;
 
     float trace = m00 + m11 + m22;
+    comp_3d_rotation rot = {0};
     if (trace > 0.0f) {
         float s = 0.5f / sqrtf(trace + 1.0f);
-        rot->w = 0.25f / s;
-        rot->x = (m21 - m12) * s;
-        rot->y = (m02 - m20) * s;
-        rot->z = (m10 - m01) * s;
+        rot.w = 0.25f / s;
+        rot.x = (m21 - m12) * s;
+        rot.y = (m02 - m20) * s;
+        rot.z = (m10 - m01) * s;
     } else if (m00 > m11 && m00 > m22) {
         float s = 2.0f * sqrtf(1.0f + m00 - m11 - m22);
-        rot->w = (m21 - m12) / s;
-        rot->x = 0.25f * s;
-        rot->y = (m01 + m10) / s;
-        rot->z = (m02 + m20) / s;
+        rot.w = (m21 - m12) / s;
+        rot.x = 0.25f * s;
+        rot.y = (m01 + m10) / s;
+        rot.z = (m02 + m20) / s;
     } else if (m11 > m22) {
         float s = 2.0f * sqrtf(1.0f + m11 - m00 - m22);
-        rot->w = (m02 - m20) / s;
-        rot->x = (m01 + m10) / s;
-        rot->y = 0.25f * s;
-        rot->z = (m12 + m21) / s;
+        rot.w = (m02 - m20) / s;
+        rot.x = (m01 + m10) / s;
+        rot.y = 0.25f * s;
+        rot.z = (m12 + m21) / s;
     } else {
         float s = 2.0f * sqrtf(1.0f + m22 - m00 - m11);
-        rot->w = (m10 - m01) / s;
-        rot->x = (m02 + m20) / s;
-        rot->y = (m12 + m21) / s;
-        rot->z = 0.25f * s;
+        rot.w = (m10 - m01) / s;
+        rot.x = (m02 + m20) / s;
+        rot.y = (m12 + m21) / s;
+        rot.z = 0.25f * s;
     }
+
+    entity_set_component_data(g_runtime_world, entity, rot_id, &rot);
 
     return minic_val_void();
 }

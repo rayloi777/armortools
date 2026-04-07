@@ -99,29 +99,30 @@ void camera_bridge_3d_update(void) {
     ecs_iter_t it = ecs_query_iter(ecs, g_camera_3d_query);
 
     while (ecs_query_next(&it)) {
-        comp_3d_camera *cam = ecs_field(&it, comp_3d_camera, 1);
-        comp_3d_position *pos = ecs_field(&it, comp_3d_position, 2);
-        comp_3d_rotation *rot = ecs_field(&it, comp_3d_rotation, 3);
-
         for (int i = 0; i < it.count; i++) {
-            if (!cam[i].active) continue;
+            // Read fresh component data via ecs_get_id (bypasses stale iterator
+            // after Flecs archetype moves triggered by ecs_set_id)
+            const comp_3d_position *pos = ecs_get_id(ecs, it.entities[i], ecs_component_comp_3d_position());
+            const comp_3d_rotation *rot = ecs_get_id(ecs, it.entities[i], ecs_component_comp_3d_rotation());
+            const comp_3d_camera *cam_fresh = ecs_get_id(ecs, it.entities[i], ecs_component_comp_3d_camera());
+            if (!pos || !rot || !cam_fresh) continue;
 
             // Sync position and rotation to Iron camera transform
             transform_t *t = g_camera_3d->base->transform;
-            t->loc.x = pos[i].x;
-            t->loc.y = pos[i].y;
-            t->loc.z = pos[i].z;
-            t->rot.x = rot[i].x;
-            t->rot.y = rot[i].y;
-            t->rot.z = rot[i].z;
-            t->rot.w = rot[i].w;
+            t->loc.x = pos->x;
+            t->loc.y = pos->y;
+            t->loc.z = pos->z;
+            t->rot.x = rot->x;
+            t->rot.y = rot->y;
+            t->rot.z = rot->z;
+            t->rot.w = rot->w;
             t->dirty = true;
             transform_build_matrix(t);
 
             // Update camera data from component
-            g_camera_3d_data->fov = cam[i].fov;
-            g_camera_3d_data->near_plane = cam[i].near_plane;
-            g_camera_3d_data->far_plane = cam[i].far_plane;
+            g_camera_3d_data->fov = cam_fresh->fov;
+            g_camera_3d_data->near_plane = cam_fresh->near_plane;
+            g_camera_3d_data->far_plane = cam_fresh->far_plane;
 
             // Rebuild projection and view matrices
             f32 aspect = (f32)iron_window_width() / (f32)iron_window_height();
