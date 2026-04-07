@@ -6,16 +6,16 @@
 #include <stdio.h>
 #include <string.h>
 
-static game_world_t *g_world = NULL;
+static game_world_t *g_mesh_3d_world = NULL;
 static ecs_query_t *g_sync_query = NULL;
 static ecs_query_t *g_cleanup_query = NULL;
 
 void mesh_bridge_3d_set_world(game_world_t *world) {
-    g_world = world;
+    g_mesh_3d_world = world;
 }
 
 void mesh_bridge_3d_init(void) {
-    if (!g_world) {
+    if (!g_mesh_3d_world) {
         fprintf(stderr, "Mesh Bridge 3D: game world not set\n");
         return;
     }
@@ -26,18 +26,26 @@ void mesh_bridge_3d_init(void) {
         scene_create(empty_scene);
     }
 
-    // Cache queries
-    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_world);
-    g_sync_query = ecs_query_new(ecs,
-        "[in] comp_3d_position, [in] comp_3d_rotation, [in] comp_3d_scale, [inout] RenderObject3D");
-    g_cleanup_query = ecs_query_new(ecs, "[in] RenderObject3D");
+    // Cache queries using ecs_query_desc_t pattern (matches render2d_bridge.c)
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_mesh_3d_world);
+
+    ecs_query_desc_t sync_desc = {0};
+    sync_desc.terms[0].id = ecs_component_comp_3d_position();
+    sync_desc.terms[1].id = ecs_component_comp_3d_rotation();
+    sync_desc.terms[2].id = ecs_component_comp_3d_scale();
+    sync_desc.terms[3].id = ecs_component_RenderObject3D();
+    g_sync_query = ecs_query_init(ecs, &sync_desc);
+
+    ecs_query_desc_t cleanup_desc = {0};
+    cleanup_desc.terms[0].id = ecs_component_RenderObject3D();
+    g_cleanup_query = ecs_query_init(ecs, &cleanup_desc);
 
     printf("Mesh Bridge 3D initialized\n");
 }
 
 void mesh_bridge_3d_shutdown(void) {
-    if (g_world) {
-        ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_world);
+    if (g_mesh_3d_world) {
+        ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_mesh_3d_world);
         if (ecs && g_cleanup_query) {
             ecs_iter_t it = ecs_query_iter(ecs, g_cleanup_query);
             while (ecs_query_next(&it)) {
@@ -54,14 +62,14 @@ void mesh_bridge_3d_shutdown(void) {
     }
     if (g_sync_query) { ecs_query_fini(g_sync_query); g_sync_query = NULL; }
     if (g_cleanup_query) { ecs_query_fini(g_cleanup_query); g_cleanup_query = NULL; }
-    g_world = NULL;
+    g_mesh_3d_world = NULL;
     printf("Mesh Bridge 3D shutdown\n");
 }
 
 void mesh_bridge_3d_sync_transforms(void) {
-    if (!g_world || !g_sync_query) return;
+    if (!g_mesh_3d_world || !g_sync_query) return;
 
-    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_world);
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_mesh_3d_world);
     if (!ecs) return;
 
     ecs_iter_t it = ecs_query_iter(ecs, g_sync_query);
@@ -94,9 +102,9 @@ void mesh_bridge_3d_sync_transforms(void) {
 }
 
 void mesh_bridge_3d_create_mesh(uint64_t entity) {
-    if (!g_world || !entity) return;
+    if (!g_mesh_3d_world || !entity) return;
 
-    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_world);
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_mesh_3d_world);
     if (!ecs) return;
 
     ecs_entity_t e = (ecs_entity_t)entity;
@@ -125,9 +133,9 @@ void mesh_bridge_3d_create_mesh(uint64_t entity) {
 }
 
 void mesh_bridge_3d_destroy_mesh(uint64_t entity) {
-    if (!g_world || !entity) return;
+    if (!g_mesh_3d_world || !entity) return;
 
-    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_world);
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_mesh_3d_world);
     if (!ecs) return;
 
     ecs_entity_t e = (ecs_entity_t)entity;

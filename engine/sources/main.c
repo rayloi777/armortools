@@ -29,6 +29,10 @@
 #include "ecs/camera_bridge.c"
 #include "ecs/render2d_bridge.c"
 
+// 3D Systems
+#include "ecs/camera_bridge_3d.c"
+#include "ecs/mesh_bridge_3d.c"
+
 // UI Extension
 #include "core/ui_ext_api.c"
 

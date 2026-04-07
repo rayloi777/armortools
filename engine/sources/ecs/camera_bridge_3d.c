@@ -3,20 +3,21 @@
 #include "ecs_components.h"
 #include "flecs.h"
 #include <iron.h>
+#include <iron_system.h>
 #include <stdio.h>
 #include <string.h>
 
-static game_world_t *g_world = NULL;
+static game_world_t *g_camera_3d_world = NULL;
 static camera_object_t *g_camera_3d = NULL;
 static camera_data_t *g_camera_3d_data = NULL;
-static ecs_query_t *g_camera_query = NULL;
+static ecs_query_t *g_camera_3d_query = NULL;
 
 void camera_bridge_3d_set_world(game_world_t *world) {
-    g_world = world;
+    g_camera_3d_world = world;
 }
 
 void camera_bridge_3d_init(void) {
-    if (!g_world) {
+    if (!g_camera_3d_world) {
         fprintf(stderr, "Camera Bridge 3D: game world not set\n");
         return;
     }
@@ -47,37 +48,42 @@ void camera_bridge_3d_init(void) {
     object_set_parent(g_camera_3d->base, _scene_root);
 
     // Build initial projection
-    camera_object_build_proj(g_camera_3d, (f32)sys_width() / (f32)sys_height());
+    f32 aspect = (f32)iron_window_width() / (f32)iron_window_height();
+    camera_object_build_proj(g_camera_3d, aspect);
     camera_object_build_mat(g_camera_3d);
 
     // Cache query for per-frame camera lookup
-    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_world);
-    g_camera_query = ecs_query_new(ecs, "[in] comp_3d_camera, [in] comp_3d_position, [in] comp_3d_rotation");
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_camera_3d_world);
+    ecs_query_desc_t qdesc = {0};
+    qdesc.terms[0].id = ecs_component_comp_3d_camera();
+    qdesc.terms[1].id = ecs_component_comp_3d_position();
+    qdesc.terms[2].id = ecs_component_comp_3d_rotation();
+    g_camera_3d_query = ecs_query_init(ecs, &qdesc);
 
     printf("Camera Bridge 3D initialized\n");
 }
 
 void camera_bridge_3d_shutdown(void) {
-    if (g_camera_query) {
-        ecs_query_fini(g_camera_query);
-        g_camera_query = NULL;
+    if (g_camera_3d_query) {
+        ecs_query_fini(g_camera_3d_query);
+        g_camera_3d_query = NULL;
     }
     if (g_camera_3d) {
         camera_object_remove(g_camera_3d);
         g_camera_3d = NULL;
         g_camera_3d_data = NULL;
     }
-    g_world = NULL;
+    g_camera_3d_world = NULL;
     printf("Camera Bridge 3D shutdown\n");
 }
 
 void camera_bridge_3d_update(void) {
-    if (!g_world || !g_camera_3d || !g_camera_query) return;
+    if (!g_camera_3d_world || !g_camera_3d || !g_camera_3d_query) return;
 
-    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_world);
+    ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_camera_3d_world);
     if (!ecs) return;
 
-    ecs_iter_t it = ecs_query_iter(ecs, g_camera_query);
+    ecs_iter_t it = ecs_query_iter(ecs, g_camera_3d_query);
 
     while (ecs_query_next(&it)) {
         comp_3d_camera *cam = ecs_field(&it, comp_3d_camera, 1);
@@ -105,7 +111,8 @@ void camera_bridge_3d_update(void) {
             g_camera_3d_data->far_plane = cam[i].far_plane;
 
             // Rebuild projection and view matrices
-            camera_object_build_proj(g_camera_3d, (f32)sys_width() / (f32)sys_height());
+            f32 aspect = (f32)iron_window_width() / (f32)iron_window_height();
+            camera_object_build_proj(g_camera_3d, aspect);
             camera_object_build_mat(g_camera_3d);
 
             // Single active camera — stop after first match
@@ -114,6 +121,6 @@ void camera_bridge_3d_update(void) {
     }
 }
 
-camera_object_t *camera_bridge_3d_get_active(void) {
-    return g_camera_3d;
+void *camera_bridge_3d_get_active(void) {
+    return (void *)g_camera_3d;
 }
