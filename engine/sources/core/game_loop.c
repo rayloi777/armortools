@@ -2,6 +2,8 @@
 #include "ecs/ecs_world.h"
 #include "ecs/camera_bridge.h"
 #include "ecs/render2d_bridge.h"
+#include "ecs/camera_bridge_3d.h"
+#include "ecs/mesh_bridge_3d.h"
 #include "minic_system.h"
 #include "ui_ext_api.h"
 #include <iron.h>
@@ -38,6 +40,8 @@ void game_loop_update(void) {
 
     sys_render();
     draw_begin(NULL, true, 0xff1a1a2e);
+    camera_bridge_3d_update();
+    mesh_bridge_3d_sync_transforms();
     camera2d_update(camera_bridge_get_camera(), g_delta_time);
     sys_2d_draw();
     minic_system_call_draw();

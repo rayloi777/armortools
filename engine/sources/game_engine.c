@@ -13,6 +13,8 @@
 #include "ecs/sprite_bridge.h"
 #include "ecs/camera_bridge.h"
 #include "ecs/render2d_bridge.h"
+#include "ecs/camera_bridge_3d.h"
+#include "ecs/mesh_bridge_3d.h"
 #include <iron_input.h>
 #include <iron.h>
 #include <stdio.h>
@@ -125,6 +127,12 @@ void game_engine_init(void) {
     camera_bridge_set_world(g_world);
     camera_bridge_init();
 
+    camera_bridge_3d_set_world(g_world);
+    camera_bridge_3d_init();
+
+    mesh_bridge_3d_set_world(g_world);
+    mesh_bridge_3d_init();
+
     sys_2d_set_world(g_world);
     sys_2d_init();
 
@@ -163,6 +171,8 @@ void game_engine_shutdown(void) {
     minic_system_unload_all();
     game_loop_shutdown();
     ecs_dynamic_shutdown();
+    mesh_bridge_3d_shutdown();
+    camera_bridge_3d_shutdown();
     game_world_destroy(g_world);
     g_world = NULL;
     engine_world_set(NULL);
