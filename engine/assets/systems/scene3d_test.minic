@@ -1,5 +1,6 @@
-// 3D Test - exercises camera, transform, and light APIs
-// Tests basic 3D entity creation without scene loading
+// 3D Test — exercises .arm scene loading via mesh_create
+// mesh_create("cube.arm") triggers scene-based loading with auto-generated
+// camera, material, shader, and world data.
 
 id g_cam = 0;
 float g_angle = 0.0;
@@ -7,17 +8,15 @@ float g_angle = 0.0;
 int init(void) {
     printf("\n=== 3D Test System Init ===\n");
 
-    // Create a 3D camera looking at origin
+    // Load cube.arm scene — auto-creates camera, materials, shaders
+    id mesh_ent = mesh_create("cube.arm");
+    printf("Mesh entity created from cube.arm\n");
+
+    // Create a separate 3D camera for orbit control
     g_cam = camera_3d_create(60.0, 0.1, 100.0);
     camera_3d_set_position(g_cam, 0.0, 2.0, 5.0);
     camera_3d_look_at(g_cam, 0.0, 0.0, 0.0);
-    printf("Camera created\n");
-
-    // Create a mesh entity (no mesh file for now, just testing ECS)
-    id mesh_ent = mesh_create("cube.arm");
-    entity_set_position(mesh_ent, 0.0, 0.0, 0.0);
-    entity_set_scale(mesh_ent, 1.0, 1.0, 1.0);
-    printf("Mesh entity created\n");
+    printf("Orbit camera created\n");
 
     // Add a directional light
     id light = light_directional(0.5, -1.0, 0.3, 1.0, 0.9, 0.8, 1.0);
