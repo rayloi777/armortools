@@ -150,6 +150,12 @@ uint64_t asset_loader_load_scene(const char *path) {
     // Auto-generate missing camera/material/shader/world data
     scene_ensure_defaults(scene_raw);
 
+    // Cache patched scene under its own name so scene_create can find it
+    // (scene_create -> scene_add_scene -> data_get_scene_raw(scene_raw->name))
+    if (scene_raw->name != NULL) {
+        any_map_set(data_cached_scene_raws, scene_raw->name, scene_raw);
+    }
+
     // Remove existing scene if present, then create fresh
     if (_scene_root != NULL) {
         scene_remove();
