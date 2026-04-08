@@ -124,6 +124,22 @@ void camera_bridge_3d_update(void) {
             g_camera_3d_data->near_plane = cam_fresh->near_plane;
             g_camera_3d_data->far_plane = cam_fresh->far_plane;
 
+            // Sync perspective/ortho mode
+            if (cam_fresh->perspective) {
+                g_camera_3d_data->ortho = NULL;
+            } else {
+                if (g_camera_3d_data->ortho == NULL || g_camera_3d_data->ortho->length < 4) {
+                    g_camera_3d_data->ortho = gc_alloc(sizeof(f32_array_t));
+                    g_camera_3d_data->ortho->buffer = gc_alloc(sizeof(float) * 4);
+                    g_camera_3d_data->ortho->length = 4;
+                    g_camera_3d_data->ortho->capacity = 4;
+                }
+                g_camera_3d_data->ortho->buffer[0] = cam_fresh->ortho_left;
+                g_camera_3d_data->ortho->buffer[1] = cam_fresh->ortho_right;
+                g_camera_3d_data->ortho->buffer[2] = cam_fresh->ortho_bottom;
+                g_camera_3d_data->ortho->buffer[3] = cam_fresh->ortho_top;
+            }
+
             // Rebuild projection and view matrices
             f32 aspect = (f32)iron_window_width() / (f32)iron_window_height();
             camera_object_build_proj(g_camera_3d, aspect);
