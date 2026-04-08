@@ -34,6 +34,10 @@ void ready() {
 	// Load cube.arm — provides mesh data, objects, transforms
 	scene_t *scene = data_get_scene_raw("cube");
 
+	// cube.arm has no camera object — add one
+	any_array_push(scene->objects,
+	    GC_ALLOC_INIT(obj_t, {.name = "Camera", .type = "camera_object", .data_ref = "MyCamera", .visible = true, .spawn = true}));
+
 	// Supplement with pipeline data not stored in cube.arm
 	scene->camera_datas = any_array_create_from_raw(
 	    (void *[]){
