@@ -3,7 +3,19 @@
 #include <stdio.h>
 #include <iron.h>
 
+f32 last_time = 0.0;
+
 void render_commands() {
+	// Rotate cube
+	f32 now = (f32)iron_time();
+	f32 dt  = last_time > 0.0 ? now - last_time : 0.0;
+	last_time = now;
+	if (scene_meshes->length > 0) {
+		mesh_object_t *mesh = (mesh_object_t *)scene_meshes->buffer[0];
+		transform_rotate(mesh->base->transform, vec4_create(0, 1, 0, 0), 0.5 * dt);
+		transform_rotate(mesh->base->transform, vec4_create(1, 0, 0, 0), 0.3 * dt);
+	}
+
 	// Use _gpu_begin directly — render_path_set_target calls gpu_viewport
 	// with znear=0.1/zfar=100.0 which breaks Metal's depth range
 	_gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff6495ed, 1.0);
