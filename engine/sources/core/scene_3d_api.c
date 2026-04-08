@@ -4,6 +4,7 @@
 #include "asset_loader.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <math.h>
 #include <minic.h>
 
@@ -163,12 +164,27 @@ static minic_val_t minic_camera_3d_look_at(minic_val_t *args, int argc) {
     return minic_val_void();
 }
 
+// Check if string ends with suffix
+static bool path_ends_with(const char *s, const char *suffix) {
+    if (!s || !suffix) return false;
+    size_t slen = strlen(s);
+    size_t suflen = strlen(suffix);
+    if (suflen > slen) return false;
+    return strcmp(s + slen - suflen, suffix) == 0;
+}
+
 // mesh_create(mesh_path, material_path) -> entity
 static minic_val_t minic_mesh_create(minic_val_t *args, int argc) {
     if (!g_runtime_world) return minic_val_id(0);
 
     const char *mesh_path = (argc > 0 && args[0].type == MINIC_T_PTR) ? (const char *)args[0].p : NULL;
     const char *mat_path = (argc > 1 && args[1].type == MINIC_T_PTR) ? (const char *)args[1].p : NULL;
+
+    // .arm files are scene files — route to scene-based loader
+    if (mesh_path && path_ends_with(mesh_path, ".arm")) {
+        uint64_t entity = asset_loader_load_scene(mesh_path);
+        return minic_val_id(entity);
+    }
 
     uint64_t entity = entity_create(g_runtime_world);
     if (entity == 0) return minic_val_id(0);
