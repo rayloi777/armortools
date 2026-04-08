@@ -329,9 +329,55 @@ static minic_val_t minic_light_directional(minic_val_t *args, int argc) {
     return minic_val_id(entity);
 }
 
+// camera_3d_perspective(entity, fov, near, far)
+static minic_val_t minic_camera_3d_perspective(minic_val_t *args, int argc) {
+    if (argc < 4 || !g_runtime_world) return minic_val_void();
+    uint64_t entity = extract_entity_id3d(&args[0]);
+    float fov = (float)minic_val_to_d(args[1]);
+    float near_plane = (float)minic_val_to_d(args[2]);
+    float far_plane = (float)minic_val_to_d(args[3]);
+
+    uint64_t cam_id = ecs_component_comp_3d_camera();
+    comp_3d_camera *cam = (comp_3d_camera *)entity_get_component_data(g_runtime_world, entity, cam_id);
+    if (cam) {
+        cam->fov = fov;
+        cam->near_plane = near_plane;
+        cam->far_plane = far_plane;
+        cam->perspective = true;
+    }
+    return minic_val_void();
+}
+
+// camera_3d_orthographic(entity, left, right, bottom, top, near, far)
+static minic_val_t minic_camera_3d_orthographic(minic_val_t *args, int argc) {
+    if (argc < 7 || !g_runtime_world) return minic_val_void();
+    uint64_t entity = extract_entity_id3d(&args[0]);
+    float left = (float)minic_val_to_d(args[1]);
+    float right = (float)minic_val_to_d(args[2]);
+    float bottom = (float)minic_val_to_d(args[3]);
+    float top = (float)minic_val_to_d(args[4]);
+    float near_plane = (float)minic_val_to_d(args[5]);
+    float far_plane = (float)minic_val_to_d(args[6]);
+
+    uint64_t cam_id = ecs_component_comp_3d_camera();
+    comp_3d_camera *cam = (comp_3d_camera *)entity_get_component_data(g_runtime_world, entity, cam_id);
+    if (cam) {
+        cam->ortho_left = left;
+        cam->ortho_right = right;
+        cam->ortho_bottom = bottom;
+        cam->ortho_top = top;
+        cam->near_plane = near_plane;
+        cam->far_plane = far_plane;
+        cam->perspective = false;
+    }
+    return minic_val_void();
+}
+
 void scene_3d_api_register(void) {
     minic_register_native("camera_3d_create", minic_camera_3d_create);
     minic_register_native("camera_3d_set_fov", minic_camera_3d_set_fov);
+    minic_register_native("camera_3d_perspective", minic_camera_3d_perspective);
+    minic_register_native("camera_3d_orthographic", minic_camera_3d_orthographic);
     minic_register_native("camera_3d_set_position", minic_camera_3d_set_position);
     minic_register_native("camera_3d_look_at", minic_camera_3d_look_at);
 
