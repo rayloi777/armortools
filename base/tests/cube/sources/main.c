@@ -38,6 +38,14 @@ void ready() {
 	any_array_push(scene->objects,
 	    GC_ALLOC_INIT(obj_t, {.name = "Camera", .type = "camera_object", .data_ref = "MyCamera", .visible = true, .spawn = true}));
 
+	// cube.arm mesh has null material_ref — point it to our material
+	for (int i = 0; i < scene->objects->length; i++) {
+		obj_t *o = (obj_t *)scene->objects->buffer[i];
+		if (string_equals(o->type, "mesh_object")) {
+			o->material_ref = "MyMaterial";
+		}
+	}
+
 	// Supplement with pipeline data not stored in cube.arm
 	scene->camera_datas = any_array_create_from_raw(
 	    (void *[]){
