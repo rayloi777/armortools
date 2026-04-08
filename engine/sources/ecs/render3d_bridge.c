@@ -9,12 +9,11 @@
 static bool g_3d_rendered = false;
 
 static void sys_3d_render_commands(void) {
-    // Render to framebuffer with depth+color clear
-    render_path_set_target("", NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff1a1a2e, 1.0f);
-
-    // Draw all scene meshes using their "mesh" material context.
-    // render_path_draw_meshes internally calls render_path_end().
-    render_path_draw_meshes("mesh");
+    // Use _gpu_begin directly — render_path_set_target calls gpu_viewport
+    // with znear=0.1/zfar=100.0 which breaks Metal's depth range
+    _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff1a1a2e, 1.0f);
+    render_path_submit_draw("mesh");
+    gpu_end();
 
     g_3d_rendered = true;
 }
@@ -25,6 +24,8 @@ void sys_3d_set_world(game_world_t *world) {
 
 void sys_3d_init(void) {
     render_path_commands = sys_3d_render_commands;
+    render_path_current_w = sys_w();
+    render_path_current_h = sys_h();
     printf("3D Render Bridge: initialized (forward rendering)\n");
 }
 
