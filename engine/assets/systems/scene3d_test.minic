@@ -3,13 +3,14 @@
 // camera, material, shader, and world data.
 
 id g_cam = 0;
+id g_mesh = 0;
 float g_angle = 0.0;
 
 int init(void) {
     printf("\n=== 3D Test System Init ===\n");
 
     // Load cube.arm scene — auto-creates camera, materials, shaders
-    id mesh_ent = mesh_create("cube.arm");
+    g_mesh = mesh_create("cube.arm");
     printf("Mesh entity created from cube.arm\n");
 
     // Create a separate 3D camera for orbit control
@@ -30,13 +31,24 @@ int init(void) {
 int step(void) {
     if (g_cam == 0) return 0;
 
+    float dt = sys_delta_time();
+    g_angle = g_angle + dt * 0.5;
+
+    // Rotate mesh around Y axis
+    if (g_mesh != 0) {
+        float rx = sin(g_angle * 1.3) * 0.707;
+        float ry = sin(g_angle);
+        float rz = 0.0;
+        float rw = cos(g_angle * 0.5);
+        entity_set_rotation(g_mesh, rx, ry, rz, rw);
+    }
+
     // Orbit camera around origin
-    g_angle = g_angle + sys_delta_time() * 0.5;
-    float dist = 5.0;
-    float cx = sin(g_angle) * dist;
-    float cz = cos(g_angle) * dist;
-    camera_3d_set_position(g_cam, cx, 2.0, cz);
-    camera_3d_look_at(g_cam, 0.0, 0.0, 0.0);
+    //float dist = 5.0;
+    //float cx = sin(g_angle) * dist;
+    //float cz = cos(g_angle) * dist;
+    //camera_3d_set_position(g_cam, cx, 2.0, cz);
+    //camera_3d_look_at(g_cam, 0.0, 0.0, 0.0);
 
     return 0;
 }
