@@ -15,4 +15,5 @@ project.add_assets("assets/prefabs/*.json", {destination: "data/{name}"});
 project.add_assets("assets/*.png", {destination: "data/{name}"});
 project.add_assets("assets/images/*.png", {destination: "data/{name}"});
 project.add_assets("assets/3d/*.arm", {destination: "data/{name}"});
+project.add_assets("assets/3d/*.png", {destination: "data/{name}"});
 return project;
