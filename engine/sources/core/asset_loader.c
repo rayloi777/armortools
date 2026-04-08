@@ -11,6 +11,132 @@ void asset_loader_set_world(game_world_t *world) {
     g_asset_loader_world = world;
 }
 
+// Ensure scene_t has required data for scene_create().
+// .arm files from ArmorPaint often lack camera, material, shader, and world data.
+static void scene_ensure_defaults(scene_t *scene) {
+    // Add camera object if scene has no camera_object
+    bool has_camera = false;
+    if (scene->objects != NULL) {
+        for (int i = 0; i < scene->objects->length; i++) {
+            obj_t *o = (obj_t *)scene->objects->buffer[i];
+            if (o->type && strcmp(o->type, "camera_object") == 0) {
+                has_camera = true;
+                break;
+            }
+        }
+    }
+    if (!has_camera && scene->objects != NULL) {
+        any_array_push(scene->objects,
+            GC_ALLOC_INIT(obj_t, {
+                .name = "Camera",
+                .type = "camera_object",
+                .data_ref = "DefaultCamera",
+                .visible = true,
+                .spawn = true
+            }));
+    }
+
+    // Set material_ref on mesh objects that lack it
+    if (scene->objects != NULL) {
+        for (int i = 0; i < scene->objects->length; i++) {
+            obj_t *o = (obj_t *)scene->objects->buffer[i];
+            if (o->type && strcmp(o->type, "mesh_object") == 0 && o->material_ref == NULL) {
+                o->material_ref = "DefaultMaterial";
+            }
+        }
+    }
+
+    // Camera data
+    if (scene->camera_datas == NULL || scene->camera_datas->length == 0) {
+        scene->camera_datas = any_array_create_from_raw(
+            (void *[]){
+                GC_ALLOC_INIT(camera_data_t, {
+                    .name = "DefaultCamera",
+                    .near_plane = 0.01,
+                    .far_plane = 100.0,
+                    .fov = 0.85
+                }),
+            },
+            1);
+    }
+    if (scene->camera_ref == NULL) {
+        scene->camera_ref = "Camera";
+    }
+
+    // World data
+    if (scene->world_datas == NULL || scene->world_datas->length == 0) {
+        scene->world_datas = any_array_create_from_raw(
+            (void *[]){
+                GC_ALLOC_INIT(world_data_t, {.name = "DefaultWorld", .color = 0xff1a1a2e}),
+            },
+            1);
+    }
+    if (scene->world_ref == NULL) {
+        scene->world_ref = "DefaultWorld";
+    }
+
+    // Material data — single material with "mesh" context
+    if (scene->material_datas == NULL || scene->material_datas->length == 0) {
+        scene->material_datas = any_array_create_from_raw(
+            (void *[]){
+                GC_ALLOC_INIT(material_data_t,
+                    {.name     = "DefaultMaterial",
+                     .shader   = "DefaultShader",
+                     .contexts = any_array_create_from_raw(
+                         (void *[]){
+                             GC_ALLOC_INIT(material_context_t,
+                                 {.name          = "mesh",
+                                  .bind_textures = any_array_create_from_raw(
+                                      (void *[]){
+                                          GC_ALLOC_INIT(bind_tex_t, {.name = "my_texture", .file = "texture.k"}),
+                                      },
+                                      1)}),
+                         },
+                         1)}),
+            },
+            1);
+    }
+
+    // Shader data — forward rendering pipeline
+    if (scene->shader_datas == NULL || scene->shader_datas->length == 0) {
+        scene->shader_datas = any_array_create_from_raw(
+            (void *[]){
+                GC_ALLOC_INIT(shader_data_t,
+                    {.name     = "DefaultShader",
+                     .contexts = any_array_create_from_raw(
+                         (void *[]){
+                             GC_ALLOC_INIT(shader_context_t,
+                                 {.name            = "mesh",
+                                  .vertex_shader   = "mesh.vert",
+                                  .fragment_shader = "mesh.frag",
+                                  .compare_mode    = "less",
+                                  .cull_mode       = "none",
+                                  .depth_write     = true,
+                                  .vertex_elements = any_array_create_from_raw(
+                                      (void *[]){
+                                          GC_ALLOC_INIT(vertex_element_t, {.name = "pos", .data = "short4norm"}),
+                                          GC_ALLOC_INIT(vertex_element_t, {.name = "tex", .data = "short2norm"}),
+                                      },
+                                      2),
+                                  .constants = any_array_create_from_raw(
+                                      (void *[]){
+                                          GC_ALLOC_INIT(shader_const_t,
+                                              {.name = "WVP", .type = "mat4", .link = "_world_view_proj_matrix"}),
+                                      },
+                                      1),
+                                  .texture_units = any_array_create_from_raw(
+                                      (void *[]){
+                                          GC_ALLOC_INIT(tex_unit_t, {.name = "my_texture"}),
+                                      },
+                                      1),
+                                  .depth_attachment = "D32"}),
+                         },
+                         1)}),
+            },
+            1);
+    }
+}
+
 uint64_t asset_loader_load_scene(const char *path) {
     if (!g_asset_loader_world || !path) return 0;
 
@@ -21,23 +147,32 @@ uint64_t asset_loader_load_scene(const char *path) {
         return 0;
     }
 
-    // Create Iron scene graph if not already initialized
-    if (!_scene_root) {
-        scene_create(scene_raw);
+    // Auto-generate missing camera/material/shader/world data
+    scene_ensure_defaults(scene_raw);
+
+    // Remove existing scene if present, then create fresh
+    if (_scene_root != NULL) {
+        scene_remove();
     }
-    else {
-        // Scene already initialized — add objects individually
-        if (scene_raw->objects != NULL) {
-            for (int i = 0; i < scene_raw->objects->length; i++) {
-                obj_t *o = (obj_t *)scene_raw->objects->buffer[i];
-                scene_create_object(o, scene_raw, _scene_root);
-            }
-        }
-    }
+    scene_create(scene_raw);
 
     if (!_scene_root) {
         fprintf(stderr, "Asset Loader: scene_create failed for '%s'\n", path);
         return 0;
+    }
+
+    // Initialize viewport dimensions to prevent division-by-zero
+    render_path_current_w = sys_w();
+    render_path_current_h = sys_h();
+
+    // Position the camera behind origin
+    if (scene_camera != NULL && scene_camera->base != NULL) {
+        transform_t *t = scene_camera->base->transform;
+        t->loc = vec4_create(0, 2, 5, 1);
+        t->rot = quat_create(0, 0, 0, 1);
+        transform_build_matrix(t);
+        camera_object_build_proj(scene_camera, (f32)sys_w() / (f32)sys_h());
+        camera_object_build_mat(scene_camera);
     }
 
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_asset_loader_world);
@@ -45,7 +180,8 @@ uint64_t asset_loader_load_scene(const char *path) {
 
     uint64_t first_entity = 0;
 
-    // Sync mesh objects to ECS entities
+    // Sync mesh objects to ECS entities — read from Iron transform_t
+    // (which was initialized from .arm mat4 data by scene_create)
     if (scene_meshes != NULL) {
         for (int i = 0; i < scene_meshes->length; i++) {
             mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[i];
@@ -54,26 +190,20 @@ uint64_t asset_loader_load_scene(const char *path) {
             ecs_entity_t e = ecs_new(ecs);
             if (first_entity == 0) first_entity = (uint64_t)e;
 
-            // Read transform from Iron object
             transform_t *t = mesh_obj->base->transform;
 
-            // Set 3D position
             comp_3d_position pos = { t->loc.x, t->loc.y, t->loc.z };
             ecs_set_id(ecs, e, (ecs_id_t)ecs_component_comp_3d_position(), sizeof(comp_3d_position), &pos);
 
-            // Set 3D rotation
             comp_3d_rotation rot = { t->rot.x, t->rot.y, t->rot.z, t->rot.w };
             ecs_set_id(ecs, e, (ecs_id_t)ecs_component_comp_3d_rotation(), sizeof(comp_3d_rotation), &rot);
 
-            // Set 3D scale
             comp_3d_scale scl = { t->scale.x, t->scale.y, t->scale.z };
             ecs_set_id(ecs, e, (ecs_id_t)ecs_component_comp_3d_scale(), sizeof(comp_3d_scale), &scl);
 
-            // Set mesh renderer
             comp_3d_mesh_renderer mr = { .visible = true };
             ecs_set_id(ecs, e, (ecs_id_t)ecs_component_comp_3d_mesh_renderer(), sizeof(comp_3d_mesh_renderer), &mr);
 
-            // Set RenderObject3D
             RenderObject3D robj = {
                 .iron_mesh_object = mesh_obj->base,
                 .iron_transform = mesh_obj->base->transform,
