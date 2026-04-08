@@ -184,6 +184,10 @@ void ecs_register_builtin_fields(void) {
     ecs_dynamic_component_add_field(id, "far_plane", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_camera, far_plane));
     ecs_dynamic_component_add_field(id, "perspective", DYNAMIC_TYPE_BOOL, offsetof(comp_3d_camera, perspective));
     ecs_dynamic_component_add_field(id, "active", DYNAMIC_TYPE_BOOL, offsetof(comp_3d_camera, active));
+    ecs_dynamic_component_add_field(id, "ortho_left", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_camera, ortho_left));
+    ecs_dynamic_component_add_field(id, "ortho_right", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_camera, ortho_right));
+    ecs_dynamic_component_add_field(id, "ortho_bottom", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_camera, ortho_bottom));
+    ecs_dynamic_component_add_field(id, "ortho_top", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_camera, ortho_top));
 
     id = comp_3d_mesh_renderer_entity;
     ecs_dynamic_component_add_field(id, "mesh_path", DYNAMIC_TYPE_PTR, offsetof(comp_3d_mesh_renderer, mesh_path));
