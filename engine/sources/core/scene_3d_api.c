@@ -2,6 +2,7 @@
 #include "ecs/ecs_world.h"
 #include "ecs/ecs_components.h"
 #include "asset_loader.h"
+#include <iron.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -404,6 +405,22 @@ static minic_val_t minic_mesh_load_arm(minic_val_t *args, int argc) {
         scene_remove();
     }
     scene_create(scene_raw);
+
+    // Log texture loading status for default material
+    if (scene_raw->material_datas != NULL && scene_raw->material_datas->length > 0) {
+        material_data_t *mat = (material_data_t *)scene_raw->material_datas->buffer[0];
+        if (mat->contexts != NULL && mat->contexts->length > 0) {
+            material_context_t *ctx = (material_context_t *)mat->contexts->buffer[0];
+            if (ctx->bind_textures != NULL) {
+                for (int i = 0; i < ctx->bind_textures->length; i++) {
+                    bind_tex_t *tex = (bind_tex_t *)ctx->bind_textures->buffer[i];
+                    gpu_texture_t *img = data_get_image(tex->file);
+                    printf("[mesh_load] Texture '%s' (unit '%s'): %s\n",
+                        tex->file, tex->name, img ? "OK" : "NOT FOUND");
+                }
+            }
+        }
+    }
 
     if (!_scene_root) {
         fprintf(stderr, "[mesh_load] scene_create failed for '%s'\n", mesh_path);

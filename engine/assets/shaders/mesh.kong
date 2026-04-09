@@ -12,6 +12,7 @@ const my_texture: tex2d;
 
 struct vert_in {
 	pos: float4;
+	nor: float2;
 	tex: float2;
 }
 

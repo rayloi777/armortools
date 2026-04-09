@@ -88,7 +88,7 @@ void scene_ensure_defaults(scene_t *scene) {
                                  {.name          = "mesh",
                                   .bind_textures = any_array_create_from_raw(
                                       (void *[]){
-                                          GC_ALLOC_INIT(bind_tex_t, {.name = "my_texture", .file = "colormap"}),
+                                          GC_ALLOC_INIT(bind_tex_t, {.name = "my_texture", .file = "colormap.k"}),
                                       },
                                       1)}),
                          },
