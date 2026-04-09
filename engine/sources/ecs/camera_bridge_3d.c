@@ -69,6 +69,13 @@ void camera_bridge_3d_init(void) {
     camera_object_build_proj(g_camera_3d, aspect);
     camera_object_build_mat(g_camera_3d);
 
+    // Pre-allocate ortho buffer to avoid per-frame gc_alloc
+    g_camera_3d_data->ortho = GC_ALLOC_INIT(f32_array_t, {
+        .buffer = gc_alloc(sizeof(float) * 4),
+        .length = 4,
+        .capacity = 4
+    });
+
     // Cache query for per-frame camera lookup
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_camera_3d_world);
     ecs_query_desc_t qdesc = {0};
@@ -135,11 +142,13 @@ void camera_bridge_3d_update(void) {
             if (cam_fresh->perspective) {
                 g_camera_3d_data->ortho = NULL;
             } else {
-                if (g_camera_3d_data->ortho == NULL || g_camera_3d_data->ortho->length < 4) {
-                    g_camera_3d_data->ortho = gc_alloc(sizeof(f32_array_t));
-                    g_camera_3d_data->ortho->buffer = gc_alloc(sizeof(float) * 4);
-                    g_camera_3d_data->ortho->length = 4;
-                    g_camera_3d_data->ortho->capacity = 4;
+                // Reuse pre-allocated ortho buffer (no per-frame gc_alloc)
+                if (g_camera_3d_data->ortho == NULL) {
+                    g_camera_3d_data->ortho = GC_ALLOC_INIT(f32_array_t, {
+                        .buffer = gc_alloc(sizeof(float) * 4),
+                        .length = 4,
+                        .capacity = 4
+                    });
                 }
                 g_camera_3d_data->ortho->buffer[0] = cam_fresh->ortho_left;
                 g_camera_3d_data->ortho->buffer[1] = cam_fresh->ortho_right;
