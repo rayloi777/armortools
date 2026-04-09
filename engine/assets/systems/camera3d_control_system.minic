@@ -1,0 +1,116 @@
+// camera3d_control_system — free-fly FPS camera controls
+// Finds "main_camera" entity and drives it with WASD + mouse look.
+
+id g_cam = 0;
+float g_yaw = 0.0;       // horizontal angle (radians)
+float g_pitch = -0.3805;  // vertical angle (radians) — matches camera at (0,2,5) looking at (0,0,0)
+float g_speed = 5.0;
+float g_sensitivity = 0.003;
+
+// Position tracked locally (read from entity at init, updated each frame)
+float g_pos_x = 0.0;
+float g_pos_y = 2.0;
+float g_pos_z = 5.0;
+
+int init(void) {
+    g_cam = entity_find_by_name("main_camera");
+    if (g_cam == 0) {
+        printf("[camera3d_control] Warning: 'main_camera' not found\n");
+        return 0;
+    }
+    printf("[camera3d_control] Camera found, controls active\n");
+    return 0;
+}
+
+int step(void) {
+    if (g_cam == 0) return 0;
+
+    float dt = sys_delta_time();
+
+    // --- Mouse look (right-click drag) ---
+    if (mouse_down("right") != 0.0) {
+        float dx = mouse_dx();
+        float dy = mouse_dy();
+        g_yaw = g_yaw - dx * g_sensitivity;
+        g_pitch = g_pitch - dy * g_sensitivity;
+        // Clamp pitch to avoid gimbal issues
+        if (g_pitch > 1.5533) g_pitch = 1.5533;   // ~89 degrees
+        if (g_pitch < -1.5533) g_pitch = -1.5533;
+    }
+
+    // --- Mouse wheel speed adjustment ---
+    float wheel = mouse_wheel_delta();
+    if (wheel > 0.0) {
+        g_speed = g_speed + 0.5;
+    }
+    if (wheel < 0.0) {
+        g_speed = g_speed - 0.5;
+    }
+    if (g_speed < 1.0) g_speed = 1.0;
+    if (g_speed > 50.0) g_speed = 50.0;
+
+    // --- Compute forward and right vectors from yaw/pitch ---
+    // Forward direction (where camera looks)
+    float fwd_x = -sin(g_yaw) * cos(g_pitch);
+    float fwd_y =  sin(g_pitch);
+    float fwd_z = -cos(g_yaw) * cos(g_pitch);
+
+    // Right direction (perpendicular on XZ plane)
+    float right_x =  cos(g_yaw);
+    float right_z = -sin(g_yaw);
+
+    // --- WASD + QE movement ---
+    float move_x = 0.0;
+    float move_y = 0.0;
+    float move_z = 0.0;
+
+    if (keyboard_down("w") != 0.0) {
+        move_x = move_x + fwd_x;
+        move_z = move_z + fwd_z;
+    }
+    if (keyboard_down("s") != 0.0) {
+        move_x = move_x - fwd_x;
+        move_z = move_z - fwd_z;
+    }
+    if (keyboard_down("d") != 0.0) {
+        move_x = move_x + right_x;
+        move_z = move_z + right_z;
+    }
+    if (keyboard_down("a") != 0.0) {
+        move_x = move_x - right_x;
+        move_z = move_z - right_z;
+    }
+    if (keyboard_down("e") != 0.0) {
+        move_y = move_y + 1.0;
+    }
+    if (keyboard_down("q") != 0.0) {
+        move_y = move_y - 1.0;
+    }
+
+    // Normalize horizontal movement to prevent faster diagonal speed
+    float move_len = sqrt(move_x * move_x + move_z * move_z);
+    if (move_len > 0.001) {
+        move_x = move_x / move_len;
+        move_z = move_z / move_len;
+    }
+
+    // Apply movement
+    float velocity = g_speed * dt;
+    g_pos_x = g_pos_x + move_x * velocity;
+    g_pos_y = g_pos_y + move_y * velocity;
+    g_pos_z = g_pos_z + move_z * velocity;
+
+    // --- Update camera ---
+    camera_3d_set_position(g_cam, g_pos_x, g_pos_y, g_pos_z);
+    camera_3d_look_at(g_cam, g_pos_x + fwd_x, g_pos_y + fwd_y, g_pos_z + fwd_z);
+
+    return 0;
+}
+
+int draw(void) {
+    draw_set_font("font.ttf", 14);
+    draw_set_color(0xffcccccc);
+    draw_string("Speed:", 10.0, 70.0);
+    draw_string(str_float1(g_speed), 70.0, 70.0);
+    return 0;
+}
