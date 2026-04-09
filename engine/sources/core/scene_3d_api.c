@@ -377,8 +377,8 @@ static minic_val_t minic_camera_3d_orthographic(minic_val_t *args, int argc) {
     return minic_val_void();
 }
 
-// mesh_load(path) -> ptr — loads .arm scene into Iron objects without creating ECS entities
-static minic_val_t minic_mesh_load(minic_val_t *args, int argc) {
+// mesh_load_arm(path) -> ptr — loads .arm scene into Iron objects without creating ECS entities
+static minic_val_t minic_mesh_load_arm(minic_val_t *args, int argc) {
     if (!g_runtime_world) return minic_val_ptr(NULL);
 
     const char *mesh_path = (argc > 0 && args[0].type == MINIC_T_PTR) ? (const char *)args[0].p : NULL;
@@ -456,7 +456,7 @@ void scene_3d_api_register(void) {
     minic_register_native("entity_get_z", minic_entity_get_z);
 
     minic_register_native("light_directional", minic_light_directional);
-    minic_register_native("mesh_load", minic_mesh_load);
+    minic_register_native("mesh_load_arm", minic_mesh_load_arm);
 
     printf("3D Scene API registered\n");
 }

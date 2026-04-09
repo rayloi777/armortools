@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 struct game_world_t;
-typedef struct scene_t scene_t;
+struct scene;
 
 void asset_loader_set_world(struct game_world_t *world);
 uint64_t asset_loader_load_scene(const char *path);
