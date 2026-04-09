@@ -377,6 +377,66 @@ static minic_val_t minic_camera_3d_orthographic(minic_val_t *args, int argc) {
     return minic_val_void();
 }
 
+// mesh_load(path) -> ptr — loads .arm scene into Iron objects without creating ECS entities
+static minic_val_t minic_mesh_load(minic_val_t *args, int argc) {
+    if (!g_runtime_world) return minic_val_ptr(NULL);
+
+    const char *mesh_path = (argc > 0 && args[0].type == MINIC_T_PTR) ? (const char *)args[0].p : NULL;
+    if (!mesh_path) return minic_val_ptr(NULL);
+
+    // Parse .arm file
+    scene_t *scene_raw = data_get_scene_raw(mesh_path);
+    if (!scene_raw) {
+        fprintf(stderr, "[mesh_load] Failed to load scene '%s'\n", mesh_path);
+        return minic_val_ptr(NULL);
+    }
+
+    // Auto-generate missing camera/material/shader/world data
+    scene_ensure_defaults(scene_raw);
+
+    // Cache patched scene under its own name so scene_create can find it
+    if (scene_raw->name != NULL) {
+        any_map_set(data_cached_scene_raws, scene_raw->name, scene_raw);
+    }
+
+    // Remove existing scene if present, then create fresh
+    if (_scene_root != NULL) {
+        scene_remove();
+    }
+    scene_create(scene_raw);
+
+    if (!_scene_root) {
+        fprintf(stderr, "[mesh_load] scene_create failed for '%s'\n", mesh_path);
+        return minic_val_ptr(NULL);
+    }
+
+    // Initialize viewport dimensions to prevent division-by-zero
+    render_path_current_w = sys_w();
+    render_path_current_h = sys_h();
+
+    // Position the auto-created camera behind origin
+    if (scene_camera != NULL && scene_camera->base != NULL) {
+        transform_t *t = scene_camera->base->transform;
+        t->loc = vec4_create(0, 2, 5, 1);
+        t->rot = quat_create(0, 0, 0, 1);
+        transform_build_matrix(t);
+        camera_object_build_proj(scene_camera, (f32)sys_w() / (f32)sys_h());
+        camera_object_build_mat(scene_camera);
+    }
+
+    // Return the first mesh object pointer (or NULL)
+    if (scene_meshes != NULL && scene_meshes->length > 0) {
+        mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[0];
+        if (mesh_obj && mesh_obj->base) {
+            printf("[mesh_load] Loaded '%s', returning mesh object\n", mesh_path);
+            return minic_val_ptr(mesh_obj->base);
+        }
+    }
+
+    printf("[mesh_load] Loaded '%s', no mesh objects found\n", mesh_path);
+    return minic_val_ptr(NULL);
+}
+
 void scene_3d_api_register(void) {
     minic_register_native("camera_3d_create", minic_camera_3d_create);
     minic_register_native("camera_3d_set_fov", minic_camera_3d_set_fov);
@@ -396,6 +456,7 @@ void scene_3d_api_register(void) {
     minic_register_native("entity_get_z", minic_entity_get_z);
 
     minic_register_native("light_directional", minic_light_directional);
+    minic_register_native("mesh_load", minic_mesh_load);
 
     printf("3D Scene API registered\n");
 }

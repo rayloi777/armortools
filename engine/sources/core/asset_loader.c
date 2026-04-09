@@ -13,7 +13,7 @@ void asset_loader_set_world(game_world_t *world) {
 
 // Ensure scene_t has required data for scene_create().
 // .arm files from ArmorPaint often lack camera, material, shader, and world data.
-static void scene_ensure_defaults(scene_t *scene) {
+void scene_ensure_defaults(scene_t *scene) {
     // Add camera object if scene has no camera_object
     bool has_camera = false;
     if (scene->objects != NULL) {
