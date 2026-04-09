@@ -7,7 +7,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef DEG_TO_RAD
 #define DEG_TO_RAD (3.14159265358979323846f / 180.0f)
+#endif
 
 static game_world_t *g_camera_3d_world = NULL;
 static camera_object_t *g_camera_3d = NULL;

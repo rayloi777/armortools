@@ -6,9 +6,11 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
-
-#define DEG_TO_RAD (3.14159265358979323846f / 180.0f)
 #include <minic.h>
+
+#ifndef DEG_TO_RAD
+#define DEG_TO_RAD (3.14159265358979323846f / 180.0f)
+#endif
 
 // Access g_runtime_world from runtime_api.c
 extern game_world_t *g_runtime_world;
