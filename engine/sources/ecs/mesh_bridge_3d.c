@@ -34,6 +34,7 @@ void mesh_bridge_3d_init(void) {
     sync_desc.terms[1].id = ecs_component_comp_3d_rotation();
     sync_desc.terms[2].id = ecs_component_comp_3d_scale();
     sync_desc.terms[3].id = ecs_component_comp_3d_mesh_renderer();
+    sync_desc.terms[4].id = ecs_component_RenderObject3D();
     g_sync_query = ecs_query_init(ecs, &sync_desc);
 
     ecs_query_desc_t cleanup_desc = {0};
@@ -68,22 +69,20 @@ void mesh_bridge_3d_shutdown(void) {
 
 void mesh_bridge_3d_sync_transforms(void) {
     if (!g_mesh_3d_world || !g_sync_query) return;
-    if (!scene_meshes || scene_meshes->length == 0) return;
 
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_mesh_3d_world);
     if (!ecs) return;
 
     ecs_iter_t it = ecs_query_iter(ecs, g_sync_query);
-    int mesh_idx = 0;
 
     while (ecs_query_next(&it)) {
         for (int i = 0; i < it.count; i++) {
-            if (mesh_idx >= scene_meshes->length) break;
+            // Read RenderObject3D to get the Iron mesh object pointer
+            const RenderObject3D *robj = ecs_get_id(ecs, it.entities[i], ecs_component_RenderObject3D());
+            if (!robj || !robj->iron_mesh_object) continue;
 
-            mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[mesh_idx];
-            mesh_idx++;
-
-            if (!mesh_obj || !mesh_obj->base || !mesh_obj->base->transform) continue;
+            object_t *base = (object_t *)robj->iron_mesh_object;
+            if (!base->transform) continue;
 
             // Read fresh component data via ecs_get_id (bypasses stale iterator
             // after Flecs archetype moves triggered by ecs_set_id)
@@ -92,7 +91,7 @@ void mesh_bridge_3d_sync_transforms(void) {
             const comp_3d_scale *scale = ecs_get_id(ecs, it.entities[i], ecs_component_comp_3d_scale());
             if (!pos || !rot || !scale) continue;
 
-            transform_t *t = mesh_obj->base->transform;
+            transform_t *t = base->transform;
             t->loc.x = pos->x;
             t->loc.y = pos->y;
             t->loc.z = pos->z;
