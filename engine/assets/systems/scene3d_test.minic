@@ -26,9 +26,9 @@ int init(void) {
     g_mesh_comp = component_lookup("comp_3d_mesh_renderer");
     g_render_comp = component_lookup("RenderObject3D");
 
-    // --- Load cube.arm scene data (creates Iron objects, not ECS entities) ---
-    void *mesh_obj = mesh_load_arm("cube.arm");
-    printf("Cube.arm loaded, mesh_obj=%p\n", mesh_obj);
+    // --- Load ship.arm scene data (creates Iron objects, not ECS entities) ---
+    void *mesh_obj = mesh_load_arm("ship.arm");
+    printf("Ship.arm loaded, mesh_obj=%p\n", mesh_obj);
 
     // --- Create mesh entity ---
     g_mesh = entity_create();
