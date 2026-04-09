@@ -11,6 +11,23 @@
 #include <iron_draw.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <iron_gc.h>
+#ifdef IRON_MACOS
+#include <mach/mach.h>
+#endif
+
+static float get_rss_mb(void) {
+#ifdef IRON_MACOS
+    struct mach_task_basic_info info;
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) {
+        return 0.0f;
+    }
+    return (float)info.resident_size / (1024.0f * 1024.0f);
+#else
+    return 0.0f;
+#endif
+}
 
 static game_world_t *g_loop_world = NULL;
 static float g_delta_time = 0.0f;
@@ -61,6 +78,13 @@ void game_loop_update(void) {
     minic_system_call_draw_ui_ext();
     ui_ext_api_end();
     sys_3d_reset_frame();
+
+    // Periodic GC collection and memory diagnostics (every 120 frames)
+    if (g_frame_count % 120 == 0) {
+        gc_run();
+        printf("[mem] frame %llu  RSS: %.1f MB\n",
+            (unsigned long long)g_frame_count, get_rss_mb());
+    }
 }
 
 float game_loop_get_delta_time(void) {
