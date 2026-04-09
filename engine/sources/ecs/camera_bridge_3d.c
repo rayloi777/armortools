@@ -97,6 +97,9 @@ void camera_bridge_3d_shutdown(void) {
 void camera_bridge_3d_update(void) {
     if (!g_camera_3d_world || !g_camera_3d || !g_camera_3d_query) return;
 
+    // Re-assert scene_camera in case scene_create() overwrote it
+    scene_camera = g_camera_3d;
+
     ecs_world_t *ecs = (ecs_world_t *)game_world_get_ecs(g_camera_3d_world);
     if (!ecs) return;
 
