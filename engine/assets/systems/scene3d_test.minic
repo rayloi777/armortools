@@ -18,6 +18,7 @@ int init(void) {
     camera_3d_set_position(g_cam, 0.0, 2.0, 5.0);
     camera_3d_look_at(g_cam, 0.0, 0.0, 0.0);
     camera_3d_perspective(g_cam, 60.0, 0.1, 100.0);
+    entity_set_name(g_cam, "main_camera");
     printf("Orbit camera created\n");
 
     // Add a directional light
@@ -44,13 +45,7 @@ int step(void) {
         entity_set_rotation(g_mesh, rx, ry, rz, rw);
     }
 
-    // Orbit camera around origin
-    //float dist = 5.0;
-    //float cx = sin(g_angle) * dist;
-    //float cz = cos(g_angle) * dist;
-    //camera_3d_set_position(g_cam, cx, 2.0, cz);
-    //camera_3d_look_at(g_cam, 0.0, 0.0, 0.0);
-
+    
     return 0;
 }
 
@@ -58,7 +53,7 @@ int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
     draw_string("3D Scene Test", 10.0, 10.0);
-    draw_string("Camera orbiting", 10.0, 30.0);
+    draw_string("WASD=Move  Q/E=Up/Down  RMB=Look  Scroll=Speed", 10.0, 30.0);
     draw_fps(10.0, 50.0);
     return 0;
 }
