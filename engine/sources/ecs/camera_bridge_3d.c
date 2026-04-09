@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define DEG_TO_RAD (3.14159265358979323846f / 180.0f)
+
 static game_world_t *g_camera_3d_world = NULL;
 static camera_object_t *g_camera_3d = NULL;
 static camera_data_t *g_camera_3d_data = NULL;
@@ -43,7 +45,7 @@ void camera_bridge_3d_init(void) {
         .name = "Camera3D",
         .near_plane = 0.1f,
         .far_plane = 100.0f,
-        .fov = 60.0f,
+        .fov = 60.0f * DEG_TO_RAD,
         .frustum_culling = true
     });
 
