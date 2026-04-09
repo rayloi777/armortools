@@ -28,6 +28,12 @@ int step(void) {
     float dt = sys_delta_time();
 
     // --- Mouse look (right-click drag) ---
+    if (mouse_started("right") != 0.0) {
+        mouse_lock();
+    }
+    if (mouse_released("right") != 0.0) {
+        mouse_unlock();
+    }
     if (mouse_down("right") != 0.0) {
         float dx = mouse_dx();
         float dy = mouse_dy();
