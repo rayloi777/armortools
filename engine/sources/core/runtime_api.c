@@ -16,6 +16,7 @@
 
 #include <minic.h>
 #include <iron_input.h>
+#include <iron_system.h>
 #include <time.h>
 #include <math.h>
 static game_world_t *g_runtime_world = NULL;
@@ -1164,6 +1165,16 @@ static minic_val_t minic_mouse_wheel_delta(void) {
     return minic_val_float(mouse_wheel_delta);
 }
 
+static minic_val_t minic_mouse_lock(void) {
+    iron_mouse_lock();
+    return minic_val_int(0);
+}
+
+static minic_val_t minic_mouse_unlock(void) {
+    iron_mouse_unlock();
+    return minic_val_int(0);
+}
+
 static minic_val_t minic_gamepad_down(minic_val_t *args, int argc) {
     if (argc < 2 || args[0].type != MINIC_T_INT || args[1].type != MINIC_T_PTR) {
         return minic_val_int(0);
@@ -1379,7 +1390,9 @@ void runtime_api_register(void) {
     minic_register_native("mouse_dx", minic_mouse_dx);
     minic_register_native("mouse_dy", minic_mouse_dy);
     minic_register_native("mouse_wheel_delta", minic_mouse_wheel_delta);
-    
+    minic_register_native("mouse_lock", minic_mouse_lock);
+    minic_register_native("mouse_unlock", minic_mouse_unlock);
+
     minic_register_native("gamepad_down", minic_gamepad_down);
     minic_register_native("gamepad_started", minic_gamepad_started);
     minic_register_native("gamepad_released", minic_gamepad_released);
