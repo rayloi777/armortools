@@ -1,58 +1,105 @@
-// 3D Test — exercises .arm scene loading via mesh_create
-// mesh_create("cube.arm") triggers scene-based loading with auto-generated
-// camera, material, shader, and world data.
+// 3D Test — raw ECS pattern: entity_create + component_lookup + entity_add + comp_set_*
 
+// Component IDs (resolved in init)
+id g_pos_comp = 0;
+id g_rot_comp = 0;
+id g_scale_comp = 0;
+id g_cam_comp = 0;
+id g_light_comp = 0;
+id g_mesh_comp = 0;
+id g_render_comp = 0;
+
+// Entity IDs
 id g_cam = 0;
 id g_mesh = 0;
 float g_angle = 0.0;
 
 int init(void) {
-    printf("\n=== 3D Test System Init ===\n");
+    printf("\n=== 3D Test System Init (Raw ECS) ===\n");
 
-    // Load cube.arm scene — auto-creates camera, materials, shaders
-    g_mesh = mesh_create("cube.arm");
-    printf("Mesh entity created from cube.arm\n");
+    // Look up component IDs
+    g_pos_comp = component_lookup("comp_3d_position");
+    g_rot_comp = component_lookup("comp_3d_rotation");
+    g_scale_comp = component_lookup("comp_3d_scale");
+    g_cam_comp = component_lookup("comp_3d_camera");
+    g_light_comp = component_lookup("comp_directional_light");
+    g_mesh_comp = component_lookup("comp_3d_mesh_renderer");
+    g_render_comp = component_lookup("RenderObject3D");
 
-    // Create a separate 3D camera for orbit control
-    g_cam = camera_3d_create(60.0, 0.1, 100.0);
-    camera_3d_set_position(g_cam, 0.0, 2.0, 5.0);
-    camera_3d_look_at(g_cam, 0.0, 0.0, 0.0);
-    camera_3d_perspective(g_cam, 60.0, 0.1, 100.0);
+    // --- Load cube.arm scene data (creates Iron objects, not ECS entities) ---
+    void *mesh_obj = mesh_load("cube.arm");
+    printf("Cube.arm loaded, mesh_obj=%p\n", mesh_obj);
+
+    // --- Create mesh entity ---
+    g_mesh = entity_create();
+    entity_add(g_mesh, g_pos_comp);
+    entity_add(g_mesh, g_rot_comp);
+    entity_add(g_mesh, g_scale_comp);
+    entity_add(g_mesh, g_mesh_comp);
+    entity_add(g_mesh, g_render_comp);
+    // Set position
+    comp_set_floats(g_pos_comp, entity_get(g_mesh, g_pos_comp), "x,y,z", 0.0, 0.0, 0.0);
+    // Identity rotation
+    comp_set_floats(g_rot_comp, entity_get(g_mesh, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+    // Unit scale
+    comp_set_floats(g_scale_comp, entity_get(g_mesh, g_scale_comp), "x,y,z", 1.0, 1.0, 1.0);
+    // Set Iron mesh object pointer in RenderObject3D
+    comp_set_ptr(g_render_comp, entity_get(g_mesh, g_render_comp), "iron_mesh_object", mesh_obj);
+    comp_set_bool(g_render_comp, entity_get(g_mesh, g_render_comp), "dirty", 1);
+    // Mark visible
+    comp_set_bool(g_mesh_comp, entity_get(g_mesh, g_mesh_comp), "visible", 1);
+    printf("Mesh entity created: %llu\n", g_mesh);
+
+    // --- Create camera entity ---
+    g_cam = entity_create();
+    entity_add(g_cam, g_pos_comp);
+    entity_add(g_cam, g_rot_comp);
+    entity_add(g_cam, g_cam_comp);
+    // Position at (0, 2, 5)
+    comp_set_floats(g_pos_comp, entity_get(g_cam, g_pos_comp), "x,y,z", 0.0, 2.0, 5.0);
+    // Identity rotation
+    comp_set_floats(g_rot_comp, entity_get(g_cam, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+    // Camera params (fov in radians, ~60 degrees)
+    comp_set_floats(g_cam_comp, entity_get(g_cam, g_cam_comp), "fov,near_plane,far_plane", 1.047, 0.1, 100.0);
+    comp_set_bool(g_cam_comp, entity_get(g_cam, g_cam_comp), "perspective", 1);
+    comp_set_bool(g_cam_comp, entity_get(g_cam, g_cam_comp), "active", 1);
     entity_set_name(g_cam, "main_camera");
-    printf("Orbit camera created\n");
+    printf("Camera entity created: %llu\n", g_cam);
 
-    // Add a directional light
-    id light = light_directional(0.5, -1.0, 0.3, 1.0, 0.9, 0.8, 1.0);
-    printf("Directional light created\n");
+    // --- Create directional light entity ---
+    id light = entity_create();
+    entity_add(light, g_light_comp);
+    comp_set_floats(g_light_comp, entity_get(light, g_light_comp), "dir_x,dir_y,dir_z", 0.5, -1.0, 0.3);
+    comp_set_floats(g_light_comp, entity_get(light, g_light_comp), "color_r,color_g,color_b", 1.0, 0.9, 0.8);
+    comp_set_float(g_light_comp, entity_get(light, g_light_comp), "strength", 1.0);
+    comp_set_bool(g_light_comp, entity_get(light, g_light_comp), "enabled", 1);
+    printf("Light entity created: %llu\n", light);
 
     printf("=== 3D Test Init Complete ===\n\n");
     return 0;
 }
 
 int step(void) {
-    if (g_cam == 0) return 0;
+    if (g_mesh == 0) return 0;
 
     float dt = sys_delta_time();
     g_angle = g_angle + dt * 0.5;
 
-    // Rotate mesh around Y axis
-    if (g_mesh != 0) {
-        float half = g_angle * 0.5;
-        float rx = 0.0;
-        float ry = sin(half);
-        float rz = 0.0;
-        float rw = cos(half);
-        entity_set_rotation(g_mesh, rx, ry, rz, rw);
-    }
+    // Rotate mesh around Y axis via raw ECS component access
+    float half = g_angle * 0.5;
+    float rx = 0.0;
+    float ry = sin(half);
+    float rz = 0.0;
+    float rw = cos(half);
+    comp_set_floats(g_rot_comp, entity_get(g_mesh, g_rot_comp), "x,y,z,w", rx, ry, rz, rw);
 
-    
     return 0;
 }
 
 int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("3D Scene Test", 10.0, 10.0);
+    draw_string("3D Scene Test (Raw ECS)", 10.0, 10.0);
     draw_string("WASD=Move  Q/E=Up/Down  RMB=Look  Scroll=Speed", 10.0, 30.0);
     draw_fps(10.0, 50.0);
     return 0;
