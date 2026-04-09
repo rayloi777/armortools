@@ -118,17 +118,17 @@ static minic_val_t minic_camera_3d_look_at(minic_val_t *args, int argc) {
     float fx = -dx, fy = -dy, fz = -dz;
     float ux = 0.0f, uy = 1.0f, uz = 0.0f;
 
-    // Right = cross(forward, up)
-    float rx = fy * uz - fz * uy;
-    float ry = fz * ux - fx * uz;
-    float rz = fx * uy - fy * ux;
+    // Right = cross(up, forward) — standard look-at: xaxis = cross(worldUp, zaxis)
+    float rx = uy * fz - uz * fy;
+    float ry = uz * fx - ux * fz;
+    float rz = ux * fy - uy * fx;
     len = sqrtf(rx * rx + ry * ry + rz * rz);
     if (len > 0.0001f) { rx /= len; ry /= len; rz /= len; }
 
-    // Up = cross(right, forward)
-    ux = ry * fz - rz * fy;
-    uy = rz * fx - rx * fz;
-    uz = rx * fy - ry * fx;
+    // Up = cross(forward, right) — standard look-at: yaxis = cross(zaxis, xaxis)
+    ux = fy * rz - fz * ry;
+    uy = fz * rx - fx * rz;
+    uz = fx * ry - fy * rx;
 
     // Rotation matrix to quaternion
     float m00 = rx, m10 = ry, m20 = rz;
