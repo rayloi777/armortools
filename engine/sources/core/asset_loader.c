@@ -88,7 +88,7 @@ void scene_ensure_defaults(scene_t *scene) {
                                  {.name          = "mesh",
                                   .bind_textures = any_array_create_from_raw(
                                       (void *[]){
-                                          GC_ALLOC_INIT(bind_tex_t, {.name = "my_texture", .file = "texture.k"}),
+                                          GC_ALLOC_INIT(bind_tex_t, {.name = "my_texture", .file = "colormap"}),
                                       },
                                       1)}),
                          },
@@ -115,9 +115,10 @@ void scene_ensure_defaults(scene_t *scene) {
                                   .vertex_elements = any_array_create_from_raw(
                                       (void *[]){
                                           GC_ALLOC_INIT(vertex_element_t, {.name = "pos", .data = "short4norm"}),
+                                          GC_ALLOC_INIT(vertex_element_t, {.name = "nor", .data = "short2norm"}),
                                           GC_ALLOC_INIT(vertex_element_t, {.name = "tex", .data = "short2norm"}),
                                       },
-                                      2),
+                                      3),
                                   .constants = any_array_create_from_raw(
                                       (void *[]){
                                           GC_ALLOC_INIT(shader_const_t,
