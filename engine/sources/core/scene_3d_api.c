@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+
+#define DEG_TO_RAD (3.14159265358979323846f / 180.0f)
 #include <minic.h>
 
 // Access g_runtime_world from runtime_api.c
@@ -22,7 +24,7 @@ static uint64_t extract_entity_id3d(minic_val_t *arg) {
 static minic_val_t minic_camera_3d_create(minic_val_t *args, int argc) {
     if (!g_runtime_world) return minic_val_id(0);
 
-    float fov = (argc > 0) ? (float)minic_val_to_d(args[0]) : 60.0f;
+    float fov = (argc > 0) ? (float)minic_val_to_d(args[0]) * DEG_TO_RAD : 60.0f * DEG_TO_RAD;
     float near_plane = (argc > 1) ? (float)minic_val_to_d(args[1]) : 0.1f;
     float far_plane = (argc > 2) ? (float)minic_val_to_d(args[2]) : 100.0f;
 
@@ -62,7 +64,7 @@ static minic_val_t minic_camera_3d_create(minic_val_t *args, int argc) {
 static minic_val_t minic_camera_3d_set_fov(minic_val_t *args, int argc) {
     if (argc < 2 || !g_runtime_world) return minic_val_void();
     uint64_t entity = extract_entity_id3d(&args[0]);
-    float fov = (float)minic_val_to_d(args[1]);
+    float fov = (float)minic_val_to_d(args[1]) * DEG_TO_RAD;
 
     uint64_t cam_id = ecs_component_comp_3d_camera();
     comp_3d_camera *cam = (comp_3d_camera *)entity_get_component_data(g_runtime_world, entity, cam_id);
@@ -333,7 +335,7 @@ static minic_val_t minic_light_directional(minic_val_t *args, int argc) {
 static minic_val_t minic_camera_3d_perspective(minic_val_t *args, int argc) {
     if (argc < 4 || !g_runtime_world) return minic_val_void();
     uint64_t entity = extract_entity_id3d(&args[0]);
-    float fov = (float)minic_val_to_d(args[1]);
+    float fov = (float)minic_val_to_d(args[1]) * DEG_TO_RAD;
     float near_plane = (float)minic_val_to_d(args[2]);
     float far_plane = (float)minic_val_to_d(args[3]);
 
