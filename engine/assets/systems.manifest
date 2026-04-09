@@ -4,6 +4,7 @@
 #   If path omitted, defaults to data/systems/<name>.minic
 
 # keyboard_test
+# mouse_test
 #frog_system
 perf_overlay
 draw_ui_ext_system
