@@ -79,7 +79,7 @@ void game_loop_update(void) {
     ui_ext_api_end();
     sys_3d_reset_frame();
 
-    // Periodic GC collection and memory diagnostics (every 120 frames)
+    // Periodic GC collection and memory diagnostics (every 120 frames ≈ 2 sec)
     if (g_frame_count % 120 == 0) {
         gc_run();
         printf("[mem] frame %llu  RSS: %.1f MB\n",
