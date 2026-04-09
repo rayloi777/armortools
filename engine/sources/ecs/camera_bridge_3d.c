@@ -58,8 +58,13 @@ void camera_bridge_3d_init(void) {
         return;
     }
 
-    // Parent camera to scene root
-    object_set_parent(g_camera_3d->base, _scene_root);
+    // Root camera objects with GC so they survive scene_remove() calls.
+    // Do NOT parent to _scene_root — scene_remove() destroys all children.
+    gc_root(g_camera_3d);
+    gc_root(g_camera_3d->base);
+    if (g_camera_3d->base->transform) {
+        gc_root(g_camera_3d->base->transform);
+    }
 
     // Set as active scene camera so Iron's rendering uses it
     scene_camera = g_camera_3d;
