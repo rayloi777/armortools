@@ -36,10 +36,11 @@ int step(void) {
 
     // Rotate mesh around Y axis
     if (g_mesh != 0) {
-        float rx = sin(g_angle * 1.3) * 0.707;
-        float ry = sin(g_angle);
+        float half = g_angle * 0.5;
+        float rx = 0.0;
+        float ry = sin(half);
         float rz = 0.0;
-        float rw = cos(g_angle * 0.5);
+        float rw = cos(half);
         entity_set_rotation(g_mesh, rx, ry, rz, rw);
     }
 
