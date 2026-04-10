@@ -136,6 +136,22 @@ void scene_ensure_defaults(scene_t *scene) {
             },
             1);
     }
+
+    // Patch shader contexts that lack depth_attachment — the 3D render path
+    // always uses a depth buffer, so missing depth_attachment causes a Metal
+    // validation error (pipeline MTLPixelFormatInvalid vs Depth32Float).
+    if (scene->shader_datas != NULL) {
+        for (int i = 0; i < scene->shader_datas->length; i++) {
+            shader_data_t *sd = (shader_data_t *)scene->shader_datas->buffer[i];
+            if (!sd || !sd->contexts) continue;
+            for (int j = 0; j < sd->contexts->length; j++) {
+                shader_context_t *ctx = (shader_context_t *)sd->contexts->buffer[j];
+                if (ctx && ctx->depth_attachment == NULL) {
+                    ctx->depth_attachment = "D32";
+                }
+            }
+        }
+    }
 }
 
 uint64_t asset_loader_load_scene(const char *path) {
