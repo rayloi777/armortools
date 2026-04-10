@@ -167,9 +167,11 @@ void camera_bridge_3d_update(void) {
             camera_object_build_mat(g_camera_3d);
 
             // Single active camera — stop after first match
+            ecs_iter_fini(&it);
             return;
         }
     }
+    ecs_iter_fini(&it);
 }
 
 void *camera_bridge_3d_get_active(void) {
