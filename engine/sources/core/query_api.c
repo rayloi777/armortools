@@ -196,7 +196,6 @@ static bool build_filter_and_run(runtime_query_t *q) {
         q->total_count = 0;
         q->truncated = false;
         memset(q->last_entities, 0, sizeof(q->last_entities));
-        ecs_iter_fini((ecs_iter_t *)q->cached_it);
         q->iter_started = false;
         return false;
     }
@@ -259,9 +258,6 @@ void query_destroy(int query_id) {
     runtime_query_t *q = get_query_by_id(query_id);
     if (!q) return;
     if (q->cached_it) {
-        if (q->iter_started) {
-            ecs_iter_fini((ecs_iter_t *)q->cached_it);
-        }
         free(q->cached_it);
         q->cached_it = NULL;
     }
@@ -301,7 +297,6 @@ bool query_next(int query_id) {
         q->total_count = 0;
         q->truncated = false;
         memset(q->last_entities, 0, sizeof(q->last_entities));
-        ecs_iter_fini((ecs_iter_t *)q->cached_it);
         q->iter_started = false;
         return false;
     }
@@ -392,7 +387,6 @@ bool query_iter_next(int query_id) {
     if (!q || !q->cached_it || !q->iter_started) return false;
     if (!ecs_query_next((ecs_iter_t *)q->cached_it)) {
         q->last_count = 0;
-        ecs_iter_fini((ecs_iter_t *)q->cached_it);
         restore_iter_state(q);
         return false;
     }

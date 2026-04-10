@@ -200,7 +200,6 @@ void sys_2d_draw(void) {
             count++;
         }
     }
-    ecs_iter_fini(&it);
 
     if (count == 0) return;
 

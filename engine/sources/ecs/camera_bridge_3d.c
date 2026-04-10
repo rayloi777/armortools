@@ -171,7 +171,6 @@ void camera_bridge_3d_update(void) {
             return;
         }
     }
-    ecs_iter_fini(&it);
 }
 
 void *camera_bridge_3d_get_active(void) {

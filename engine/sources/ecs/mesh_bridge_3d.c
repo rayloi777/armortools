@@ -59,7 +59,6 @@ void mesh_bridge_3d_shutdown(void) {
                     }
                 }
             }
-            ecs_iter_fini(&it);
         }
     }
     if (g_sync_query) { ecs_query_fini(g_sync_query); g_sync_query = NULL; }
@@ -107,7 +106,6 @@ void mesh_bridge_3d_sync_transforms(void) {
             transform_build_matrix(t);
         }
     }
-    ecs_iter_fini(&it);
 }
 
 void mesh_bridge_3d_create_mesh(uint64_t entity) {
