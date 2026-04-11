@@ -61,14 +61,23 @@ All four are optional. `draw_ui` is used for game HUD, debug overlays, and UI el
 | `void`  | No return value                                      |
 | `ptr`   | Generic pointer (maps to `void *`)                   |
 
-The `id` type stores 64-bit Flecs entity/component IDs natively (`uint64_t`). It supports comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) via a fast path that compares `uint64_t` directly. It does **not** support arithmetic. Use it for variables that hold entity or component IDs returned by `entity_create()`, `component_lookup()`, `query_foreach()` callbacks, etc.
+The `id` type stores 64-bit Flecs entity/component IDs natively (`uint64_t`). It supports comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) via a fast path that compares `uint64_t` directly. It does **not** support arithmetic. Use it for variables that hold entity or component IDs returned by `entity_create()`, `component_lookup()`, `query_iter_entity_id()`, `entity_find_by_name()`, etc.
 
 ```c
-// Example:
-id g_player = entity_create();
-id g_pos_comp = component_lookup("comp_2d_position");
-entity_add(g_player, g_pos_comp);
+// Example: id variables for entities and components
+id g_player = 0;
+id g_pos_comp = 0;
+id g_camera = 0;
+
+int init(void) {
+    g_pos_comp = component_lookup("comp_2d_position");
+    g_player = entity_create();
+    entity_add(g_player, g_pos_comp);
+    g_camera = entity_find_by_name("main_camera");
+}
 ```
+
+**Global `id` variables must be initialized to `0`** — uninitialized `id` variables may cause undefined behavior when passed to ECS functions.
 
 ### Variables
 
