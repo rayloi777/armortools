@@ -294,36 +294,78 @@ entity_set_data(e, comp_id, data);           // Set component data
 
 ### Queries
 
-Queries iterate over all entities that have a specific set of components.
+Queries iterate over all entities that have a specific set of components. Two patterns are available.
+
+**Pattern 1: Callback-style (query_foreach)**
 
 ```c
 // Create a query for entities with a specific component
-int q = query_create("BenchVelocity");
+int q = query_create("FrogVelocity");
 
-// Iterator-style iteration
+// Callback called once per entity
+int ai_frog_step(id entity, void *vel) {
+    float vx = comp_get_float(g_vel_comp, vel, "vx");
+    float vy = comp_get_float(g_vel_comp, vel, "vy");
+    // ... process entity ...
+    return 0;
+}
+query_foreach(q, ai_frog_step);
+```
+
+**Pattern 2: Iterator-style (direct iteration in Minic)**
+
+```c
+// Create query from component name
+int q = query_create("EnemyBody");
+
+// Or create and configure manually
+int q2 = query_new();
+query_with(q2, g_health_comp);
+query_find(q2);
+
+// Iterator loop
 query_iter_begin(q);
 while (query_iter_next(q)) {
     int count = query_iter_count(q);
     for (int i = 0; i < count; i++) {
-        int entity = query_iter_entity(q, i);
+        id entity = query_iter_entity_id(q, i);
         void *data = query_iter_comp_ptr(q, i, 0);  // comp_index = 0
-        // ... process entity
+        // ... process entity ...
     }
 }
 
-// Callback-style iteration (C iterates, calls your function per entity)
-int my_step(int entity, void *data) {
-    comp_add_float(g_comp, data, "x", 1.0);
-    return 0;
+// Get entity by index (old style, still works)
+int count = query_find(q);
+for (int i = 0; i < count; i++) {
+    id e = query_get(q, i);
+    void *data = entity_get(e, comp_id);
+    // ...
 }
-query_foreach(q, my_step);
+```
 
-// Batch callback (C iterates, calls once per chunk with contiguous data)
-int my_batch(int count, void *data_array) {
-    // Process 'count' entities, data is contiguous
-    return 0;
+**Deferred entity destruction:** When destroying entities during iteration, collect them in a buffer and destroy after the loop:
+
+```c
+id g_dead_enemies[200];
+int g_dead_enemy_count = 0;
+
+void destroy_dead(void) {
+    int i = 0;
+    while (i < g_dead_enemy_count) {
+        entity_destroy(g_dead_enemies[i]);
+        i++;
+    }
+    g_dead_enemy_count = 0;
 }
-query_foreach_batch(q, my_batch);
+
+// During query iteration:
+if (should_destroy) {
+    if (g_dead_enemy_count < 200) {
+        g_dead_enemies[g_dead_enemy_count] = query_iter_entity_id(q, i);
+        g_dead_enemy_count++;
+    }
+}
+destroy_dead();  // called after iteration completes
 ```
 
 ---
