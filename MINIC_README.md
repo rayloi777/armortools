@@ -417,6 +417,33 @@ float vx = mouse_view_x();       // View-space position
 float vy = mouse_view_y();
 ```
 
+### Mouse Lock (FPS Controls)
+
+For FPS-style camera control, lock the mouse to the window while dragging:
+
+```c
+// Begin lock on right-click start
+if (mouse_started("right") != 0.0) {
+    mouse_lock();
+}
+// End lock on right-click release
+if (mouse_released("right") != 0.0) {
+    mouse_unlock();
+}
+// Read relative movement while locked
+if (mouse_down("right") != 0.0) {
+    float dx = mouse_dx();
+    float dy = mouse_dy();
+    g_yaw = g_yaw - dx * sensitivity;
+    g_pitch = g_pitch - dy * sensitivity;
+    // Clamp pitch to prevent gimbal lock
+    if (g_pitch > 1.5533) g_pitch = 1.5533;
+    if (g_pitch < -1.5533) g_pitch = -1.5533;
+}
+```
+
+`mouse_lock()` captures the mouse cursor within the window. `mouse_dx()`/`mouse_dy()` return relative movement since the last frame. Use `mouse_wheel_delta()` to adjust movement speed.
+
 ### Gamepad
 
 ```c
