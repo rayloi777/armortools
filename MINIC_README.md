@@ -19,7 +19,7 @@ Scripts are loaded via `load_and_run_script()` in `game_engine.c`. Each script r
 
 ## Script Lifecycle
 
-A script can define up to three callback functions:
+A script can define up to four callback functions:
 
 ```c
 int init(void) {
@@ -33,12 +33,17 @@ int step(void) {
 }
 
 int draw(void) {
-    // Called every frame (render 2D overlay)
+    // Called every frame (render 2D overlay in 3D scene)
+    return 0;
+}
+
+int draw_ui(void) {
+    // Called every frame after all 3D rendering (UI/HUD overlay)
     return 0;
 }
 ```
 
-All three are optional. Return values are currently ignored.
+All four are optional. `draw_ui` is used for game HUD, debug overlays, and UI elements that should render on top of everything else. Return values are currently ignored.
 
 ---
 
