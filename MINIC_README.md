@@ -498,6 +498,30 @@ float zoom = camera_get_zoom();
 
 ---
 
+### 3D Camera
+
+```c
+// Set camera position and look target
+camera_3d_set_position(cam, x, y, z);
+camera_3d_look_at(cam, target_x, target_y, target_z);
+
+// Get camera position
+float cx = camera_3d_get_x(cam);
+float cy = camera_3d_get_y(cam);
+float cz = camera_3d_get_z(cam);
+
+// Find camera by name
+id cam = entity_find_by_name("main_camera");
+if (cam == 0) {
+    printf("[camera] Warning: 'main_camera' not found\n");
+    return 0;
+}
+```
+
+Note: Camera movement is typically done by reading/tracking a world position and calling `camera_3d_set_position()` each frame, rather than storing camera position internally.
+
+---
+
 ## Sprite API
 
 ```c
