@@ -591,6 +591,18 @@ char *upper = to_upper_case(s);
 char *hex = i32_to_string_hex(255);
 ```
 
+### String Conversion
+
+```c
+// Convert numeric values to strings for display
+char *s = str_float(float_value);   // e.g., "3.14"
+char *s = str_int(int_value);       // e.g., "42"
+
+// Usage with draw_string
+draw_string(str_float(g_speed), 70.0, 70.0);
+draw_string(str_int(g_level), m + 30.0, y);
+```
+
 ### Arrays
 
 Typed arrays: `i8_array_t`, `u8_array_t`, `i16_array_t`, `u16_array_t`, `i32_array_t`, `u32_array_t`, `f32_array_t`, `any_array_t`, `string_array_t`, `buffer_t`
