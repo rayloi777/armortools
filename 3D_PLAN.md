@@ -431,6 +431,63 @@ float3 kD = (1 - F) * (1 - metallic);
 float3 ambient = kD * diffuse_sh + specular * F;
 ```
 
+#### SH Light Probe（Baked GI，Phase 2）
+
+Light Probe 解決物件之間的全局光照（light bounce）。Editor 中放置 probes，烘焙 SH irradiance 係數。
+
+**原理：** 每個 probe 記錄周圍環境的 irradiance，而不是 reflection。
+
+**Probe 放置：**
+
+| 場景類型 | 放置策略 |
+|---------|---------|
+| 室外 | 每 10m 放置一個，覆蓋整個場景 |
+| 室內 | 每個房間 4-8 個，角落和光源附近更密集 |
+
+**Editor 烘焙流程：**
+
+```c
+// 1. 在每個 probe 位置發射 rays，採樣周圍環境
+// 2. 對採樣結果做 SH projection，得到 9 個係數
+// 3. 儲存到 comp_environment_probe.sh
+
+struct SHIrradiance {
+    float3 L00, L1m1, L10, L11;   // Band 0+1
+    float3 L2m2, L2m1, L20, L21, L22; // Band 2
+};
+```
+
+**運行時使用：**
+
+```glsl
+// 根據 world position 找最近的 probe
+comp_environment_probe* probe = find_nearest_probe(world_pos);
+
+// 計算該方向的 irradiance
+float3 indirect_light = SampleSH(probe->sh, normal);
+
+// 應用於 PBR
+float3 diffuse_indirect = albedo * indirect_light * ao;
+color = direct_lighting + diffuse_indirect;
+```
+
+**多 Probe 混合：**
+
+```c
+// 找最近的 2-4 個 probes，根據 distance 混合
+float w0 = 1.0 - smoothstep(0, blend_radius, dist0);
+float w1 = 1.0 - smoothstep(0, blend_radius, dist1);
+float3 final_sh = (sh0 * w0 + sh1 * w1) / (w0 + w1);
+```
+
+**與 Reflection Probe 的區別：**
+
+| | SH Irradiance Probe | Reflection Probe |
+|--|---------------------|------------------|
+| 用途 | 間接光照（diffuse bounce） | 反射（specular reflection） |
+| 採樣方向 | 法線 N | 反射向量 R |
+| 內容 | 周圍物體反彈的光 | 環境的反射 |
+
 #### Reflection Probe（Phase 4）
 
 多個位置放置 probe，每個有自己的 SH + prefiltered env cubemap：

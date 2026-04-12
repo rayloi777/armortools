@@ -666,12 +666,50 @@ totalAtt = (1 - dist/range)² × angleAtt</div>
 <span class="fn">float3</span> kD = (<span class="c">1</span> - F) * (<span class="c">1</span> - metallic);
 <span class="fn">float3</span> ambient = kD * diffuse_sh + specular * F;</div>
 
-  <h3>Component</h3>
-  <div class="code"><span class="k">typedef struct</span> {
-    <span class="fn">float3</span> sky_color;       <span class="c">// float3(0.5, 0.7, 1.0) 藍天</span>
-    <span class="fn">float3</span> ground_color;    <span class="c">// float3(0.2, 0.2, 0.2) 灰色地</span>
-    <span class="fn">float</span>  ambient_strength;
-} comp_sky_settings;</div>
+  <h3>SH Light Probe（Baked GI，Phase 2）</h3>
+  <p>Light Probe 解決物件之間的全局光照（light bounce）。Editor 中放置 probes，烘焙 SH irradiance 係數。</p>
+
+  <h4>Probe 放置</h4>
+  <table>
+    <tr><th>場景類型</th><th>放置策略</th></tr>
+    <tr><td>室外</td><td>每 10m 放置一個</td></tr>
+    <tr><td>室內</td><td>每個房間 4-8 個，角落更密集</td></tr>
+  </table>
+
+  <h4>Editor 烘焙流程</h4>
+  <div class="code"><span class="c">// 1. 在每個 probe 位置發射 rays，採樣周圍環境</span>
+<span class="c">// 2. 對採樣結果做 SH projection，得到 9 個係數</span>
+<span class="c">// 3. 儲存到 comp_environment_probe.sh</span>
+
+<span class="k">struct</span> SHIrradiance {
+    <span class="fn">float3</span> L00, L1m1, L10, L11;   <span class="c">// Band 0+1</span>
+    <span class="fn">float3</span> L2m2, L2m1, L20, L21, L22; <span class="c">// Band 2</span>
+};</div>
+
+  <h4>運行時使用</h4>
+  <div class="code"><span class="c">// 根據 world position 找最近的 probe</span>
+<span class="t">comp_environment_probe</span>* probe = find_nearest_probe(world_pos);
+
+<span class="c">// 計算該方向的 irradiance</span>
+<span class="fn">float3</span> indirect_light = SampleSH(probe->sh, normal);
+
+<span class="c">// 應用於 PBR</span>
+<span class="fn">float3</span> diffuse_indirect = albedo * indirect_light * ao;
+color = direct_lighting + diffuse_indirect;</div>
+
+  <h4>多 Probe 混合</h4>
+  <div class="code"><span class="c">// 找最近的 2-4 個 probes，根據 distance 混合</span>
+<span class="fn">float</span> w0 = <span class="c">1.0</span> - smoothstep(<span class="c">0</span>, blend_radius, dist0);
+<span class="fn">float</span> w1 = <span class="c">1.0</span> - smoothstep(<span class="c">0</span>, blend_radius, dist1);
+<span class="fn">float3</span> final_sh = (sh0 * w0 + sh1 * w1) / (w0 + w1);</div>
+
+  <h4>與 Reflection Probe 的區別</h4>
+  <table>
+    <tr><th></th><th>SH Irradiance Probe</th><th>Reflection Probe</th></tr>
+    <tr><td>用途</td><td>間接光照（diffuse bounce）</td><td>反射（specular reflection）</td></tr>
+    <tr><td>採樣方向</td><td>法線 N</td><td>反射向量 R</td></tr>
+    <tr><td>內容</td><td>周圍物體反彈的光</td><td>環境的反射</td></tr>
+  </table>
 </section>
 
 <!-- ==========================================
