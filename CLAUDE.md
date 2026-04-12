@@ -59,14 +59,19 @@ Iron Engine (base/)             # Rendering, platform, UI — never modified
 
 ### Key Modules in engine/sources/
 
-- **core/** — Minic-facing APIs. Each `*_api.c` registers functions callable from `.minic` scripts via `minic_register()`. `runtime_api.c` is the unified registration entry point. `engine_world.c` holds the global world state. `minic_system.c` manages system lifecycle (loading, init/step/draw callbacks, manifest parsing).
-- **ecs/** — Flecs ECS internals. `ecs_world.c` manages the Flecs world lifecycle. `ecs_dynamic.c` handles runtime component registration. `*_bridge.c` files sync ECS state to Iron (render bridge, sprite bridge, camera bridge).
-- **components/** — Built-in component definitions (Transform, MeshRenderer, Camera).
+- **core/** — Minic-facing APIs. Each `*_api.c` registers functions callable from `.minic` scripts via `minic_register()`. `runtime_api.c` is the unified registration entry point. `engine_world.c` holds the global world state. `minic_system.c` manages system lifecycle (loading, init/step/draw callbacks, manifest parsing). Additional modules: `asset_loader.c` (scene/mesh loading), `scene_3d_api.c` (3D scene operations), `scene_api.c` (scene management), `camera2d.c` (2D camera), `prefab.c` (prefab load/save), `ui_ext_api.c` (extended UI), `input.c` (input handling), `game_loop.c` (frame loop).
+- **ecs/** — Flecs ECS internals. `ecs_world.c` manages the Flecs world lifecycle. `ecs_dynamic.c` handles runtime component registration. `ecs_components.c` registers all built-in components. Bridge files sync ECS state to Iron: `ecs_bridge.c` (base), `sprite_bridge.c` (2D sprites), `render2d_bridge.c` (2D draw calls), `camera_bridge.c` (2D camera), `render3d_bridge.c` (3D draw calls), `camera_bridge_3d.c` (3D camera), `mesh_bridge_3d.c` (3D mesh sync).
+- **components/** — Built-in component definitions: `transform.c` (2D position/rotation/scale), `mesh_renderer.c` (3D mesh renderer), `camera.c` (2D/3D camera), `material.c` (PBR material).
 - `game_engine.c` — Top-level init/shutdown/start. Wires together ECS world, API registration, Iron callbacks, and script loading.
 
 ### Bridge Pattern
 
-Bridge systems (`ecs_bridge.c`, `sprite_bridge.c`, `render2d_bridge.c`, `camera_bridge.c`) run as Flecs systems that detect ECS component changes and sync them to Iron engine objects. For example, when a sprite component is added, the sprite bridge creates the corresponding Iron object and adds it to the active scene.
+Bridge systems run as Flecs systems that detect ECS component changes and sync them to Iron engine objects:
+
+- **2D bridges:** `sprite_bridge.c`, `render2d_bridge.c`, `camera_bridge.c` — handle 2D sprites, batch rendering, and 2D camera.
+- **3D bridges:** `render3d_bridge.c`, `camera_bridge_3d.c`, `mesh_bridge_3d.c` — handle 3D mesh rendering, 3D camera sync, and mesh object lifecycle.
+
+For example, when a sprite component is added, the sprite bridge creates the corresponding Iron object and adds it to the active scene.
 
 ### Minic Script System
 
@@ -96,6 +101,34 @@ entity_add(g_player, g_pos_comp);
 ### 2D Components
 
 2D ECS components use the `comp_2d_` naming prefix (e.g., `comp_2d_position`, `comp_2d_sprite`). The 2D render pipeline is driven by `render2d_bridge.c` which batches and submits 2D draw calls.
+
+### 3D Components
+
+3D ECS components use the `comp_3d_` naming prefix:
+
+| Component | Struct | Fields |
+|-----------|--------|--------|
+| Position | `comp_3d_position` | `x, y, z` |
+| Rotation | `comp_3d_rotation` | `x, y, z, w` (quaternion) |
+| Scale | `comp_3d_scale` | `x, y, z` |
+| Camera | `comp_3d_camera` | `fov, near_plane, far_plane, perspective, ortho_*` |
+| Mesh Renderer | `comp_3d_mesh_renderer` | `mesh_path, material_path, cast_shadows, receive_shadows` |
+| Material | `comp_3d_material` | `metallic, roughness, albedo_rgb, emissive_rgb, ao` |
+| Directional Light | `comp_directional_light` | `dir_xyz, color_rgb, strength, enabled` |
+
+The 3D render pipeline is driven by `render3d_bridge.c`. Mesh objects are synced to Iron via `mesh_bridge_3d.c`, and the 3D camera via `camera_bridge_3d.c`. The `asset_loader` module provides `asset_loader_load_scene()` and `asset_loader_load_mesh()` for loading 3D assets from Minic scripts.
+
+## Context Files
+
+Detailed documentation for subsystems lives in separate README files at the repo root:
+
+- **KONG_README.md** — Kong shader compiler: language syntax, types, built-in functions, backend pipeline, advanced patterns from paint shaders.
+- **MINIC_README.md** — Minic scripting language: type system, ECS API (entities, components, queries), input/drawing APIs, system lifecycle, complete examples.
+- **AMAKE_README.md** — Build system (amake): shell wrapper → make.js → project.js architecture, platform commands, Project API, shader compilation, asset export.
+- **ARM3D_README.md** — `.arm` binary format: Scene format (Blender export), Project format (ArmorPaint export), binary encoding, vertex packing, loading pipeline, ECS integration.
+- **3D_PLAN.md** — 3D deferred rendering pipeline implementation plan: 5-pass architecture, component types, lighting system, post-processing roadmap.
+
+Read these files when working on the corresponding subsystems.
 
 ## Code Style
 
