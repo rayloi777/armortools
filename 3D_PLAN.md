@@ -64,27 +64,34 @@ Tag: Comp3dVisible         — 當前幀可見（culling 結果）
 
 ### Material System（.arm 格式）
 
-Engine 使用 Iron 的 `.arm` 格式管理 Material。.arm 是 ArmorPaint/ArmorLab 的項目格式，支援 PBR 參數和紋理。
+Engine 使用 Iron 的 `.arm` 格式。.arm 有兩種格式：
 
-**Material 來源：**
+| 格式 | 來源 | 內容 |
+|------|------|------|
+| **Scene format** | Blender 匯出 | 網格幾何 + 物件 transform，**不含材質** |
+| **Project format** | ArmorPaint 匯出 | 完整專案：材質、圖層、筆刷、紋理 |
+
+**重要：Blender 匯出的 .arm 沒有材質！** 材質需單獨從 ArmorPaint 匯出。
+
+**Material 載入：**
 
 | 來源 | 載入方式 |
 |------|---------|
-| `.arm` 文件內的 material | `data_get_material("scene.arm", "MaterialName")` |
-| 獨立 `.arm` 文件 | `data_get_material("materials/wood.arm", NULL)` |
+| ArmorPaint .arm（Project format） | `data_get_material("materials/wood.arm", "Wood")` |
 | 程式建立 | `material_create("name")` |
+| 覆蓋參數 | `material_override(arm_path, mat_name)` |
 
 **Iron Material 結構：**
 
 ```c
-// Iron engine 的 material_data_t
+// material_data_t — 來自 .arm 或程式建立
 typedef struct {
     const char *name;              // material 名稱
     const char *shader;            // shader 名稱 (e.g., "World PBR")
     void       *_;                 // runtime data
 } material_data_t;
 
-// 每個 material 可有多個 context（如 mesh, paint, vertpaint）
+// material_context_t — 每個 material 的 render context
 typedef struct {
     const char *name;              // context 名稱 (e.g., "mesh")
     bind_const_t_array_t *bind_constants;  // 常量 (metallic, roughness...)
@@ -95,28 +102,30 @@ typedef struct {
 **Component 定義：**
 
 ```c
-// Mesh Renderer 引用 .arm 中的 material
 comp_3d_mesh_renderer — mesh_path, arm_path, material_name
 ```
 
 **使用流程：**
 
 ```c
-// 方式 1：直接使用 .arm 中的 material
+// 1. Blender 匯出網格（Scene .arm，無材質）
+// 2. ArmorPaint 建立材質（Project .arm）
+// 3. 遊戲中組合：
+
 entity_add(entity, comp_3d_mesh_renderer{
-    .mesh          = "meshes/cube.mesh",
-    .arm_path      = "materials/wood.arm",
-    .material_name = "Wood"
+    .mesh          = "meshes/cube.mesh",       // 來自 Blender .arm
+    .arm_path      = "materials/wood.arm",    // 來自 ArmorPaint .arm
+    .material_name = "Wood"                    // material 名稱
 });
 
-// 方式 2：程式建立 material
+// 程式建立 material（無需 .arm 文件）
 id mat = material_create("my_material");
 material_set_shader(mat, "World PBR");
 material_set_float(mat, "metallic", 0.0f);
 material_set_float(mat, "roughness", 0.7f);
 material_set_texture(mat, "albedo_map", "textures/brick.ktx");
 
-// 方式 3：使用 .arm 並覆蓋參數
+// 使用 .arm 並覆蓋參數
 id mat = material_override("materials/wood.arm", "Wood");
 material_set_float(mat, "roughness", 0.3f);
 ```
