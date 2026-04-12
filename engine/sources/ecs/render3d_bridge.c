@@ -28,10 +28,15 @@ static void sys_3d_render_commands(void) {
     render_path_submit_draw("mesh");
     gpu_end();
 
-    // Pass 2: Display gbuffer0 to screen
+    // Pass 2: Debug display — show selected G-buffer channel
     _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR, 0xff1a1a2e, 1.0f);
-    if (gb->gbuffer0) {
-        draw_scaled_image(gb->gbuffer0, 0.0f, 0.0f, (float)w, (float)h);
+    gpu_texture_t *display_tex = NULL;
+    switch (g_debug_mode) {
+        case 1: display_tex = gb->depth_target; break;  // Depth
+        default: display_tex = gb->gbuffer0; break;      // Color/Normal/Albedo
+    }
+    if (display_tex) {
+        draw_scaled_image(display_tex, 0.0f, 0.0f, (float)w, (float)h);
     }
     gpu_end();
 
@@ -77,7 +82,6 @@ void sys_3d_set_debug_mode(int mode) {
     if (mode < 0) mode = 0;
     if (mode > 3) mode = 3;
     g_debug_mode = mode;
-    printf("3D Render Bridge: debug mode set to %d\n", g_debug_mode);
 }
 
 int sys_3d_get_debug_mode(void) {
