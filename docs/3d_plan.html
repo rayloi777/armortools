@@ -397,18 +397,24 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
 
   <h3>Material System（.arm 格式）</h3>
 
-  <p>Engine 使用 Iron 的 <code>.arm</code> 格式管理 Material（ArmorPaint/ArmorLab 項目格式）。</p>
+  <p>.arm 有兩種格式：</p>
+  <table>
+    <tr><th>格式</th><th>來源</th><th>內容</th></tr>
+    <tr><td>Scene format</td><td>Blender 匯出</td><td>網格幾何 + transform，<strong>不含材質</strong></td></tr>
+    <tr><td>Project format</td><td>ArmorPaint 匯出</td><td>完整專案：材質、圖層、筆刷、紋理</td></tr>
+  </table>
+  <p><strong>重要：Blender 匯出的 .arm 沒有材質！</strong> 材質需從 ArmorPaint 匯出。</p>
 
-  <h4>Material 來源</h4>
+  <h4>Material 載入</h4>
   <table>
     <tr><th>來源</th><th>載入方式</th></tr>
-    <tr><td>.arm 文件內的 material</td><td><code>data_get_material("scene.arm", "MaterialName")</code></td></tr>
-    <tr><td>獨立 .arm 文件</td><td><code>data_get_material("materials/wood.arm", NULL)</code></td></tr>
+    <tr><td>ArmorPaint .arm</td><td><code>data_get_material("materials/wood.arm", "Wood")</code></td></tr>
     <tr><td>程式建立</td><td><code>material_create("name")</code></td></tr>
+    <tr><td>覆蓋參數</td><td><code>material_override(arm_path, mat_name)</code></td></tr>
   </table>
 
   <h4>Iron Material 結構</h4>
-  <div class="code"><span class="c">// material_data_t — Iron engine 的 material</span>
+  <div class="code"><span class="c">// material_data_t</span>
 <span class="k">typedef struct </span>{
     <span class="k">const char</span> *name;       <span class="c">// material 名稱</span>
     <span class="k">const char</span> *shader;     <span class="c">// shader 名稱 (e.g., "World PBR")</span>
@@ -423,6 +429,17 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
 } <span class="t">material_context_t</span>;</div>
 
   <h4>使用流程</h4>
+  <div class="code"><span class="c">// 1. Blender 匯出網格（Scene .arm，無材質）</span>
+<span class="c">// 2. ArmorPaint 建立材質（Project .arm）</span>
+<span class="c">// 3. 遊戲中組合：</span>
+
+<span class="fn">entity_add</span>(entity, comp_3d_mesh_renderer{
+    .mesh = <span class="s">"meshes/cube.mesh"</span>,       <span class="c">// Blender .arm</span>
+    .arm_path = <span class="s">"materials/wood.arm"</span>,   <span class="c">// ArmorPaint .arm</span>
+    .material_name = <span class="s">"Wood"</span>                    <span class="c">// material 名稱</span>
+});</div>
+
+  <h4>Shader 映射</h4>
   <div class="code"><span class="c">// 方式 1：直接使用 .arm 中的 material</span>
 <span class="fn">entity_add</span>(entity, comp_3d_mesh_renderer{
     .mesh = <span class="s">"meshes/cube.mesh"</span>,
