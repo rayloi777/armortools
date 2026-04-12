@@ -358,6 +358,31 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
     </div>
   </div>
 
+  <h3>.arm 資產流程</h3>
+  <div class="code">┌─────────────────────────────────────────────────────┐
+│  .arm 資產來源                                          │
+│                                                        │
+│  Blender ──► Scene .arm ──► 網格 + Transform（無材質） │
+│  ArmorPaint ──► Project .arm ──► Material + Texture    │
+└─────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────┐
+│  載入函數                                             │
+│                                                        │
+│  scene_load("scene.arm")  → ECS entities           │
+│  material_load("mat.arm")  → material_data_t         │
+└─────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────┐
+│  ECS Component                                      │
+│                                                        │
+│  comp_3d_mesh_renderer {                             │
+│      .mesh_path,       // "meshes/cube.mesh"         │
+│      .arm_path,        // "materials/wood.arm"      │
+│      .material_name     // "Wood"                    │
+│  }                                                  │
+└─────────────────────────────────────────────────────┘</div>
+
   <h3>ECS Components</h3>
   <div class="grid">
     <div class="card">
@@ -370,7 +395,10 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
       <h4>Mesh</h4>
       <div class="tag-box">comp_3d_mesh_renderer</div>
       <div class="tag-box">comp_3d_lod</div>
-      <div class="tag-box">RenderObject3D</div>
+    </div>
+    <div class="card">
+      <h4>Material（見 1.1）</h4>
+      <div class="tag-box">comp_3d_material</div>
     </div>
     <div class="card">
       <h4>Camera</h4>
@@ -391,11 +419,14 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
       <div class="tag-box tag">Comp3dVisible</div>
       <div class="tag-box tag">Comp3dTransparent</div>
       <div class="tag-box tag">Comp3dParticle</div>
-      <div class="tag-box tag">Comp3dGlowingParticle</div>
     </div>
   </div>
 
-  <h3>Material System（.arm 格式）</h3>
+  <!-- ==========================================
+       1.1 Material System
+       ========================================== -->
+  <section id="material">
+    <h3>1.1 Material System（.arm 格式）</h3>
 
   <p>.arm 有兩種格式：</p>
   <table>
