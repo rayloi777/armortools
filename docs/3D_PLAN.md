@@ -371,6 +371,90 @@ struct LightData {
 };
 ```
 
+### PBR 環境光（Ambient / Environment Lighting）
+
+G-buffer 只儲存 material properties（normal, albedo, roughness, metallic, ao），環境光需要另外處理。
+
+#### 三層環境光
+
+| 層次 | 內容 | 計算方式 | 成本 |
+|------|------|---------|------|
+| Ambient | 簡單常數或天空顏色 | `albedo × ambient × ao` | 極低 |
+| SH Irradiance | 球諧函數預計算的間接光 | `albedo × SH_probe(pos, N)` | 低 |
+| IBL Reflection | Environment map 反射 | `env_map.sample(reflection_vec, roughness)` | 中 |
+
+#### Phase 1：Unity 風格預設天空（已實現）
+
+```glsl
+// Unity 風格藍天灰地
+float3 GetSkyAmbient(float3 N, float3 albedo, float ao) {
+    float t = N.y * 0.5 + 0.5;  // -1~1 → 0~1
+    float3 sky_color = float3(0.5, 0.7, 1.0);    // 藍天
+    float3 ground_color = float3(0.2, 0.2, 0.2); // 灰色地
+    float3 sky_ambient = lerp(ground_color, sky_color, t);
+    return sky_ambient * albedo * ao * ambient_strength;
+}
+```
+
+#### Phase 2+：SH Irradiance
+
+球諧函數用 27 個 floats（9 coefficients × 3 channels）儲存 irradiance：
+
+```glsl
+struct SHIrradiance {
+    float3 L00, L1m1, L10, L11;   // Band 0 + 1
+    float3 L2m2, L2m1, L20, L21, L22; // Band 2
+};
+
+float3 SampleSH(SHIrradiance sh, float3 N) {
+    return sh.L00
+         + sh.L1m1 * (N.y) + sh.L10 * (N.z) + sh.L11 * (N.x)
+         + sh.L20 * (N.y*N.z) + sh.L21 * (N.y*N.x) + sh.L22 * (N.z*N.x)
+         + sh.L2m2 * (N.x*N.y) + sh.L2m1 * (N.z*N.z - 1.0/3.0);
+}
+```
+
+#### Phase 3+：IBL Reflection
+
+Prefiltered environment cubemap（每個 mip level 對應一個 roughness）：
+
+```glsl
+// Specular IBL
+float3 R = reflect(-V, N);
+float mip = roughness * (num_mips - 1);
+float3 specular = env_cubemap.SampleLevel(R, mip);
+
+// PBR BRDF
+float3 F0 = lerp(float3(0.04), albedo, metallic);
+float3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+float3 kD = (1 - F) * (1 - metallic);
+float3 ambient = kD * diffuse_sh + specular * F;
+```
+
+#### Reflection Probe（Phase 4）
+
+多個位置放置 probe，每個有自己的 SH + prefiltered env cubemap：
+
+```c
+typedef struct {
+    float3  position;
+    float   blend_radius;
+    SHIrradiance sh;
+    bool    has_envmap;
+} comp_environment_probe;
+```
+
+#### Component
+
+```c
+// 全域天空設定
+typedef struct {
+    float3 sky_color;       // float3(0.5, 0.7, 1.0) 藍天
+    float3 ground_color;    // float3(0.2, 0.2, 0.2) 灰色地
+    float  ambient_strength; // 環境光強度
+} comp_sky_settings;
+```
+
 ---
 
 ## 6. Culling 系統

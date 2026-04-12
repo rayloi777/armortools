@@ -316,6 +316,7 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
     <a href="#gbuffer">G-Buffer</a>
     <a href="#csm">CSM</a>
     <a href="#lighting">燈光</a>
+    <a href="#pbr-env">環境光</a>
     <a href="#culling">Culling</a>
     <a href="#transparent">透明</a>
     <a href="#optimize">優化</a>
@@ -614,6 +615,63 @@ totalAtt = (1 - dist/range)² × angleAtt</div>
 
   <h3>Tiled / Clustered Lighting</h3>
   <p>ComputeShader 把屏幕分成 16×16 tiles，每個 tile 預先計算影響它的燈光（平均 2-4 個）。省 50-80% 燈光遍歷計算。</p>
+</section>
+
+<!-- ==========================================
+     5b. PBR Environment Lighting
+     ========================================== -->
+<section id="pbr-env">
+  <h2>5b. PBR 環境光</h2>
+
+  <p>G-buffer 只儲存 material properties（normal, albedo, roughness, metallic, ao），環境光需要另外處理。</p>
+
+  <h3>三層環境光</h3>
+  <table>
+    <tr><th>層次</th><th>內容</th><th>計算方式</th><th>成本</th></tr>
+    <tr><td>Ambient</td><td>簡單常數或天空顏色</td><td>albedo × ambient × ao</td><td>極低</td></tr>
+    <tr><td>SH Irradiance</td><td>球諧函數預計算的間接光</td><td>albedo × SH_probe(pos, N)</td><td>低</td></tr>
+    <tr><td>IBL Reflection</td><td>Environment map 反射</td><td>env_map.sample(reflection_vec, roughness)</td><td>中</td></tr>
+  </table>
+
+  <h3>Phase 1：Unity 風格預設天空（已實現）</h3>
+  <div class="code"><span class="fn">float3</span> <span class="c">GetSkyAmbient</span>(<span class="fn">float3</span> N, <span class="fn">float3</span> albedo, <span class="fn">float</span> ao) {
+    <span class="fn">float</span> t = N.y * <span class="c">0.5</span> + <span class="c">0.5</span>;  <span class="c">// -1~1 → 0~1</span>
+    <span class="fn">float3</span> sky_color = <span class="fn">float3</span>(<span class="c">0.5</span>, <span class="c">0.7</span>, <span class="c">1.0</span>);    <span class="c">// 藍天</span>
+    <span class="fn">float3</span> ground_color = <span class="fn">float3</span>(<span class="c">0.2</span>, <span class="c">0.2</span>, <span class="c">0.2</span>); <span class="c">// 灰色地</span>
+    <span class="fn">float3</span> sky_ambient = lerp(ground_color, sky_color, t);
+    <span class="k">return</span> sky_ambient * albedo * ao * ambient_strength;
+}</div>
+
+  <h3>SH Irradiance（Phase 2+）</h3>
+  <div class="code"><span class="k">struct</span> SHIrradiance {
+    <span class="fn">float3</span> L00, L1m1, L10, L11;   <span class="c">// Band 0 + 1</span>
+    <span class="fn">float3</span> L2m2, L2m1, L20, L21, L22; <span class="c">// Band 2</span>
+};
+
+<span class="fn">float3</span> <span class="c">SampleSH</span>(SHIrradiance sh, <span class="fn">float3</span> N) {
+    <span class="k">return</span> sh.L00 + sh.L1m1*(N.y) + sh.L10*(N.z) + sh.L11*(N.x)
+         + sh.L20*(N.y*N.z) + sh.L21*(N.y*N.x) + sh.L22*(N.z*N.x)
+         + sh.L2m2*(N.x*N.y) + sh.L2m1*(N.z*N.z - <span class="c">1.0</span>/<span class="c">3.0</span>);
+}</div>
+
+  <h3>IBL Reflection（Phase 3+）</h3>
+  <div class="code"><span class="c">// Specular IBL</span>
+<span class="fn">float3</span> R = reflect(-V, N);
+<span class="fn">float</span> mip = roughness * (num_mips - <span class="c">1</span>);
+<span class="fn">float3</span> specular = env_cubemap.SampleLevel(R, mip);
+
+<span class="c">// PBR BRDF</span>
+<span class="fn">float3</span> F0 = lerp(<span class="fn">float3</span>(<span class="c">0.04</span>), albedo, metallic);
+<span class="fn">float3</span> F = FresnelSchlickRoughness(NdotV, F0, roughness);
+<span class="fn">float3</span> kD = (<span class="c">1</span> - F) * (<span class="c">1</span> - metallic);
+<span class="fn">float3</span> ambient = kD * diffuse_sh + specular * F;</div>
+
+  <h3>Component</h3>
+  <div class="code"><span class="k">typedef struct</span> {
+    <span class="fn">float3</span> sky_color;       <span class="c">// float3(0.5, 0.7, 1.0) 藍天</span>
+    <span class="fn">float3</span> ground_color;    <span class="c">// float3(0.2, 0.2, 0.2) 灰色地</span>
+    <span class="fn">float</span>  ambient_strength;
+} comp_sky_settings;</div>
 </section>
 
 <!-- ==========================================
