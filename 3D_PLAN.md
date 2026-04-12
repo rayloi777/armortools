@@ -62,87 +62,84 @@ Tag: Comp3dShadowCaster    — 投射陰影
 Tag: Comp3dShadowReceiver  — 接收陰影
 Tag: Comp3dVisible         — 當前幀可見（culling 結果）
 
-### Material System（自訂 Shader）
+### Material System（.arm 格式）
 
-每個 Mesh 可以指定自訂 Material，Material 決定使用哪個 Shader。
+Engine 使用 Iron 的 `.arm` 格式管理 Material。.arm 是 ArmorPaint/ArmorLab 的項目格式，支援 PBR 參數和紋理。
+
+**Material 來源：**
+
+| 來源 | 載入方式 |
+|------|---------|
+| `.arm` 文件內的 material | `data_get_material("scene.arm", "MaterialName")` |
+| 獨立 `.arm` 文件 | `data_get_material("materials/wood.arm", NULL)` |
+| 程式建立 | `material_create("name")` |
+
+**Iron Material 結構：**
 
 ```c
-// Material 結構
+// Iron engine 的 material_data_t
 typedef struct {
-    const char* shader_name;       // e.g. "world_gbuffer", "custom_pbr"
-    float metallic;               // 覆蓋 global material
-    float roughness;               // 覆蓋 global material
-    float3 albedo;                // 覆蓋 global material
-    float normal_strength;         // 法線強度
-    float ao_strength;             // AO 強度
-    float emissive;                // 自發光強度
-    // Texture slots
-    const char* albedo_map;       // 紋理路徑
-    const char* normal_map;
-    const char* roughness_map;
-    const char* metallic_map;
-    const char* ao_map;
-    const char* emissive_map;
-} comp_3d_material;
+    const char *name;              // material 名稱
+    const char *shader;            // shader 名稱 (e.g., "World PBR")
+    void       *_;                 // runtime data
+} material_data_t;
 
-// Mesh Renderer 引用 Material
-comp_3d_mesh_renderer — mesh_path, material_path
-comp_3d_material       — shader_name, PBR params, texture slots
+// 每個 material 可有多個 context（如 mesh, paint, vertpaint）
+typedef struct {
+    const char *name;              // context 名稱 (e.g., "mesh")
+    bind_const_t_array_t *bind_constants;  // 常量 (metallic, roughness...)
+    bind_tex_t_array_t  *bind_textures;    // 紋理槽位
+} material_context_t;
+```
+
+**Component 定義：**
+
+```c
+// Mesh Renderer 引用 .arm 中的 material
+comp_3d_mesh_renderer — mesh_path, arm_path, material_name
 ```
 
 **使用流程：**
 
 ```c
-// 1. 創建自訂 Material
-id mat = entity_create_material("my_custom_material");
-material_set_shader(mat, "custom_pbr");
-material_set_float(mat, "roughness", 0.5f);
-material_set_texture(mat, "albedo_map", "textures/brick_diffuse.ktx");
+// 方式 1：直接使用 .arm 中的 material
+entity_add(entity, comp_3d_mesh_renderer{
+    .mesh          = "meshes/cube.mesh",
+    .arm_path      = "materials/wood.arm",
+    .material_name = "Wood"
+});
 
-// 2. 附加到 Entity
-entity_add(entity, get_comp_3d_material(mat));
+// 方式 2：程式建立 material
+id mat = material_create("my_material");
+material_set_shader(mat, "World PBR");
+material_set_float(mat, "metallic", 0.0f);
+material_set_float(mat, "roughness", 0.7f);
+material_set_texture(mat, "albedo_map", "textures/brick.ktx");
 
-// 3. Mesh 指向同一 Material
-entity_add(entity, comp_3d_mesh_renderer{.mesh = "meshes/cube.mesh", .material = mat});
+// 方式 3：使用 .arm 並覆蓋參數
+id mat = material_override("materials/wood.arm", "Wood");
+material_set_float(mat, "roughness", 0.3f);
 ```
 
-**Shader 查找順序：**
+**Shader 映射：**
 
-```
-mesh.material.shader_name
-    ↓ 如果為空
-material_library_get_default(mesh.mesh_type)  // e.g. "opaque" → "world_gbuffer"
-    ↓
-"fallback_pbr"
-```
+| Iron Shader | 用途 | 對應 Pipeline |
+|-------------|------|------------|
+| `World PBR` | PBR 渲染 | Deferred / Forward+ |
+| `World PBR Double Side` | 雙面 PBR | Deferred / Forward+ |
+| `Sky` | 天空盒 | Forward |
+| `Shadow` | 陰影 casting | Shadow Pass |
 
 **Minic API：**
 
 ```c
-// 創建 Material
 id material_create(const char* name);
-
-// 設置參數
-void material_set_shader(id mat, const char* shader);  // "world_gbuffer", "custom_pbr"
+id material_override(const char* arm_path, const char* material_name);
+void material_set_shader(id mat, const char* shader);
 void material_set_float(id mat, const char* param, float val);
-void material_set_vec3(id mat, const char* param, float x, y, z);
+void material_set_vec3(id mat, const char* param, float x, float y, float z);
 void material_set_texture(id mat, const char* slot, const char* path);
-
-// 快捷方式：直接創建並附加
-entity_add(entity, comp_3d_material{.shader_name = "custom_pbr", .roughness = 0.3f});
 ```
-
-**內建 Shader：**
-
-| Shader Name       | 用途                        |
-|-------------------|---------------------------|
-| `world_gbuffer`   | Deferred G-buffer (預設)   |
-| `transparent`     | 透明物體 Forward Pass      |
-| `particle`        | 粒子 Additive              |
-| `unlit`           | 無光照 (僅紋理)             |
-| `outline`         | 輪廓線                     |
-| `toon`            | 卡通渲染                   |
-| `custom_*`        | 用家自訂                   |
 
 ### ECS System 執行順序
 
