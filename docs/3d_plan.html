@@ -321,6 +321,7 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
     <a href="#transparent">透明</a>
     <a href="#optimize">優化</a>
     <a href="#api">Minic API</a>
+    <a href="#pipeline-switch">Pipeline</a>
     <a href="#phases">階段</a>
     <a href="#files">檔案</a>
   </nav>
@@ -905,6 +906,64 @@ culling_set_occlusion_enabled(bool)</div>
 render_set_shadow_quality("high")</div>
     </div>
   </div>
+</section>
+
+<!-- ==========================================
+     9. Forward+ / Deferred Pipeline
+     ========================================== -->
+<section id="pipeline-switch">
+  <h2>9. Forward+ / Deferred 雙 Pipeline 支援</h2>
+
+  <h3>Forward+ vs Deferred 比較</h3>
+  <table>
+    <tr><th>特性</th><th>Forward+</th><th>Deferred</th></tr>
+    <tr><td>原理</td><td>Tiled Forward + Light Binning</td><td>G-buffer + Lighting Pass</td></tr>
+    <tr><td>燈光數量</td><td>中等（~64/tile）</td><td>多（所有燈光一次處理）</td></tr>
+    <tr><td>透明物件</td><td>原生支援（Alpha Blend）</td><td>需要 Dual-Render</td></tr>
+    <tr><td>適用</td><td>室內、少量動態燈光</td><td>室外、大量燈光</td></tr>
+  </table>
+
+  <h3>Forward+ 原理</h3>
+  <div class="code">Pass 1: Depth Pre-pass
+Pass 2: Light Binning (ComputeShader, 16×16 tiles)
+Pass 3: Forward Tiled Rendering (每個 tile 平均 2-4 燈光)</div>
+
+  <h3>架構</h3>
+  <div class="code">PipelineManager
+    ├── Forward+ Path
+    │     Depth → Tiled Light Bin → Tiled Forward → screen
+    └── Deferred Path
+          G-buffer → Lighting → PostFX → screen</div>
+
+  <h3>PipelineManager</h3>
+  <div class="code"><span class="k">typedef enum</span> {
+    PIPELINE_FORWARD_PLUS,
+    PIPELINE_DEFERRED,
+} pipeline_type;
+
+<span class="k">void</span> <span class="c">pipeline_set</span>(pipeline_type type) { ... }
+
+<span class="c">// Minic API</span>
+<span class="k">void</span> render_set_pipeline(<span class="k">const char</span>* name);  <span class="c">// "forward+", "deferred"</span>
+<span class="k">void</span> render_set_quality(<span class="k">const char</span>* preset);</div>
+
+  <h3>Quality Preset</h3>
+  <table>
+    <tr><th>Preset</th><th>Pipeline</th><th>Features</th></tr>
+    <tr><td>LOW</td><td>Forward+</td><td>No shadows, no post-fx</td></tr>
+    <tr><td>MEDIUM</td><td>Forward+</td><td>Basic shadows</td></tr>
+    <tr><td>HIGH</td><td>Deferred</td><td>CSM, SSAO</td></tr>
+    <tr><td>ULTRA</td><td>Deferred</td><td>CSM×4, SSAO, Bloom, TAA</td></tr>
+  </table>
+
+  <h3>新建檔案</h3>
+  <table>
+    <tr><th>檔案</th><th>用途</th></tr>
+    <tr><td><code>pipeline_manager.c/h</code></td><td>Pipeline 切換管理</td></tr>
+    <tr><td><code>material_system.c/h</code></td><td>統一 Material 接口</td></tr>
+    <tr><td><code>forward_plus_renderer.c/h</code></td><td>Forward+ rendering</td></tr>
+    <tr><td><code>mesh_forward_plus.kong</code></td><td>Forward+ mesh shader</td></tr>
+  </table>
 </section>
 
 <!-- ==========================================
