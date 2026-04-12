@@ -1,0 +1,264 @@
+<h2>完整燈光系統設計</h2>
+<p class="subtitle">Directional + Point + Spot · 全部帶陰影</p>
+
+<!-- Light Types -->
+<div class="section">
+  <h3>三種燈光類型</h3>
+  <table class="data-table">
+    <tr><th>類型</th><th>陰影方法</th><th>最大數量</th><th>Shadow Map</th></tr>
+    <tr><td>Directional</td><td>Cascaded Shadow Maps (CSM)</td><td>4</td><td>3 × shadow_0/1/2 (2048/1024/512)</td></tr>
+    <tr><td>Point</td><td>Shadow Cubemap</td><td>8</td><td>6 × shadow_cube_N (1024²)</td></tr>
+    <tr><td>Spot</td><td>Perspective Shadow Map</td><td>4</td><td>1 × shadow_spot_N (1024²)</td></tr>
+  </table>
+</div>
+
+<!-- Light Components -->
+<div class="split" style="gap: 1.5rem;">
+  <div>
+    <h3>Directional Light</h3>
+    <div class="code-block">
+typedef struct {
+    float dir_x, dir_y, dir_z;   // 光照方向（歸一化）
+    float color_r, g, b;
+    float strength;
+    bool  enabled;
+    // CSM
+    bool  cast_shadows;
+    float shadow_bias;
+    float normal_offset_bias;
+    float shadow_radius;          // PCF kernel 大小
+} comp_directional_light;
+    </div>
+
+    <h3>Point Light</h3>
+    <div class="code-block">
+typedef struct {
+    float pos_x, pos_y, pos_z;   // 世界座標
+    float color_r, g, b;
+    float strength;
+    float range;                  // 衰減半徑
+    bool  enabled;
+    // Shadow
+    bool  cast_shadows;
+    float shadow_bias;
+    // Cubemap stored as: shadow_cube_0 .. shadow_cube_7
+} comp_point_light;
+    </div>
+  </div>
+  <div>
+    <h3>Spot Light</h3>
+    <div class="code-block">
+typedef struct {
+    float pos_x, pos_y, pos_z;   // 世界座標
+    float dir_x, dir_y, dir_z;   // 照射方向
+    float color_r, g, b;
+    float strength;
+    float range;                  // 衰減半徑
+    float inner_cone;             // 內圓錐角（rad）
+    float outer_cone;            // 外圓錐角（rad）
+    bool  enabled;
+    bool  cast_shadows;
+    float shadow_bias;
+} comp_spot_light;
+    </div>
+  </div>
+</div>
+
+<!-- Shadow Render Passes -->
+<div class="section">
+  <h3>Shadow Pass 順序</h3>
+  <div class="pipeline-flow">
+    <div class="pipeline-pass shadow">
+      <div class="pass-header shadow-header">Directional × N</div>
+      <div class="pass-content">
+        <p>×4 lights × 3 cascades</p>
+        <p>→ shadow_0/1/2</p>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipeline-pass shadow">
+      <div class="pass-header shadow-header">Point × N</div>
+      <div class="pass-content">
+        <p>×8 lights × 6 cubemap faces</p>
+        <p>→ shadow_cube_[0-7]</p>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipeline-pass shadow">
+      <div class="pass-header shadow-header">Spot × N</div>
+      <div class="pass-content">
+        <p>×4 lights</p>
+        <p>→ shadow_spot_[0-3]</p>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipeline-pass">
+      <div class="pass-header">G-Buffer</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipeline-pass">
+      <div class="pass-header">Lighting</div>
+    </div>
+  </div>
+</div>
+
+<!-- Lighting Calculation -->
+<div class="section">
+  <h3>Deferred Lighting Shader（deferred_light.kong 擴展）</h3>
+  <div class="code-block">
+// 燈光 Buffer（所有燈光資料）
+struct LightData {
+    // Directional[4]
+    float4 dir[4];           // xyz = direction, w = enabled
+    float4 dirColor[4];
+    float4 dirSMVP[4*3];     // 4 lights × 3 cascades
+    float4 dirCascadeSplit[4];
+    // Point[8]
+    float4 pointPos[8];
+    float4 pointColor[8];
+    float  pointRange[8];
+    bool   pointShadow[8];
+    // Spot[4]
+    float4 spotPos[4];
+    float4 spotDir[4];
+    float4 spotColor[4];
+    float  spotRange[4];
+    float  spotInnerCone[4];
+    float  spotOuterCone[4];
+};
+
+fun lighting_fragment(input : vert_out) : float4 {
+    float4 g0 = sample(gbuffer0, input.tex);
+    float4 g1 = sample(gbuffer1, input.tex);
+    float  depth = sample(gbufferD, input.tex).r;
+    float3 N = decode_octahedron(g0.xy);
+    float3 albedo = g1.rgb;
+    float  metallic = g0.a, roughness = g0.b;
+    float  ao = g1.a;
+
+    float3 color = ambient * albedo;
+
+    // --- Directional Lights ---
+    for (int i = 0; i < 4; i++) {
+        if (!dir[i].w) continue;
+        float3 L = -normalize(dir[i].xyz);
+        float NdotL = max(0, dot(N, L));
+        float shadow = sample_csm(L, input.pos, dirSMVP[i], dirCascadeSplit[i]);
+        color += NdotL * shadow * dirColor[i].rgb * albedo;
+    }
+
+    // --- Point Lights ---
+    for (int i = 0; i < 8; i++) {
+        if (!pointPos[i].w) continue; // enabled flag
+        float3 toLight = pointPos[i].xyz - worldPos;
+        float dist = length(toLight);
+        if (dist > pointRange[i]) continue;
+        float3 L = toLight / dist;
+        float att = 1.0 - dist / pointRange[i];
+        att = att * att;
+        float NdotL = max(0, dot(N, L));
+        float shadow = pointShadow[i] ? sample_cubemap(i, L, worldPos) : 1.0;
+        color += NdotL * att * shadow * pointColor[i].rgb * albedo;
+    }
+
+    // --- Spot Lights ---
+    for (int i = 0; i < 4; i++) {
+        if (!spotPos[i].w) continue;
+        float3 toLight = spotPos[i].xyz - worldPos;
+        float dist = length(toLight);
+        if (dist > spotRange[i]) continue;
+        float3 L = toLight / dist;
+        float spotEffect = dot(L, -normalize(spotDir[i].xyz));
+        float angleAtten = smoothstep(spotOuterCone[i], spotInnerCone[i], spotEffect);
+        float att = (1.0 - dist / spotRange[i]) * angleAtten;
+        float NdotL = max(0, dot(N, L));
+        float shadow = sample_spot_shadow(i, worldPos);
+        color += NdotL * att * shadow * spotColor[i].rgb * albedo;
+    }
+
+    return float4(color, 1.0);
+}
+    </div>
+</div>
+
+<!-- Attenuation -->
+<div class="section">
+  <h3>光照衰減公式</h3>
+  <div class="split">
+    <div>
+      <p><strong>Point Light</strong></p>
+      <div class="code-block">
+att = 1.0 - saturate(dist / range)
+att² = att * att  // 二次衰減更物理精確
+      </div>
+    </div>
+    <div>
+      <p><strong>Spot Light</strong></p>
+      <div class="code-block">
+spotEffect = dot(L, -spotDir)
+angleAtt = smoothstep(outer, inner, spotEffect)
+totalAtt = (1 - dist/range)² × angleAtt
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Files -->
+<div class="section">
+  <h3>新增 / 修改檔案</h3>
+  <table class="data-table">
+    <tr><th>檔案</th><th>動作</th></tr>
+    <tr><td><code>engine/sources/components/light.c/h</code></td><td>新建 — Point/Spot light 組件定義</td></tr>
+    <tr><td><code>engine/sources/ecs/light_bridge.c/h</code></td><td>修改 — Point/Spot 燈光 bridge</td></tr>
+    <tr><td><code>engine/sources/ecs/shadow_point.c/h</code></td><td>新建 — Point light cubemap shadow pass</td></tr>
+    <tr><td><code>engine/sources/ecs/shadow_spot.c/h</code></td><td>新建 — Spot light shadow pass</td></tr>
+    <tr><td><code>engine/sources/ecs/ecs_components.h</code></td><td>修改 — comp_point_light, comp_spot_light</td></tr>
+    <tr><td><code>engine/assets/shaders/deferred_light.kong</code></td><td>修改 — 擴展支援 Point/Spot + Shadow sampling</td></tr>
+  </table>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」確認燈光系統設計</p>
+</div>
+
+<style>
+.pipeline-flow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+.pipeline-pass {
+  flex: 1;
+  min-width: 90px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem;
+  font-size: 0.72rem;
+}
+.shadow { border-color: var(--accent); }
+.shadow-header { color: var(--accent); font-size: 0.72rem; }
+.pass-header { font-weight: 700; font-size: 0.72rem; margin-bottom: 0.25rem; }
+.pass-content { font-size: 0.68rem; line-height: 1.4; }
+.arrow { font-size: 1.2rem; color: var(--muted); display: flex; align-items: center; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.68rem;
+  font-family: monospace;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.section { margin-top: 1.2rem; }
+.split { display: flex; gap: 1.5rem; }
+.split > div { flex: 1; }
+h3 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+</style>

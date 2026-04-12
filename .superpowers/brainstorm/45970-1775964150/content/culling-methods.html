@@ -1,0 +1,199 @@
+<h2>Frustum Culling 方案</h2>
+<p class="subtitle">點擊方案查看說明</p>
+
+<div class="options">
+  <div class="option" data-choice="frustum" onclick="selectOption(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Frustum Culling（視錐裁剪）</h3>
+      <p>對每個物件的包圍盒（AABB / OBB）做 6 個 frustum plane 檢測</p>
+      <ul>
+        <li>最基礎、必做</li>
+        <li>CPU 端每幀檢測所有物件</li>
+        <li>簡單場景可忽視，1000+ 物件時必須</li>
+      </ul>
+      <p class="tag">所有方案的核心基礎</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="clustered" onclick="selectOption(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Clustered Frustum Culling</h3>
+      <p>先把場景分成 Grid / Octree / BVH 叢集，對叢集做 frustum test</p>
+      <ul>
+        <li>大量小物件時大幅減少測試次數</li>
+        <li>Octree 適合靜態場景</li>
+        <li>Grid 適合大室外場景</li>
+      </ul>
+      <p class="tag">適合大型開放世界</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="hz" onclick="selectOption(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hi-Z（Hierarchical Z-Buffer）Culling</h3>
+      <p>利用前一幀的 depth buffer 做層次化深度檢測，GPU 端並行處理</p>
+      <ul>
+        <li>最徹底的隱藏面消除</li>
+        <li>需要額外 mip-level depth mipmap</li>
+        <li>適合遠景、中等密度場景</li>
+      </ul>
+      <p class="tag">GPU-driven rendering 必備</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="occlusion" onclick="selectOption(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Occlusion Culling（遮擋裁剪）</h3>
+      <p>被其他物件完全遮擋的不渲染，遮擋物變化時重新檢測</p>
+      <ul>
+        <li>室內場景特別有效</li>
+        <li>室外場景效果有限（天空遮擋少）</li>
+        <li>實現複雜度中等</li>
+      </ul>
+      <p class="tag">室內場景神器</p>
+    </div>
+  </div>
+</div>
+
+<!-- Frustum Plane Details (shown by default) -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>Frustum Culling 核心原理</h3>
+  <div class="split">
+    <div>
+      <p>6 個視錐平面：</p>
+      <ul>
+        <li>Near / Far plane</li>
+        <li>Left / Right plane</li>
+        <li>Top / Bottom plane</li>
+      </ul>
+      <p>每個物件的 AABB 對每個 plane 做 Outside Test：</p>
+      <div class="code-block">
+dot(center, plane.normal) + d [>|+radius|? → outside]
+      </div>
+      <p>AABB 完全在任意 plane 外側 → 不可見，cull 掉</p>
+    </div>
+    <div>
+      <p>Engine 中的實作位置：</p>
+      <div class="code-block">
+mesh_bridge_3d_create_mesh(entity)
+  → 計算物件 world-space AABB
+  → 存入 RenderObject3D.bounds
+
+sys_3d_render_commands()
+  → deferred_shadow_render()
+    → 對 visible entities 做 frustum test
+  → deferred_gbuffer_render_geometry()
+    → 對 visible entities 做 frustum test
+      </div>
+      <p>每個 Pass 前 filter 一次 visible list</p>
+    </div>
+  </div>
+</div>
+
+<!-- Hi-Z Details -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>Hi-Z Culling 原理</h3>
+  <div class="split">
+    <div>
+      <div class="code-block">
+Pass 1: 建立 depth mipmap（每層是前一层 1/4 大小）
+  depth_mip_0 = main.depth  (full res)
+  depth_mip_1 = quarter(depth_mip_0)
+  depth_mip_2 = quarter(depth_mip_1)
+  ...
+
+Pass 2: GPU CS 查询物件包圍盒的 Hi-Z level
+  hiz_level = log2(bounds_size_in_pixels / threshold)
+  hi_z_depth = sample(depth_mip[hiz_level], bounds_center_uv)
+  if (bounds_min_z > hi_z_depth) → cull
+
+Pass 3: 對通関 Hi-Z 的物件才 draw
+      </div>
+    </div>
+    <div>
+      <p>與 Frustum Culling 的比較：</p>
+      <table class="data-table">
+        <tr><th></th><th>Frustum</th><th>Hi-Z</th></tr>
+        <tr><td>檢測維度</td><td>3D 幾何</td><td>2D Depth</td></tr>
+        <tr><td>處理位置</td><td>CPU</td><td>GPU (CS)</td></tr>
+        <tr><td>遮擋感知</td><td>無</td><td>有</td></tr>
+        <tr><td>額外內存</td><td>無</td><td>Depth mipmap</td></tr>
+        <tr><td>延遲</td><td>無</td><td>落後 1-2 幀</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Recommended Approach -->
+<div class="section" style="margin-top: 1.5rem;">
+  <h3>推薦：Frustum → Hi-Z 兩層</h3>
+  <div class="step-flow">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><strong>Frustum Culling (CPU)</strong> — 每幀對所有 RenderObject3D 做 AABB vs 6 planes，產生 visible list</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><strong>Hi-Z Culling (GPU CS)</strong> — 對 visible list 中的大物件做 depth mipmap 查詢，進一步剔除被遮擋的</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><strong>Draw Indirect</strong> — 只對最終 visible 物件發送 draw call</div></div>
+  </div>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」選擇方案</p>
+</div>
+
+<script>
+var details = {
+  frustum: { title: "Frustum Culling — 詳細", content: "<p>最基礎的裁剪方法。對象的 AABB（軸對齊包圍盒）或 OBB（有向包圍盒）與 camera frustum 的 6 個 plane 做檢測。如果 AABB 完全在任意一個 plane 的外側，則該物件不可能被 camera 看見，可以跳過渲染。</p><p><strong>優點：</strong>實現簡單，每幀只跑一次，記憶體開銷小</p><p><strong>缺點：</strong>只能做 AABB 等簡單形狀，複雜遮擋（如薄物體、孔洞）無效</p>" },
+  clustered: { title: "Clustered Culling — 詳細", content: "<p>把場景分成多層次的包圍結構：Octree（八叉樹）或 BVH（Bounding Volume Hierarchy）。測試時先檢測叢集是否可見，只有叢集可見才深入檢測內部物件。</p><p><strong>適用場景：</strong>場景物件數量 10000+、物件分佈不均勻</p><p><strong>缺點：</strong>動態物件需要重建部分結構</p>" },
+  hz: { title: "Hi-Z Culling — 詳細", content: "<p>利用 depth buffer 的多級漸遠紋理（mipmap）做層次化深度測試。前一幀生成 depth mipmap，每個物件的包圍盒映射到 depth mip 中查詢，如果物件的最近深度都比 depth mip 中記錄的深度還遠說明被遮擋。</p><p><strong>優點：</strong>能檢測任意形狀的遮擋，GPU 並行處理</p><p><strong>缺點：</strong>需要落後 1 幀（使用上一幀 depth），需要额外 depth mipmap 生成 pass</p>" },
+  occlusion: { title: "Occlusion Culling — 詳細", content: "<p>分為 Occluder Detection + Occludee Query 兩步。Occluder 是大、不透明、靠近 camera 的物件（如建築物）。先渲染 occluder 到 depth buffer，再用 occlusion query 測試其他物件是否被遮擋。</p><p><strong>缺點：</strong>查詢是 synchronous（CPU 等待 GPU 結果），需要預熱 query</p>" }
+};
+
+var selected_el = null;
+function selectOption(el) {
+  selected_el = el;
+  document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  var key = el.getAttribute('data-choice');
+  var detail = document.getElementById('detail-area');
+  if (details[key]) {
+    detail.style.display = 'block';
+    document.getElementById('detail-title').textContent = details[key].title;
+    document.getElementById('detail-content').innerHTML = details[key].content;
+  }
+}
+</script>
+
+<style>
+.option h3 { font-size: 0.9rem; margin: 0 0 0.25rem; }
+.option ul { margin: 0.25rem 0; padding-left: 1.2rem; font-size: 0.75rem; }
+.option .tag { font-size: 0.7rem; color: var(--accent); margin-top: 0.25rem; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.72rem;
+  font-family: monospace;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.section { margin-top: 1.2rem; }
+.split { display: flex; gap: 1.5rem; }
+.split > div { flex: 1; }
+.step-flow { display: flex; flex-direction: column; gap: 0.5rem; }
+.step { display: flex; align-items: flex-start; gap: 0.75rem; font-size: 0.8rem; }
+.step-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-fg);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.75rem; flex-shrink: 0;
+}
+.step-text { line-height: 1.4; }
+</style>

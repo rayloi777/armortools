@@ -1,0 +1,180 @@
+<h2>Unity-style 多層 Culling 系統</h2>
+<p class="subtitle">GPU Frustum → LOD → Baked Occlusion</p>
+
+<!-- Culling Pipeline -->
+<div class="section">
+  <h3>Culling Pipeline（執行順序）</h3>
+  <div class="step-flow">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        <strong>GPU Frustum Culling</strong> — ComputeShader
+        <br/>所有 RenderObject3D 的 AABB 與 camera frustum 6 planes 做 test
+        <br/>輸出：visible object list (Buffer)
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        <strong>LOD Selection</strong> — CPU + GPU
+        <br/>根據 camera 距離選擇 mesh LOD level
+        <br/>每個物件根據 distance bucket 選擇：LOD0 / LOD1 / LOD2 / LOD3 / ShadowOnly
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        <strong>Baked Occlusion Culling</strong> — Pre-compute + Runtime query
+        <br/>Editor: 烘焙 occlusion data (Cell Grid + PVS)
+        <br/>Runtime: 根據 camera cell 查詢 visible list
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-text">
+        <strong>Draw Call</strong> — DrawProceduralIndirect
+        <br/>只對最終 visible objects 發送 draw call
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GPU Frustum Culling -->
+<div class="split" style="gap: 1.5rem;">
+  <div>
+    <h3>GPU Frustum Culling ComputeShader</h3>
+    <div class="code-block">
+// Object Data Buffer (輸入)
+struct ObjectBounds {
+    float3 center;    // AABB center (world space)
+    float3 extents;   // AABB half-extents
+    uint   lodMask;   // 該物件支援哪些 LOD level
+};
+
+// Frustum Plane (輸入)
+struct Plane { float3 n; float d; }; // dot(n,p) + d = 0
+Plane frustum[6];  // near/far/left/right/top/bottom
+
+// Output: visible objects (append to buffer)
+[numthreads(256, 1, 1)]
+void FrustumCullKernel(
+    uint  id : SV_DispatchThreadID,
+    ObjectBounds obj : ObjectBounds,
+    Plane planes[6] : FRUSTUM_PLANES,
+    RWStructuredBuffer<uint> visibleOut : VISIBLE_OUT
+) {
+    // 對 6 個 plane 做 AABB outside test
+    bool culled = false;
+    for (int i = 0; i < 6; i++) {
+        float d = dot(obj.center, planes[i].n) + planes[i].d;
+        if (d < -length(obj.extents)) { culled = true; break; }
+    }
+    if (!culled) {
+        uint index = outBuffer.IncrementCounter();
+        visibleOut[index] = id;
+    }
+}
+    </div>
+  </div>
+  <div>
+    <h3>LOD System</h3>
+    <div class="code-block">
+// comp_lod 組件
+typedef struct {
+    float   distances[4];     // LOD0→LOD1, LOD1→LOD2, ...
+    char*   mesh_lod0_path;   // 最高解析度
+    char*   mesh_lod1_path;   // 次高
+    char*   mesh_lod2_path;   // 中等
+    char*   mesh_lod3_path;   // 最低
+    int     current_lod;      // 運行時選擇的 LOD
+} comp_lod;
+
+// 選擇 LOD
+int select_lod(float dist) {
+    if (dist > distances[2]) return 3;
+    if (dist > distances[1]) return 2;
+    if (dist > distances[0]) return 1;
+    return 0;
+}
+    </div>
+    <h3>Occlusion Culling（烘焙版）</h3>
+    <div class="code-block">
+// Cell Grid 分區
+struct OcclusionCell {
+    float3  min;       // cell 邊界
+    float3  max;
+    uint    visibleObjects[MAX_VIS]; // 預計算可見列表
+    uint    numVisible;
+};
+OcclusionCell cells[GRID_W * GRID_H * GRID_D];
+
+// Runtime: 根據 camera 位置找 cell
+OcclusionCell* cell = get_cell_at(cameraPos);
+for (i = 0; i < cell.numVisible; i++) {
+    add_to_visible_list(cell.visibleObjects[i]);
+}
+    </div>
+  </div>
+</div>
+
+<!-- Unity Comparison -->
+<div class="section">
+  <h3>與 Unity 對照</h3>
+  <table class="data-table">
+    <tr><th>功能</th><th>Unity</th><th>Engine 實作</th></tr>
+    <tr><td>Frustum Culling</td><td>GPU Driven Pipeline</td><td>ComputeShader kernel</td></tr>
+    <tr><td>LOD</td><td> LOD Group component</td><td>comp_lod + mesh_lod[N] paths</td></tr>
+    <tr><td>Occlusion Culling</td><td>Baked Occlusion + Cell Portal</td><td>Baked Cell Grid + PVS</td></tr>
+    <tr><td>Draw Call</td><td>DrawProceduralIndirect</td><td>DrawProceduralIndirect + Buffer</td></tr>
+  </table>
+</div>
+
+<!-- File Changes -->
+<div class="section">
+  <h3>新增 / 修改檔案</h3>
+  <table class="data-table">
+    <tr><th>檔案</th><th>動作</th></tr>
+    <tr><td><code>engine/sources/ecs/culling.c/h</code></td><td>新建 — GPU frustum culling + LOD + occlusion 系統</td></tr>
+    <tr><td><code>engine/sources/components/lod.c/h</code></td><td>新建 — LOD component 和選擇邏輯</td></tr>
+    <tr><td><code>engine/sources/ecs/occlusion.c/h</code></td><td>新建 — occlusion cell 管理 + 烘焙資料載入</td></tr>
+    <tr><td><code>engine/assets/shaders/culling.csh</code></td><td>新建 — frustum cull compute shader (Kong)</td></tr>
+    <tr><td><code>engine/sources/ecs/render3d_bridge.c</code></td><td>修改 — culling → shadow → gbuffer 順序</td></tr>
+    <tr><td><code>engine/sources/ecs/ecs_components.h</code></td><td>修改 — 新增 comp_lod</td></tr>
+    <tr><td><code>engine/sources/core/mesh_bridge_3d.c</code></td><td>修改 — 支援 LOD mesh loading</td></tr>
+  </table>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」確認設計，準備寫入 3D_PLAN.md</p>
+</div>
+
+<style>
+.step-flow { display: flex; flex-direction: column; gap: 0.6rem; }
+.step { display: flex; align-items: flex-start; gap: 0.75rem; font-size: 0.8rem; }
+.step-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-fg);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.75rem; flex-shrink: 0;
+}
+.step-text { line-height: 1.5; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.68rem;
+  font-family: monospace;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.section { margin-top: 1.2rem; }
+.split { display: flex; gap: 1.5rem; }
+.split > div { flex: 1; }
+h3 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+</style>

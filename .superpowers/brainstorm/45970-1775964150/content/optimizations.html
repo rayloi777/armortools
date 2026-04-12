@@ -1,0 +1,214 @@
+<h2>效能優化建議</h2>
+<p class="subtitle">點擊各項目查看詳細說明</p>
+
+<div class="options">
+  <div class="option" data-choice="scissor" onclick="selectOption(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>1. Single-Pass CSM（Viewport Scissors）</h3>
+      <p>3 個 cascade 不要分 3 次渲染，用 scissor test 在一次 draw call 中畫到 3 張不同的 shadow map</p>
+      <ul>
+        <li>減少 66% shadow draw calls</li>
+        <li>Geometry shader 一次性輸出到 multiple targets</li>
+        <li>或用 Multi-draw indirect + scissor</li>
+      </ul>
+      <p class="tag">省 2/3 shadow draw calls</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="tiled" onclick="selectOption(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>2. Tiled / Clustered Lighting</h3>
+      <p>不對每個 fragment 遍歷所有燈光，而是把屏幕分成 16×16 tiles，每個 tile 預先計算哪些燈光影響它</p>
+      <ul>
+        <li>減少 8× point lights 的無效 lighting pass 採樣</li>
+        <li>每個 tile 只計算 1-4 個影響它的燈光</li>
+        <li>可加進 deferred lighting pass 前做</li>
+      </ul>
+      <p class="tag">省 50-80% lighting 計算量</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="earlyz" onclick="selectOption(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>3. Early-Z / Depth Rejection</h3>
+      <p>Geometry pass 前先做深度 pre-pass，把最新深度寫入 depth buffer，後續 fragment shader 可 skip 被遮擋的像素</p>
+      <ul>
+        <li>Z-cull 硬體自動做</li>
+        <li>需要 G-buffer pass 也開啟 depth test (equal/less)</li>
+        <li>光柵化階段就 reject 被遮擋的 fragment</li>
+      </ul>
+      <p class="tag">省 30-60% fragment shader 开销</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="compressed" onclick="selectOption(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>4. G-Buffer 壓縮 / 降精度</h3>
+      <p>RGBA64 (64bit) → RGBA16F (64bit) 或 RGBA8 (32bit) — 取決於 GPU 精度需求</p>
+      <ul>
+        <li>Normal octahedron 只需 2 通道，RGBA8 足夠</li>
+        <li>Depth 用 D24S8 而非 D32</li>
+        <li>省 50% gbuffer 記憶體頻寬</li>
+      </ul>
+      <p class="tag">省 50% gbuffer 頻寬</p>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Area -->
+<div class="section" id="detail-area" style="margin-top:1.5rem;">
+  <h3 id="detail-title"></h3>
+  <div id="detail-content"></div>
+</div>
+
+<!-- All Optimizations Summary -->
+<div class="section" style="margin-top:1.5rem;">
+  <h3>完整優化清單（按優先順序）</h3>
+  <table class="data-table">
+    <tr><th>優化</th><th>節省</th><th>難度</th><th>優先級</th></tr>
+    <tr><td>A. Single-Pass CSM</td><td>2/3 shadow draws</td><td>中</td><td>P0 — 立即做</td></tr>
+    <tr><td>B. Tiled Lighting</td><td>50-80% lighting</td><td>高</td><td>P1 — Phase 2</td></tr>
+    <tr><td>C. Early-Z + Hi-Z</td><td>30-60% frag shader</td><td>低</td><td>P0 — 立即做</td></tr>
+    <tr><td>D. G-Buffer 降精度</td><td>50% mem bandwidth</td><td>低</td><td>P0 — 立即做</td></tr>
+    <tr><td>E. Draw Indirect</td><td>減少 draw call CPU overhead</td><td>中</td><td>P0 — 立即做</td></tr>
+    <tr><td>F. Hi-Z Occlusion</td><td>省被遮擋物件 draw</td><td>高</td><td>P1 — Phase 2</td></tr>
+    <tr><td>G. Variable Rate Shading</td><td>周边区域像素着色降低</td><td>中</td><td>P2 — Phase 3</td></tr>
+  </table>
+</div>
+
+<!-- Implementation Order -->
+<div class="section" style="margin-top:1.5rem;">
+  <h3>建議實施順序</h3>
+  <div class="step-flow">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><strong>Single-Pass CSM</strong> — 用 viewport scissors，減少 2/3 shadow draw calls</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><strong>Early-Z + Hi-Z</strong> — Depth pre-pass + Hi-Z culling，減少 fragment shader 开銷</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><strong>G-Buffer 降精度</strong> — RGBA8 + D24S8，省頻寬</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text"><strong>DrawProceduralIndirect</strong> — GPU-driven draw call，減少 CPU overhead</div></div>
+    <div class="step"><div class="step-num">5</div><div class="step-text"><strong>Tiled Lighting</strong> — screen-space light binning，複雜場景必做</div></div>
+  </div>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」或點擊方案查看詳細</p>
+</div>
+
+<script>
+var details = {
+  scissor: {
+    title: "Single-Pass CSM — 詳細",
+    content: `<p>傳統 CSM：每個 cascade 都要完整渲染一次場景 → 3× geometry passes</p>
+<p><strong>Viewport Scissors 做法：</strong></p>
+<div class="code-block">
+// 1. 設置 viewport scissor：每個 cascade 在 shadow map 的不同區域
+//    shadow_map = 2048×2048, 切成 2×2 grid:
+//    ┌──────────┬──────────┐
+//    │ Cascade0 │ Cascade1 │  ← 各自 rendering to 自己區域
+//    ├──────────┼──────────┤
+//    │ Cascade2 │  free    │
+//    └──────────┴──────────┘
+
+// 2. Geometry shader 或 MRT 直接輸出到各 cascade region
+// 3. 一次 draw call 輸出 3 個 cascade depth
+</div>
+<p>限制：所有 cascade 必須打包到同一張 shadow map texture (atlas)</p>`
+  },
+  tiled: {
+    title: "Tiled / Clustered Lighting — 詳細",
+    content: `<p>問題：8 個 point lights + 4 個 spot lights + 4 個 directional = 16 個燈光。如果每個 fragment 都遍歷全部 16 個，是巨大的浪費。</p>
+<p><strong>Tiled Lighting 做法：</strong></p>
+<div class="code-block">
+// Compute shader: 把屏幕分成 16×16 tiles
+// 每個 tile 的 threads 協作：
+// 1. 建立 tile 的 frustum (4 個 plane)
+// 2. 對所有燈光做 frustum test，把通過的燈光 index 寫入 light list
+// 3. 每個 tile 的 light list 長度平均 2-4 個
+
+// Lighting pass: 每個 fragment 先算自己屬於哪個 tile
+// → 只遍歷該 tile 的 light list（2-4 個燈光）
+</div>
+<p>省 70-90% 燈光計算是常見的結果</p>`
+  },
+  earlyz: {
+    title: "Early-Z + Hi-Z — 詳細",
+    content: `<p><strong>Early-Z：</strong>硬體在 fragment shader 之前就做深度測試，被遮擋的 fragment 直接 reject，不跑 shader</p>
+<div class="code-block">
+// G-buffer pass 前加一個 depth pre-pass:
+render_path_set_target("main", NULL, NULL, GPU_CLEAR_DEPTH, 0, 1.0f);
+render_path_submit_draw("mesh_depth_only");  // 只寫深度，不算 color
+
+// G-buffer pass:
+render_path_set_target("gbuffer0", ..., "main", ...);
+// depth_write = true, depth_test = LESS
+// → Early-Z 硬體自動生效
+</div>
+<p><strong>Hi-Z：</strong>軟體做的層次化深度測試，在 GPU CS 中並行處理，結果送給 draw indirect buffer</p>`
+  },
+  compressed: {
+    title: "G-Buffer 降精度 — 詳細",
+    content: `<p><strong>當前設計：</strong></p>
+<ul><li>gbuffer0: RGBA64 (4×16bit float)</li><li>gbuffer1: RGBA64</li><li>depth: D32</li></ul>
+<p><strong>優化後：</strong></p>
+<div class="code-block">
+// Normal (octahedron 2 channels) + Roughness(1) + Metallic(1)
+// RGBA8: 4×8bit = 32bit, 足夠儲存 octahedron normal + PBR params
+// 但需要注意: normal octahedron decode 時的精度損失是否可接受
+
+// 建議用 RGBA16F (64bit) 作為折衷
+// depth: D24S8 (24bit depth + 8bit stencil) 而不是 D32
+// → 省 25% depth memory bandwidth
+
+// 最終:
+// gbuffer0: RGBA16F → Normal.xy(10bit each) + Roughness(6bit) + Metallic(6bit)
+// gbuffer1: RGBA16F → Albedo.rgb(16bit each) + AO(16bit)
+// depth: D24S8
+</div>`
+  }
+};
+
+function selectOption(el) {
+  var key = el.getAttribute('data-choice');
+  document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  var detail = document.getElementById('detail-area');
+  if (details[key]) {
+    detail.style.display = 'block';
+    document.getElementById('detail-title').textContent = details[key].title;
+    document.getElementById('detail-content').innerHTML = '<div class="code-block">' + details[key].content + '</div>';
+  }
+}
+</script>
+
+<style>
+.option h3 { font-size: 0.88rem; margin: 0 0 0.25rem; }
+.option ul { margin: 0.25rem 0; padding-left: 1.2rem; font-size: 0.74rem; }
+.option .tag { font-size: 0.68rem; color: var(--accent); margin-top: 0.25rem; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.68rem;
+  font-family: monospace;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.section { margin-top: 1.2rem; }
+.step-flow { display: flex; flex-direction: column; gap: 0.5rem; }
+.step { display: flex; align-items: flex-start; gap: 0.75rem; font-size: 0.8rem; }
+.step-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-fg);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.75rem; flex-shrink: 0;
+}
+.step-text { line-height: 1.4; }
+</style>

@@ -1,0 +1,147 @@
+<h2>Deferred Rendering Pipeline — 4 Pass 流程</h2>
+<p class="subtitle">滑鼠點擊任一 Pass 可查看詳細說明</p>
+
+<div class="pipeline-flow">
+  <!-- Pass 1 -->
+  <div class="pipeline-pass" data-choice="pass1" onclick="selectPass(this)">
+    <div class="pass-header">Pass 1: Geometry</div>
+    <div class="pass-content">
+      <p><strong>輸出：</strong>G-Buffer</p>
+      <ul>
+        <li><code>gbuffer0</code>: Normal(oct) + Roughness + Metallic</li>
+        <li><code>gbuffer1</code>: Albedo.rgb + AO</li>
+        <li><code>main</code>: Depth (D32)</li>
+      </ul>
+      <p><strong>Shader:</strong> <code>world_gbuffer.kong</code> (MRT)</p>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Pass 2 -->
+  <div class="pipeline-pass" data-choice="pass2" onclick="selectPass(this)">
+    <div class="pass-header">Pass 2: Lighting</div>
+    <div class="pass-content">
+      <p><strong>輸入：</strong>gbuffer0 + gbuffer1 + main(depth)</p>
+      <p><strong>輸出：</strong><code>buf</code> (lit color)</p>
+      <p><strong>Shader:</strong> <code>deferred_light.kong</code></p>
+      <p>單一 directional light + constant ambient</p>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Pass 3 -->
+  <div class="pipeline-pass" data-choice="pass3" onclick="selectPass(this)">
+    <div class="pass-header">Pass 3: Post-FX</div>
+    <div class="pass-content">
+      <p><strong>鏈：</strong>SSAO → Bloom → TAA → <code>last</code></p>
+      <p><strong>Phase 3</strong> 才實作</p>
+    </div>
+  </div>
+
+  <div class="arrow">→</div>
+
+  <!-- Pass 4 -->
+  <div class="pipeline-pass current" data-choice="pass4" onclick="selectPass(this)">
+    <div class="pass-header">Pass 4: 2D Overlay</div>
+    <div class="pass-content">
+      <p><strong>輸入：</strong><code>last</code></p>
+      <p>Sprite batch (forward, unchanged)</p>
+      <p><strong>組件：</strong><code>render2d_bridge.c</code></p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>G-Buffer 格式</h3>
+  <table class="data-table">
+    <tr><th>Target</th><th>Format</th><th>內容</th></tr>
+    <tr><td>main</td><td>D32</td><td>Depth buffer（所有 Pass 共享）</td></tr>
+    <tr><td>gbuffer0</td><td>RGBA64</td><td>Normal.xy (octahedron), Roughness, Metallic</td></tr>
+    <tr><td>gbuffer1</td><td>RGBA64</td><td>Albedo.rgb, AO</td></tr>
+    <tr><td>buf</td><td>RGBA64</td><td>Intermediate / lighting output</td></tr>
+    <tr><td>last</td><td>RGBA64</td><td>Final composited output</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>Phase 規劃</h3>
+  <div class="options" data-multiselect>
+    <div class="option" data-choice="phase1" onclick="toggleSelect(this)">
+      <div class="letter">1</div>
+      <div class="content">
+        <h3>Phase 1: G-Buffer + Deferred Lighting</h3>
+        <p>G-buffer geometry pass + 單一 directional light lighting pass。輸出 lit 3D 場景到 buf。</p>
+      </div>
+    </div>
+    <div class="option" data-choice="phase2" onclick="toggleSelect(this)">
+      <div class="letter">2</div>
+      <div class="content">
+        <h3>Phase 2: PBR Materials + Multi-Light</h3>
+        <p>新增 comp_material 組件、texture sampling、multi-light 支援（point/spot）</p>
+      </div>
+    </div>
+    <div class="option" data-choice="phase3" onclick="toggleSelect(this)">
+      <div class="letter">3</div>
+      <div class="content">
+        <h3>Phase 3: Post-Processing</h3>
+        <p>SSAO → Bloom → TAA → Compositor (vignette + tonemapping)</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後，請在終端回覆「繼續」以進入下一個問題</p>
+</div>
+
+<script>
+function selectPass(el) {
+  document.querySelectorAll('.pipeline-pass').forEach(p => p.classList.remove('selected'));
+  el.classList.add('selected');
+}
+</script>
+
+<style>
+.pipeline-flow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+.pipeline-pass {
+  flex: 1;
+  min-width: 140px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+}
+.pipeline-pass:hover { border-color: var(--accent); }
+.pipeline-pass.selected { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 3px var(--accent-glow); }
+.pass-header {
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+}
+.pass-content { font-size: 0.75rem; line-height: 1.5; }
+.pass-content ul { margin: 0.25rem 0; padding-left: 1rem; }
+.pass-content code { font-size: 0.7rem; background: var(--muted); padding: 1px 4px; border-radius: 3px; }
+.arrow {
+  font-size: 1.5rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  padding-top: 0.5rem;
+}
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.section { margin-top: 1.5rem; }
+h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+</style>

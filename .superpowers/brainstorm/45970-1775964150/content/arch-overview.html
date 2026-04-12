@@ -1,0 +1,202 @@
+<h2>Engine 3D 系統重構 — 總覽</h2>
+<p class="subtitle">Follows Flecs System + Minic-native design</p>
+
+<!-- Architecture Overview -->
+<div class="section">
+  <h3>Layer 架構</h3>
+  <div class="arch-layers">
+    <div class="arch-layer minic">
+      <div class="layer-label">Minic Scripts (.minic)</div>
+      <div class="layer-content">遊戲邏輯腳本 — 創建實體、添加組件、查詢系統</div>
+    </div>
+    <div class="arch-arrow">↓ calls C API registered via minic_register()</div>
+    <div class="arch-layer api">
+      <div class="layer-label">Core API (core/)</div>
+      <div class="layer-content">entity_api · component_api · light_api · camera_api · culling_api</div>
+    </div>
+    <div class="arch-arrow">↓ operates on</div>
+    <div class="arch-layer ecs">
+      <div class="layer-label">Flecs ECS (ecs/)</div>
+      <div class="layer-content">系統：culling · shadow · gbuffer · lighting · postfx</div>
+    </div>
+    <div class="arch-arrow">↓ syncs to</div>
+    <div class="arch-layer iron">
+      <div class="layer-label">Iron Engine (base/)</div>
+      <div class="layer-content">GPU render targets · render_path · mesh_object · camera_object</div>
+    </div>
+  </div>
+</div>
+
+<!-- ECS World Structure -->
+<div class="section">
+  <h3>Flecs ECS World — 所有 3D 組件和系統</h3>
+  <div class="split" style="gap: 1.5rem;">
+    <div>
+      <h4>Components（ECS 組件）</h4>
+      <div class="code-block">
+// Transform
+comp_3d_position     — float x,y,z
+comp_3d_rotation     — float x,y,z,w (quat)
+comp_3d_scale       — float x,y,z
+
+// Mesh
+comp_3d_mesh_renderer — mesh_path, material_path
+RenderObject3D        — iron_mesh_object ptr
+comp_lod              — distances[4], mesh_lod0-3
+
+// Camera
+comp_3d_camera       — fov, near, far, perspective
+comp_3d_ortho        — left,right,bottom,top
+
+// Lights
+comp_directional_light — dir, color, strength, shadow
+comp_point_light       — pos, color, range, shadow
+comp_spot_light        — pos, dir, color, range, cone, shadow
+
+// Rendering (tags)
+Tag: CompRenderable     — 可被渲染的實體
+Tag: CompShadowCaster   — 投射陰影
+Tag: CompShadowReceiver — 接收陰影
+Tag: CompVisible        — 當前幀可見（culling 結果）
+      </div>
+    </div>
+    <div>
+      <h4>ECS Systems（執行順序）</h4>
+      <div class="code-block">
+System Order (tick order):
+
+1. sys_culling_frustum    // GPU frustum culling
+   → writes CompVisible tag
+
+2. sys_culling_lod        // LOD selection
+   → updates comp_lod.current_lod
+
+3. sys_shadow_directional  // CSM shadow maps
+   → renders to shadow_0/1/2
+
+4. sys_shadow_point        // Point cubemap shadows
+   → renders to shadow_cube_[N]
+
+5. sys_shadow_spot         // Spot shadow maps
+   → renders to shadow_spot_[N]
+
+6. sys_gbuffer            // Geometry pass
+   → outputs gbuffer0 + gbuffer1 + main(depth)
+
+7. sys_lighting           // Deferred lighting
+   → reads gbuffer + all shadow maps
+   → outputs buf
+
+8. sys_postfx            // Post-processing
+   → SSAO → Bloom → TAA → last
+
+9. sys_output            // 2D overlay + present
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Minic Integration -->
+<div class="section">
+  <h3>Minic API — 方便使用的 C API</h3>
+  <div class="code-block">
+// === 燈光 API ===
+entity_create_light_directional(dir_x,dir_y,dir_z, color, strength) → id
+entity_create_light_point(pos_x,y,z, color, range, strength) → id
+entity_create_light_spot(pos_x,y,z, dir_x,y,z, color, range, cone) → id
+light_set_shadow(light_id, cast_shadows, bias)
+light_set_enabled(light_id, bool)
+
+// === 攝影機 API ===
+entity_create_camera3d(fov, near, far) → id
+camera3d_set_ortho(camera_id, left,right,bottom,top)
+camera3d_set_active(camera_id)  // 成為主攝影機
+
+// === 渲染 API ===
+culling_set_enabled(bool)       // 開關 frustum culling
+culling_set_shadow_only(bool)   // 只做 shadow pass culling
+render_set_pipeline("deferred")  // 切換 render pipeline
+
+// === 查詢 ===
+query_foreach("CompRenderable", "CompVisible", callback)
+query_foreach("comp_directional_light", callback)
+      </div>
+</div>
+
+<!-- File Structure -->
+<div class="section">
+  <h3>重構後的目錄結構</h3>
+  <div class="code-block">
+engine/sources/
+├── ecs/
+│   ├── ecs_world.c/h          — Flecs world 管理
+│   ├── ecs_components.c/h     — 組件註冊
+│   ├── culling/
+│   │   ├── culling_frustum.c/h    — GPU frustum culling
+│   │   ├── culling_lod.c/h        — LOD 選擇系統
+│   │   └── culling_occlusion.c/h  — 烘焙 occlusion
+│   ├── shadow/
+│   │   ├── shadow_directional.c/h — CSM
+│   │   ├── shadow_point.c/h        — Point cubemap
+│   │   └── shadow_spot.c/h        — Spot
+│   ├── deferred/
+│   │   ├── deferred_gbuffer.c/h   — G-buffer
+│   │   ├── deferred_lighting.c/h  — 燈光 pass
+│   │   └── deferred_postfx.c/h    — Post-processing
+│   └── bridges/
+│       ├── mesh_bridge_3d.c/h    — mesh sync
+│       ├── camera_bridge_3d.c/h  — camera sync
+│       └── light_bridge.c/h     — light sync
+├── core/
+│   ├── light_api.c/h          — Minic light API
+│   ├── camera_api.c/h          — Minic camera API
+│   ├── culling_api.c/h         — Minic culling API
+│   └── render_api.c/h          — Minic render API
+└── components/
+    ├── transform.c/h
+    ├── mesh_renderer.c/h
+    ├── light.c/h               — Point/Spot light component
+    └── lod.c/h                 — LOD component
+      </div>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」深入各子系統設計</p>
+</div>
+
+<style>
+.arch-layers { display: flex; flex-direction: column; gap: 0.3rem; }
+.arch-layer {
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.78rem;
+}
+.arch-layer.minic { border-color: #9b59b6; background: rgba(155,89,182,0.1); }
+.arch-layer.api { border-color: #3498db; background: rgba(52,152,219,0.1); }
+.arch-layer.ecs { border-color: #2ecc71; background: rgba(46,204,113,0.1); }
+.arch-layer.iron { border-color: #e67e22; background: rgba(230,126,34,0.1); }
+.layer-label { font-weight: 700; margin-bottom: 0.2rem; }
+.layer-content { font-size: 0.72rem; opacity: 0.85; }
+.arch-arrow { font-size: 0.7rem; color: var(--muted); text-align: center; padding: 0.1rem 0; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.68rem;
+  font-family: monospace;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.section { margin-top: 1.2rem; }
+.split { display: flex; gap: 1.5rem; }
+.split > div { flex: 1; }
+h3 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+h4 { font-size: 0.82rem; margin-bottom: 0.3rem; color: var(--accent); }
+</style>

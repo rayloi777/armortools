@@ -1,0 +1,110 @@
+<h2>3D_PLAN.md — 完整大綱</h2>
+<p class="subtitle">即將寫入 docs/3D_PLAN.md</p>
+
+<div class="section">
+  <h3>文檔結構</h3>
+  <div class="code-block">
+# Engine 3D Render Pipeline — 重構計劃
+
+## 1. 架構總覽
+   - Layer: Minic → Core API → Flecs ECS → Iron Engine
+   - ECS World 結構圖
+   - System execution order
+
+## 2. Render Pipeline（5 Pass）
+   - Pass 0: Shadow Maps (Directional CSM + Point Cubemap + Spot)
+   - Pass 1: G-Buffer Geometry
+   - Pass 2: Deferred Lighting
+   - Pass 3: Post-Processing
+   - Pass 4: 2D Overlay
+
+## 3. G-Buffer 格式
+   - gbuffer0: Normal(oct) + Roughness + Metallic
+   - gbuffer1: Albedo + AO
+   - main: Depth (D24S8)
+   - buf / last: Intermediate
+
+## 4. Cascaded Shadow Maps (CSM)
+   - 3 層 cascade：2048 / 1024 / 512
+   - 對數分割（Logarithmic split）
+   - Single-Pass CSM（Viewport Scissors）
+   - 4-tap PCF filtering
+
+## 5. 燈光系統
+   - Directional Light (×4, CSM)
+   - Point Light (×8, Cubemap shadow)
+   - Spot Light (×4, Perspective SM)
+   - Attenuation 公式
+   - Tiled / Clustered Lighting
+
+## 6. Culling 系統
+   - GPU Frustum Culling (ComputeShader)
+   - LOD System
+   - Baked Occlusion Culling (Cell Grid)
+   - Hi-Z Occlusion (GPU-driven)
+   - DrawProceduralIndirect
+
+## 7. 優化
+   - Early-Z + Depth Pre-pass
+   - G-Buffer 降精度 (RGBA16F)
+   - Single-Pass CSM
+   - Tiled Lighting
+   - Variable Rate Shading (Phase 3)
+
+## 8. Minic API
+   - light_api.c — 燈光創建/控制
+   - camera_api.c — 攝影機 API
+   - culling_api.c — Culling 控制
+   - render_api.c — Pipeline 控制
+
+## 9. 實施階段
+   - Phase 1: 基礎建設（G-Buffer + Directional CSM + Basic Lighting）
+   - Phase 2: 完整燈光 + Point/Spot Shadow
+   - Phase 3: Post-FX + Occlusion Culling + Tiled Lighting
+   - Phase 4: 全部優化整合
+
+## 10. 文件清單
+   - 新建檔案
+   - 修改檔案
+  </div>
+</div>
+
+<div class="section">
+  <h3>確認後寫入</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>3D_PLAN.md 將包含：</h4>
+      <ul>
+        <li>完整 5 Pass Pipeline 架構</li>
+        <li>3 種燈光 + 3 種陰影</li>
+        <li>4 層 Culling 系統</li>
+        <li>5 項效能優化</li>
+        <li>Minic API 設計</li>
+        <li>4 個實作 Phase</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">回覆「確認」則寫入 3D_PLAN.md<br/>回覆其他則繼續修改</p>
+</div>
+
+<style>
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.68rem;
+  font-family: monospace;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.section { margin-top: 1.2rem; }
+</style>

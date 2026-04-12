@@ -1,0 +1,167 @@
+<h2>多級陰影圖方案比較</h2>
+<p class="subtitle">點擊方案查看詳細說明</p>
+
+<div class="options">
+  <div class="option" data-choice="csm" onclick="selectOption(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>CSM (Cascaded Shadow Maps)</h3>
+      <p>經典方案：多層 shadow map 覆蓋近/中/遠距離</p>
+      <ul>
+        <li>3-4 層 cascade，覆盖 camera frustum 分段</li>
+        <li>近處高解析度、遠處低解析度</li>
+        <li>需要選擇 cascade 的 fragment 使用哪層</li>
+      </ul>
+      <p class="tag">成熟穩定、相容性最好</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="vsm" onclick="selectOption(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>VSM (Variance Shadow Maps)</h3>
+      <p>統計方法：每層記錄 (depth, depth²)，查詢時用 Chebyshev 估計陰影比例</p>
+      <ul>
+        <li>單層可覆蓋全距離（需 2048×2048+）</li>
+        <li>支援 PCF 模糊、Biased Mipmapping</li>
+        <li>Light-bleeding 問題可用 Bretesta 修正</li>
+      </ul>
+      <p class="tag">軟陰影、暈開 shadow edge</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="rt" onclick="selectOption(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Ray-Traced Shadows (RTX)</h3>
+      <p>硬體光線追蹤：每個 fragment 發射 ray 檢測遮擋</p>
+      <ul>
+        <li>無限解析度、完美的接觸陰影</li>
+        <li>需要 DXR / Metal Ray Tracing</li>
+        <li>效能成本高，適合近處物體</li>
+      </ul>
+      <p class="tag">最高質量、需要硬體支援</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="dsm" onclick="selectOption(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>DSM + Screen-space blur</h3>
+      <p>方向陰影圖 + 後處理模糊：用 2D blur kernel 在 shadow map 上做均值擴散</p>
+      <ul>
+        <li>用 Poisson disk 或 Gaussian blur 代替 PCF</li>
+        <li>減少 shadow map 解析度需求</li>
+        <li>blur radius 控制陰影軟硬</li>
+      </ul>
+      <p class="tag">節省記憶體、質量中等</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="detail-area" style="display:none; margin-top:1.5rem;">
+  <h3 id="detail-title"></h3>
+  <div id="detail-content"></div>
+</div>
+
+<div class="section" style="margin-top:1.5rem;">
+  <h3>推薦：VSM + CSM 混合方案</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>推薦理由</h4>
+      <ul>
+        <li>VSM 只需 1-2 層 shadow map（近/遠各一），節省 draw calls</li>
+        <li>可用單一 2048×2048 覆蓋近景 + 1024×1024 覆蓋遠景</li>
+        <li>支援 Mipmap，可在 lighting pass 中動態選擇 LOD 等級</li>
+        <li>比起 CSM 不需要 fragment 判斷使用哪層 cascade</li>
+        <li>Blur 成本：可預計算或在 lighting pass 同時做</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>缺點 / 注意</h4>
+      <ul>
+        <li>Light bleeding 需要用 Back-off 或 LiSBM 修正</li>
+        <li>不適合點光源 spot（需 cubemap，VSM 不支援 cubemap）</li>
+        <li>shadow map 需要 generate mipmaps（額外 pass）</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:1.5rem;">
+  <h3>Shadow Map 解析度選擇</h3>
+  <table class="data-table">
+    <tr><th>場景類型</th><th>近景 shadow map</th><th>遠景 shadow map</th><th>Cascade 策略</th></tr>
+    <tr><td>室內 / 狭小場景</td><td>2048×2048</td><td>1024×1024</td><td>2層 VSM</td></tr>
+    <tr><td>開放世界 / 景觀</td><td>4096×4096</td><td>2048×2048</td><td>3層 VSM 或 3層 CSM</td></tr>
+    <tr><td>AAA 主機遊戲</td><td>4096×4096</td><td>2048×2048 + 1024×1024</td><td>4層 CSM + RTX 近景</td></tr>
+    <tr><td>強調效能</td><td>1024×1024</td><td>512×512</td><td>2層 VSM + DSM blur</td></tr>
+  </table>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」確認方案選擇</p>
+</div>
+
+<script>
+var selected = {};
+
+var details = {
+  csm: {
+    title: "CSM (Cascaded Shadow Maps) — 詳細",
+    content: `<p><strong>分割策略：</strong>等距分割（等距深度）或線性分割</p>
+<p><strong>穩定性問題：</strong>camera 移動時 cascade 邊界會產生 "shadow dancing"</p>
+<p><strong>穩定CSM 技術：</strong>用 View-aligned cascade、解決辦法：PCF depth bias + normalOffsetBias 調大</p>
+<p><strong>分裂距離計算：</strong>lambda = (near^(-1) + i/(N-1) * (far^(-1) - near^(-1)))^(-1)</p>
+<p><strong>代碼複雜度：</strong中等（需 shadow_frustum computation + viewport scissors）</p>`
+  },
+  vsm: {
+    title: "VSM (Variance Shadow Maps) — 詳細",
+    content: `<p><strong>核心公式：</strong>P(x > d) ≤ (σ²) / (σ² + (d - μ)²)</p>
+<p><strong>σ² = moment2 - μ²</strong></p>
+<p><strong>Shadow map 格式：</strong>RG32（depth, depth²）或 RGBA32F（moment1-4）</p>
+<p><strong>Mipmap 需要：</strong>minification 會导致 light bleeding，可用 mipmap level 限制</p>
+<p><strong>Blur kernel：</strong>9-tap Gaussian → 5-tap Poisson Disk</p>
+<p><strong>Bretesta 修正：</strong>用 min15moment 求上界，減少 light bleeding</p>`
+  },
+  rt: {
+    title: "Ray-Traced Shadows — 詳細",
+    content: `<p><strong>實作方式：</strong>Acceleration structure + Ray query per fragment</p>
+<p><strong>效能優化：</strong>只有近景物體用 RT，遠景用 CSM/VSM</p>
+<p><strong>Shadow ray length：</strong>燈光方向的最大陰影長度（如 50m）</p>
+<p><strong>Opacity Micromap：</strong>DXR 2.0+，MSAA + Opacity Micromap 可處理透明度</p>
+<p><strong>適用於：</strong>接觸陰影（contact shadow）、軟陰影邊緣</p>`
+  },
+  dsm: {
+    title: "DSM + Screen-space blur — 詳細",
+    content: `<p><strong>Blur 策略：</strong>用多個 Poisson disk 採樣 shadow map</p>
+<p><strong>Kernel size：</strong>5-tap（硬陰影）、9-tap（中等軟）、13-tap（軟陰影）</p>
+<p><strong>陰影半影控制：</strong>Blur kernel = shadow_softness / distance_to_occluder</p>
+<p><strong>與 VSM 比較：</strong>VSM 是"空間平均"，DSM 是"鄰域平均"，結果視覺上接近</p>
+<p><strong>缺陷：</strong>blur 會導致 light-bleeding，特別是場景有薄物體時</p>`
+  }
+};
+
+function selectOption(el) {
+  var choice = el.getAttribute('data-choice');
+  selected[choice] = !selected[choice];
+  document.querySelectorAll('.option').forEach(o => {
+    if (selected[o.getAttribute('data-choice')]) {
+      o.classList.add('selected');
+    } else {
+      o.classList.remove('selected');
+    }
+  });
+}
+</script>
+
+<style>
+.option { cursor: pointer; }
+.option h3 { font-size: 0.9rem; margin: 0 0 0.25rem; }
+.option ul { margin: 0.25rem 0; padding-left: 1.2rem; font-size: 0.75rem; }
+.option .tag { font-size: 0.7rem; color: var(--accent); margin-top: 0.25rem; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.section { margin-top: 1.2rem; }
+</style>

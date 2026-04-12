@@ -1,0 +1,200 @@
+<h2>Deferred Pipeline + Cascaded Shadow Maps (CSM)</h2>
+<p class="subtitle">3 層 Cascade · 對數分割 · 4-tap PCF</p>
+
+<!-- Pipeline Flow -->
+<div class="section">
+  <h3>Pass 流程</h3>
+  <div class="pipeline-flow">
+    <div class="pipeline-pass shadow" data-choice="pass0" onclick="toggleSelect(this)">
+      <div class="pass-header shadow-header">Pass 0: Shadow</div>
+      <div class="pass-content">
+        <p>×3 Cascade</p>
+        <ul>
+          <li><code>shadow_0</code> 2048²</li>
+          <li><code>shadow_1</code> 1024²</li>
+          <li><code>shadow_2</code> 512²</li>
+        </ul>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipeline-pass" data-choice="pass1" onclick="toggleSelect(this)">
+      <div class="pass-header">Pass 1: G-Buffer</div>
+      <div class="pass-content">
+        <p>MRT: gbuffer0 + gbuffer1 + depth</p>
+        <p>+ lightSpacePos_0/1/2 varying</p>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipeline-pass" data-choice="pass2" onclick="toggleSelect(this)">
+      <div class="pass-header">Pass 2: Lighting</div>
+      <div class="pass-content">
+        <p>選擇 cascade + 4-tap PCF</p>
+        <p>邊界 smooth blend</p>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipeline-pass" data-choice="pass3" onclick="toggleSelect(this)">
+      <div class="pass-header">Pass 3: Post-FX</div>
+      <div class="pass-content">
+        <p>SSAO → Bloom → TAA</p>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pipeline-pass" data-choice="pass4" onclick="toggleSelect(this)">
+      <div class="pass-header">Pass 4: 2D</div>
+      <div class="pass-content">
+        <p>render2d_bridge</p>
+        <p>sprite overlay</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CSM Details -->
+<div class="split" style="gap: 1.5rem;">
+  <div>
+    <h3>Cascade Split（對數分割）</h3>
+    <div class="code-block">
+split_i = near * (far / near)^(i / N)
+
+Cascade 0: 0.1m  →  ~4.6m   (2048×2048, 近景細節)
+Cascade 1: 4.6m  →  ~21.5m  (1024×1024, 中景)
+Cascade 2: 21.5m →  100m    (512×512,   遠景)
+    </div>
+
+    <h3>Light Space 計算</h3>
+    <div class="code-block">
+light_view:  look-at(light_dir, scene_center, up)
+light_proj:  ortho(-extent, extent, -extent, extent, cascade_near, cascade_far)
+SMVP_i:      light_proj × light_view × model_matrix
+    </div>
+
+    <h3>Cascade 選擇邏輯</h3>
+    <div class="code-block">
+idx = (view_depth < split_0) ? 0
+    : (view_depth < split_1) ? 1 : 2;
+
+// 邊界過渡混合
+blend = smoothstep(split_i - transition, split_i, depth);
+    </div>
+  </div>
+
+  <div>
+    <h3>4-tap PCF Shader</h3>
+    <div class="code-block">
+float shadow_pcf(sampler2D sm, vec4 sc, float bias) {
+    vec2 ts = 1.0 / shadow_map_size;
+    float s = 0.0;
+    s += texture(sm, sc.xy + vec2(-ts.x,-ts.y)).r;
+    s += texture(sm, sc.xy + vec2( ts.x,-ts.y)).r;
+    s += texture(sm, sc.xy + vec2(-ts.x, ts.y)).r;
+    s += texture(sm, sc.xy + vec2( ts.x, ts.y)).r;
+    s /= 4.0;
+    return s < sc.z - bias ? 0.0 : 1.0;
+}
+    </div>
+
+    <h3>Lighting Pass 中的陰影計算</h3>
+    <div class="code-block">
+// 選擇 cascade
+float ci = get_cascade_index(view_depth);
+vec4 sp = get_shadow_pos(ci);  // SMVP[ci] × world_pos
+
+// 4-tap PCF
+float shad = shadow_pcf(shadow_map[ci], sp, light.bias);
+
+// NdotL × shadow × light_color
+color += NdotL * shad * light.color * albedo;
+    </div>
+  </div>
+</div>
+
+<!-- Render Targets -->
+<div class="section">
+  <h3>Render Targets</h3>
+  <table class="data-table">
+    <tr><th>名稱</th><th>Format</th><th>大小</th><th>用途</th></tr>
+    <tr><td>shadow_0</td><td>D32</td><td>2048×2048</td><td>Cascade 0 陰影圖</td></tr>
+    <tr><td>shadow_1</td><td>D32</td><td>1024×1024</td><td>Cascade 1 陰影圖</td></tr>
+    <tr><td>shadow_2</td><td>D32</td><td>512×512</td><td>Cascade 2 陰影圖</td></tr>
+    <tr><td>main</td><td>D32</td><td>W×H</td><td>主深度緩衝</td></tr>
+    <tr><td>gbuffer0</td><td>RGBA64</td><td>W×H</td><td>Normal + Roughness + Metallic</td></tr>
+    <tr><td>gbuffer1</td><td>RGBA64</td><td>W×H</td><td>Albedo + AO</td></tr>
+    <tr><td>buf</td><td>RGBA64</td><td>W×H</td><td>燈光輸出</td></tr>
+    <tr><td>last</td><td>RGBA64</td><td>W×H</td><td>最終輸出</td></tr>
+  </table>
+</div>
+
+<!-- File Changes -->
+<div class="section">
+  <h3>新增 / 修改檔案</h3>
+  <table class="data-table">
+    <tr><th>檔案</th><th>動作</th></tr>
+    <tr><td><code>engine/sources/ecs/deferred_shadow.c/h</code></td><td>新建 — shadow pass + cascade 管理</td></tr>
+    <tr><td><code>engine/sources/ecs/light_bridge.c/h</code></td><td>新建 — 同步 directional light shadow 參數</td></tr>
+    <tr><td><code>engine/sources/ecs/deferred_gbuffer.c/h</code></td><td>修改 — 新增 shadow_0/1/2 targets</td></tr>
+    <tr><td><code>engine/sources/ecs/deferred_lighting.c/h</code></td><td>修改 — bind shadow maps + SMVP uniforms</td></tr>
+    <tr><td><code>engine/sources/ecs/ecs_components.h</code></td><td>修改 — 擴展 comp_directional_light</td></tr>
+    <tr><td><code>engine/assets/shaders/world_gbuffer.kong</code></td><td>修改 — 新增 SMVP_i varying</td></tr>
+    <tr><td><code>engine/assets/shaders/deferred_light.kong</code></td><td>修改 — cascade selection + 4-tap PCF</td></tr>
+  </table>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」確認設計</p>
+</div>
+
+<script>
+function toggleSelect(el) {
+  el.classList.toggle('selected');
+}
+</script>
+
+<style>
+.pipeline-flow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+.pipeline-pass {
+  flex: 1;
+  min-width: 100px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+  font-size: 0.75rem;
+}
+.pipeline-pass:hover { border-color: var(--accent); }
+.pipeline-pass.selected { border-color: var(--accent); background: var(--accent-bg); }
+.shadow { border-color: var(--accent); }
+.shadow-header { color: var(--accent); }
+.pass-header { font-weight: 700; font-size: 0.75rem; margin-bottom: 0.3rem; }
+.pass-content { font-size: 0.7rem; line-height: 1.4; }
+.pass-content ul { margin: 0.2rem 0; padding-left: 0.8rem; }
+.pass-content code { font-size: 0.65rem; background: var(--muted); padding: 1px 3px; border-radius: 2px; }
+.arrow { font-size: 1.3rem; color: var(--muted); display: flex; align-items: center; padding-top: 0.4rem; }
+.split { display: flex; gap: 1.5rem; }
+.split > div { flex: 1; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.72rem;
+  font-family: monospace;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.section { margin-top: 1.2rem; }
+h3 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+</style>

@@ -45,16 +45,16 @@ comp_3d_scale        — float x, y, z
 // Mesh
 comp_3d_mesh_renderer — mesh_path, material_path
 RenderObject3D        — iron_mesh_object ptr, iron_transform ptr
-comp_lod              — distances[4], mesh_lod0/1/2/3 paths, current_lod
+comp_3d_lod           — distances[4], mesh_lod0/1/2/3 paths, current_lod
 
 // Camera
 comp_3d_camera        — fov, near, far, perspective
 comp_3d_ortho         — left, right, bottom, top
 
 // Lights
-comp_directional_light — dir(xyz), color(rgb), strength, enabled, cast_shadows, shadow_bias, normal_offset_bias, shadow_radius
-comp_point_light       — pos(xyz), color(rgb), strength, range, enabled, cast_shadows, shadow_bias
-comp_spot_light        — pos(xyz), dir(xyz), color(rgb), strength, range, inner_cone, outer_cone, enabled, cast_shadows, shadow_bias
+comp_3d_directional_light — dir(xyz), color(rgb), strength, enabled, cast_shadows, shadow_bias, normal_offset_bias, shadow_radius
+comp_3d_point_light       — pos(xyz), color(rgb), strength, range, enabled, cast_shadows, shadow_bias
+comp_3d_spot_light        — pos(xyz), dir(xyz), color(rgb), strength, range, inner_cone, outer_cone, enabled, cast_shadows, shadow_bias
 
 // Rendering Tags
 Tag: CompRenderable      — 可被渲染的實體
@@ -67,7 +67,7 @@ Tag: CompVisible         — 當前幀可見（culling 結果）
 
 ```
 1.  sys_culling_frustum    // GPU frustum culling → writes CompVisible
-2.  sys_culling_lod        // LOD selection → updates comp_lod.current_lod
+2.  sys_culling_lod        // LOD selection → updates comp_3d_lod.current_lod
 3.  sys_shadow_directional  // CSM × 4 directional lights
 4.  sys_shadow_point        // Cubemap shadows × 8 point lights
 5.  sys_shadow_spot         // Shadow maps × 4 spot lights
@@ -284,7 +284,7 @@ typedef struct {
     float shadow_bias;
     float normal_offset_bias;
     float shadow_radius;          // PCF kernel 大小
-} comp_directional_light;
+} comp_3d_directional_light;
 
 typedef struct {
     float pos_x, pos_y, pos_z;   // 世界座標
@@ -294,7 +294,7 @@ typedef struct {
     bool  enabled;
     bool  cast_shadows;
     float shadow_bias;
-} comp_point_light;
+} comp_3d_point_light;
 
 typedef struct {
     float pos_x, pos_y, pos_z;   // 世界座標
@@ -307,7 +307,7 @@ typedef struct {
     bool  enabled;
     bool  cast_shadows;
     float shadow_bias;
-} comp_spot_light;
+} comp_3d_spot_light;
 ```
 
 ### 衰減公式
@@ -423,7 +423,7 @@ typedef struct {
     char *mesh_lod2_path;
     char *mesh_lod3_path;
     int   current_lod;          // 運行時選擇的 LOD level
-} comp_lod;
+} comp_3d_lod;
 
 int select_lod(float dist, float4 distances) {
     if (dist > distances.w) return 3;
