@@ -1,0 +1,65 @@
+#[set(everything)]
+const constants: {
+	debug_mode: int;
+};
+
+#[set(everything)]
+const sampler_linear: sampler;
+
+#[set(everything)]
+const gbuffer0_tex: tex2d;
+
+#[set(everything)]
+const gbuffer1_tex: tex2d;
+
+#[set(everything)]
+const depth_tex: tex2d;
+
+struct vert_in {
+	pos: float4;
+	tex: float2;
+}
+
+struct vert_out {
+	pos: float4;
+	tex: float2;
+}
+
+fun debug_gbuffer_vert(input: vert_in): vert_out {
+	var output: vert_out;
+	output.pos = float4(input.pos.xy, 0.0, 1.0);
+	output.tex = input.tex;
+	return output;
+}
+
+fun debug_gbuffer_frag(input: vert_out): float4 {
+	var g0: float4 = sample(gbuffer0_tex, sampler_linear, input.tex);
+	var g1: float4 = sample(gbuffer1_tex, sampler_linear, input.tex);
+	var d: float = sample(depth_tex, sampler_linear, input.tex).r;
+
+	if (constants.debug_mode == 0) {
+		// Normal: display raw octahedral encoding as color
+		return float4(g0.x, g0.y, 1.0 - abs(g0.x * 2.0 - 1.0) - abs(g0.y * 2.0 - 1.0), 1.0);
+	}
+	if (constants.debug_mode == 1) {
+		// Depth: grayscale
+		return float4(d, d, d, 1.0);
+	}
+	if (constants.debug_mode == 2) {
+		// Albedo: direct RGB + AO
+		return float4(g1.x, g1.y, g1.z, 1.0);
+	}
+	if (constants.debug_mode == 3) {
+		// Roughness (red) / Metallic (green)
+		return float4(g0.z, g0.w, 0.0, 1.0);
+	}
+
+	// Fallback: combined view
+	return float4(g0.x, g0.y, d, 1.0);
+}
+
+#[pipe]
+struct pipe {
+	vertex = debug_gbuffer_vert;
+	fragment = debug_gbuffer_frag;
+}
