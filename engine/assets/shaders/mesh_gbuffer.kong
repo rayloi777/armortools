@@ -1,0 +1,51 @@
+#[set(everything)]
+const constants: {
+    WVP: float4x4;
+    World: float4x4;
+    metallic: float;
+    roughness: float;
+    albedo_rgb: float3;
+    ao: float;
+};
+
+struct vert_in {
+    pos: float4;
+    nor: float3;
+    tex: float2;
+}
+
+struct vert_out {
+    pos: float4;
+    nor: float3;
+    tex: float2;
+}
+
+fun oct_encode(n: float3): float2 {
+    var nn = normalize(n);
+    var sum = abs(nn.x) + abs(nn.y) + abs(nn.z);
+    var oct = nn.xy * (1.0 / sum);
+    oct = oct * 0.5 + 0.5;
+    return oct;
+}
+
+fun gbuffer_vert(input: vert_in): vert_out {
+    var output: vert_out;
+    output.tex = input.tex;
+    output.nor = (constants.World * float4(input.nor.xyz, 0.0)).xyz;
+    output.pos = constants.WVP * float4(input.pos.xyz, 1.0);
+    return output;
+}
+
+fun gbuffer_frag(input: vert_out): float4[2] {
+    var result: float4[2];
+    var oct: float2 = oct_encode(normalize(input.nor));
+    result[0] = float4(oct.x, oct.y, constants.roughness, constants.metallic);
+    result[1] = float4(constants.albedo_rgb.x, constants.albedo_rgb.y, constants.albedo_rgb.z, constants.ao);
+    return result;
+}
+
+#[pipe]
+struct pipe {
+    vertex = gbuffer_vert;
+    fragment = gbuffer_frag;
+}
