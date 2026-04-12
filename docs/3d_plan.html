@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engine 3D Render Pipeline — 重構計劃</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #21253a;
+  --border: #2a2f45;
+  --accent: #6c9fff;
+  --accent-bg: rgba(108,159,255,0.08);
+  --accent-fg: #e8f0ff;
+  --text: #c8ccd8;
+  --muted: #5a6178;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --purple: #a78bfa;
+  --code-bg: #12141e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+/* ---- HEADER ---- */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 2rem 2rem 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent-fg);
+  margin-bottom: 0.3rem;
+}
+.header .meta {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.header .tag {
+  display: inline-block;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.nav {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.nav a {
+  color: var(--text);
+  text-decoration: none;
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+.nav a:hover { background: var(--surface2); }
+.nav a.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+
+/* ---- LAYOUT ---- */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+section {
+  margin-bottom: 3rem;
+  scroll-margin-top: 120px;
+}
+h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent-fg);
+  border-left: 3px solid var(--accent);
+  padding-left: 0.8rem;
+  margin-bottom: 1.2rem;
+}
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.2rem 0 0.6rem;
+}
+h4 {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 1rem 0 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+p { margin-bottom: 0.5rem; }
+ul, ol { padding-left: 1.4rem; margin-bottom: 0.6rem; }
+li { margin-bottom: 0.25rem; }
+
+/* ---- ARCH DIAGRAM ---- */
+.arch-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 1rem 0;
+}
+.arch-layer {
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  border: 2px solid;
+}
+.arch-layer.minic { border-color: var(--purple); background: rgba(167,139,250,0.07); }
+.arch-layer.api   { border-color: var(--accent); background: rgba(108,159,255,0.07); }
+.arch-layer.ecs   { border-color: var(--success); background: rgba(74,222,128,0.07); }
+.arch-layer.iron  { border-color: var(--warning); background: rgba(251,191,36,0.07); }
+.arch-layer .layer-label { font-weight: 700; font-size: 0.85rem; margin-bottom: 0.15rem; }
+.arch-layer .layer-content { font-size: 0.75rem; opacity: 0.8; }
+.arch-arrow { text-align: center; font-size: 0.72rem; color: var(--muted); padding: 0.1rem 0; }
+
+/* ---- PIPELINE FLOW ---- */
+.pipeline-flow {
+  display: flex;
+  gap: 0.3rem;
+  align-items: stretch;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+.pass {
+  flex: 1;
+  min-width: 110px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  background: var(--surface);
+  transition: border-color 0.2s;
+}
+.pass:hover { border-color: var(--accent); }
+.pass.shadow { border-color: var(--warning); background: rgba(251,191,36,0.05); }
+.pass .pass-title { font-weight: 700; font-size: 0.72rem; margin-bottom: 0.3rem; color: var(--accent-fg); }
+.pass.shadow .pass-title { color: var(--warning); }
+.pass .pass-detail { font-size: 0.68rem; color: var(--muted); line-height: 1.4; }
+.arrow { display: flex; align-items: center; font-size: 1.2rem; color: var(--muted); padding: 0 0.1rem; }
+
+/* ---- CODE ---- */
+.code {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  line-height: 1.7;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0.6rem 0;
+  color: #d4d8e8;
+}
+.code .c { color: #6c9fff; } /* comment */
+.code .k { color: #f472b6; } /* keyword */
+.code .t { color: #4ade80; } /* type */
+.code .s { color: #fbbf24; } /* string */
+.code .fn { color: #a78bfa; } /* function */
+
+/* ---- TABLES ---- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin: 0.6rem 0;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+th { background: var(--surface2); color: var(--accent-fg); font-weight: 600; }
+tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; color: var(--accent); }
+
+/* ---- TAGS ---- */
+.tag-box {
+  display: inline-block;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  margin: 0.1rem;
+}
+.tag-box.tag { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+
+/* ---- STEP FLOW ---- */
+.step-flow { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.6rem 0; }
+.step { display: flex; align-items: flex-start; gap: 0.7rem; font-size: 0.8rem; }
+.step-n {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.7rem; flex-shrink: 0;
+}
+.step-text { line-height: 1.5; }
+.step-text strong { color: var(--accent-fg); }
+
+/* ---- GRID ---- */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin: 0.6rem 0; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+}
+.card h4 { margin-top: 0; color: var(--accent); font-size: 0.82rem; }
+.card .desc { font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem; }
+
+/* ---- OPTIMIZATIONS ---- */
+.optimization {
+  display: flex;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.optimization:last-child { border-bottom: none; }
+.opt-name { font-weight: 600; color: var(--accent-fg); min-width: 200px; font-size: 0.85rem; }
+.opt-detail { font-size: 0.8rem; }
+.priority {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.p0 { background: rgba(248,113,113,0.15); color: var(--danger); }
+.p1 { background: rgba(251,191,36,0.15); color: var(--warning); }
+.p2 { background: rgba(108,159,255,0.15); color: var(--accent); }
+
+/* ---- PHASES ---- */
+.phase {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.phase-header {
+  background: var(--surface2);
+  padding: 0.6rem 1rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.phase-body { padding: 0.8rem 1rem; font-size: 0.82rem; }
+.phase-body li { margin-bottom: 0.3rem; }
+
+/* ---- FILES ---- */
+.file-section { margin-bottom: 1.5rem; }
+.file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+.file-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.file-item .new { color: var(--success); font-weight: 700; font-size: 0.65rem; }
+.file-item .mod { color: var(--warning); font-weight: 700; font-size: 0.65rem; }
+.file-item code { color: var(--accent); font-size: 0.75rem; }
+.file-item .desc { color: var(--muted); font-size: 0.72rem; margin-left: auto; }
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 768px) {
+  .container { padding: 1rem; }
+  .pipeline-flow { flex-direction: column; }
+  .arrow { display: none; }
+  .grid { grid-template-columns: 1fr; }
+  .header .meta { flex-direction: column; gap: 0.3rem; }
+  .optimization { flex-direction: column; gap: 0.3rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Engine 3D Render Pipeline — 重構計劃</h1>
+  <div class="meta">
+    <span class="tag">Draft</span>
+    <span>2026-04-12</span>
+    <span>Unity-style multi-layer culling + full deferred rendering</span>
+  </div>
+  <nav class="nav">
+    <a href="#arch">架構</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="#gbuffer">G-Buffer</a>
+    <a href="#csm">CSM</a>
+    <a href="#lighting">燈光</a>
+    <a href="#culling">Culling</a>
+    <a href="#optimize">優化</a>
+    <a href="#api">Minic API</a>
+    <a href="#phases">階段</a>
+    <a href="#files">檔案</a>
+  </nav>
+</div>
+
+<div class="container">
+
+<!-- ==========================================
+     1. 架構總覽
+     ========================================== -->
+<section id="arch">
+  <h2>1. 架構總覽</h2>
+
+  <h3>Layer 架構</h3>
+  <div class="arch-layers">
+    <div class="arch-layer minic">
+      <div class="layer-label">Minic Scripts (.minic)</div>
+      <div class="layer-content">遊戲邏輯腳本 — 創建實體、添加組件、查詢系統</div>
+    </div>
+    <div class="arch-arrow">↓ calls C API registered via minic_register()</div>
+    <div class="arch-layer api">
+      <div class="layer-label">Core API (core/)</div>
+      <div class="layer-content">entity_api · light_api · camera_api · culling_api · render_api</div>
+    </div>
+    <div class="arch-arrow">↓ operates on</div>
+    <div class="arch-layer ecs">
+      <div class="layer-label">Flecs ECS (ecs/)</div>
+      <div class="layer-content">Systems: culling · shadow · gbuffer · lighting · postfx</div>
+    </div>
+    <div class="arch-arrow">↓ syncs to</div>
+    <div class="arch-layer iron">
+      <div class="layer-label">Iron Engine (base/)</div>
+      <div class="layer-content">GPU render targets · render_path · mesh_object · camera_object</div>
+    </div>
+  </div>
+
+  <h3>ECS Components</h3>
+  <div class="grid">
+    <div class="card">
+      <h4>Transform</h4>
+      <div class="tag-box">comp_3d_position</div>
+      <div class="tag-box">comp_3d_rotation</div>
+      <div class="tag-box">comp_3d_scale</div>
+    </div>
+    <div class="card">
+      <h4>Mesh</h4>
+      <div class="tag-box">comp_3d_mesh_renderer</div>
+      <div class="tag-box">comp_3d_lod</div>
+      <div class="tag-box">RenderObject3D</div>
+    </div>
+    <div class="card">
+      <h4>Camera</h4>
+      <div class="tag-box">comp_3d_camera</div>
+      <div class="tag-box">comp_3d_ortho</div>
+    </div>
+    <div class="card">
+      <h4>Lights</h4>
+      <div class="tag-box">comp_3d_directional_light</div>
+      <div class="tag-box">comp_3d_point_light</div>
+      <div class="tag-box">comp_3d_spot_light</div>
+    </div>
+    <div class="card">
+      <h4>Tags</h4>
+      <div class="tag-box tag">CompRenderable</div>
+      <div class="tag-box tag">CompShadowCaster</div>
+      <div class="tag-box tag">CompShadowReceiver</div>
+      <div class="tag-box tag">CompVisible</div>
+    </div>
+  </div>
+
+  <h3>ECS System 執行順序</h3>
+  <div class="step-flow">
+    <div class="step"><div class="step-n">1</div><div class="step-text"><strong>sys_culling_frustum</strong> — GPU Frustum Culling → writes CompVisible</div></div>
+    <div class="step"><div class="step-n">2</div><div class="step-text"><strong>sys_culling_lod</strong> — LOD selection → updates comp_3d_lod.current_lod</div></div>
+    <div class="step"><div class="step-n">3</div><div class="step-text"><strong>sys_shadow_directional</strong> — CSM × 4 directional lights</div></div>
+    <div class="step"><div class="step-n">4</div><div class="step-text"><strong>sys_shadow_point</strong> — Cubemap shadows × 8 point lights</div></div>
+    <div class="step"><div class="step-n">5</div><div class="step-text"><strong>sys_shadow_spot</strong> — Shadow maps × 4 spot lights</div></div>
+    <div class="step"><div class="step-n">6</div><div class="step-text"><strong>sys_gbuffer</strong> — Geometry pass → gbuffer0 + gbuffer1 + main(depth)</div></div>
+    <div class="step"><div class="step-n">7</div><div class="step-text"><strong>sys_lighting</strong> — Deferred lighting → buf</div></div>
+    <div class="step"><div class="step-n">8</div><div class="step-text"><strong>sys_postfx</strong> — Post-processing → SSAO → Bloom → TAA → last</div></div>
+    <div class="step"><div class="step-n">9</div><div class="step-text"><strong>sys_output</strong> — 2D overlay + present</div></div>
+  </div>
+</section>
+
+<!-- ==========================================
+     2. Render Pipeline
+     ========================================== -->
+<section id="pipeline">
+  <h2>2. Render Pipeline（5 Pass）</h2>
+  <div class="pipeline-flow">
+    <div class="pass shadow">
+      <div class="pass-title">Pass 0<br>Shadow</div>
+      <div class="pass-detail">
+        Dir ×4 ×3 CSM<br>
+        Point ×8 ×6 Cubemap<br>
+        Spot ×4
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass">
+      <div class="pass-title">Pass 1<br>G-Buffer</div>
+      <div class="pass-detail">
+        gbuffer0: Normal+RM<br>
+        gbuffer1: Albedo+AO<br>
+        main: Depth
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass">
+      <div class="pass-title">Pass 2<br>Lighting</div>
+      <div class="pass-detail">
+        Reads G-buffer<br>
+        + All shadow maps<br>
+        → buf (lit color)
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass">
+      <div class="pass-title">Pass 3<br>Post-FX</div>
+      <div class="pass-detail">
+        SSAO → Bloom<br>
+        → TAA → last
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass">
+      <div class="pass-title">Pass 4<br>2D Overlay</div>
+      <div class="pass-detail">
+        render2d_bridge<br>
+        → screen
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     3. G-Buffer
+     ========================================== -->
+<section id="gbuffer">
+  <h2>3. G-Buffer 格式</h2>
+  <table>
+    <tr><th>Target</th><th>Format</th><th>內容</th></tr>
+    <tr><td>main</td><td>D24S8</td><td>Depth buffer（所有 Pass 共享）</td></tr>
+    <tr><td>gbuffer0</td><td>RGBA16F</td><td>Normal.xy (octahedron), Roughness, Metallic</td></tr>
+    <tr><td>gbuffer1</td><td>RGBA16F</td><td>Albedo.rgb, AO</td></tr>
+    <tr><td>buf</td><td>RGBA16F</td><td>Intermediate / lighting output</td></tr>
+    <tr><td>last</td><td>RGBA16F</td><td>Final composited output</td></tr>
+  </table>
+
+  <h3>gbuffer0 (RGBA16F)</h3>
+  <div class="grid" style="grid-template-columns: repeat(4,1fr);">
+    <div class="card" style="text-align:center"><h4>R</h4><p>Normal.x (oct)</p></div>
+    <div class="card" style="text-align:center"><h4>G</h4><p>Normal.y (oct)</p></div>
+    <div class="card" style="text-align:center"><h4>B</h4><p>Roughness (0.5)</p></div>
+    <div class="card" style="text-align:center"><h4>A</h4><p>Metallic (0.0)</p></div>
+  </div>
+
+  <h3>gbuffer1 (RGBA16F)</h3>
+  <div class="grid" style="grid-template-columns: repeat(4,1fr);">
+    <div class="card" style="text-align:center"><h4>R</h4><p>Albedo.r (0.8)</p></div>
+    <div class="card" style="text-align:center"><h4>G</h4><p>Albedo.g (0.8)</p></div>
+    <div class="card" style="text-align:center"><h4>B</h4><p>Albedo.b (0.8)</p></div>
+    <div class="card" style="text-align:center"><h4>A</h4><p>AO (1.0)</p></div>
+  </div>
+
+  <h3>Octahedron Encoding</h3>
+  <div class="code"><span class="c">// Encode</span>
+<span class="fn">float2</span> <span class="c">oct_encode</span>(<span class="fn">float3</span> n) {
+    n = normalize(n);
+    <span class="fn">float2</span> oct = n.xy * (<span class="fn">float</span>)(<span class="c">1.0</span> / (abs(n.x) + abs(n.y) + abs(n.z)));
+    <span class="k">return</span> oct * <span class="c">0.5</span> + <span class="c">0.5</span>;
+}
+<span class="c">// Decode</span>
+<span class="fn">float3</span> <span class="c">oct_decode</span>(<span class="fn">float2</span> oct) {
+    oct = oct * <span class="c">2.0</span> - <span class="c">1.0</span>;
+    <span class="fn">float3</span> n; n.z = <span class="c">1.0</span> - abs(oct.x) - abs(oct.y);
+    <span class="k">if</span> (n.z >= <span class="c">0.0</span>) { n.x = oct.x; n.y = oct.y; }
+    <span class="k">else</span> { <span class="fn">float2</span> f2 = <span class="fn">float2</span>(<span class="c">1.0</span> - abs(oct.y), <span class="c">1.0</span> - abs(oct.x)) * sign(oct); n.x = f2.x; n.y = f2.y; }
+    <span class="k">return</span> normalize(n);
+}</div>
+</section>
+
+<!-- ==========================================
+     4. CSM
+     ========================================== -->
+<section id="csm">
+  <h2>4. Cascaded Shadow Maps (CSM)</h2>
+
+  <table>
+    <tr><th>參數</th><th>值</th></tr>
+    <tr><td>Cascade 數量</td><td>3</td></tr>
+    <tr><td>分割策略</td><td>對數分割（Logarithmic）</td></tr>
+    <tr><td>Cascade 0</td><td>2048×2048, near → ~4.6m</td></tr>
+    <tr><td>Cascade 1</td><td>1024×1024, ~4.6m → ~21.5m</td></tr>
+    <tr><td>Cascade 2</td><td>512×512, ~21.5m → 100m</td></tr>
+    <tr><td>Filtering</td><td>4-tap PCF</td></tr>
+    <tr><td>Max Directional Lights</td><td>4</td></tr>
+  </table>
+
+  <h3>Logarithmic Split</h3>
+  <div class="code"><span class="c">split_i(near, far, i, N) = near * (far / near)^(i / N)</span>
+
+Cascade <span class="c">0</span>: <span class="c">0.1m → ~4.6m</span>
+Cascade <span class="c">1</span>: <span class="c">~4.6m → ~21.5m</span>
+Cascade <span class="c">2</span>: <span class="c">~21.5m → 100m</span></div>
+
+  <h3>Single-Pass CSM（Viewport Scissors）</h3>
+  <div class="code">Shadow Atlas (2048×2048):
+┌─────────────┬─────────────┐
+│  Cascade 0  │  Cascade 1  │
+│  2048²      │  1024²      │
+├─────────────┼─────────────┤
+│  Cascade 2  │             │
+│  512²       │    free     │
+└─────────────┴─────────────┘</div>
+
+  <h3>4-tap PCF</h3>
+  <div class="code"><span class="fn">float</span> <span class="c">shadow_pcf</span>(<span class="t">sampler2D</span> shadow_map, <span class="fn">float4</span> sc, <span class="fn">float</span> bias, <span class="fn">float2</span> size) {
+    <span class="fn">float2</span> ts = <span class="c">1.0</span> / size; <span class="fn">float</span> s = <span class="c">0.0</span>;
+    s += texture(shadow_map, sc.xy + <span class="fn">vec2</span>(-ts.x,-ts.y)).r;
+    s += texture(shadow_map, sc.xy + <span class="fn">vec2</span>( ts.x,-ts.y)).r;
+    s += texture(shadow_map, sc.xy + <span class="fn">vec2</span>(-ts.x, ts.y)).r;
+    s += texture(shadow_map, sc.xy + <span class="fn">vec2</span>( ts.x, ts.y)).r;
+    <span class="k">return</span> (s / <span class="c">4.0</span>) < sc.z - bias ? <span class="c">0.0</span> : <span class="c">1.0</span>;
+}</div>
+</section>
+
+<!-- ==========================================
+     5. Lighting
+     ========================================== -->
+<section id="lighting">
+  <h2>5. 燈光系統</h2>
+
+  <table>
+    <tr><th>類型</th><th>數量</th><th>陰影方法</th><th>Shadow Map</th></tr>
+    <tr><td>Directional</td><td>4</td><td>CSM (3 cascades)</td><td>shadow_0/1/2 (2048/1024/512)</td></tr>
+    <tr><td>Point</td><td>8</td><td>Shadow Cubemap</td><td>shadow_cube_[0-7] (1024²×6)</td></tr>
+    <tr><td>Spot</td><td>4</td><td>Perspective SM</td><td>shadow_spot_[0-3] (1024²)</td></tr>
+  </table>
+
+  <h3>組件定義</h3>
+  <div class="code"><span class="k">typedef struct</span> {
+    <span class="fn">float</span> dir_x, dir_y, dir_z;
+    <span class="fn">float</span> color_r, color_g, color_b;
+    <span class="fn">float</span> strength;
+    <span class="t">bool</span>  enabled;
+    <span class="t">bool</span>  cast_shadows;
+    <span class="fn">float</span> shadow_bias;
+    <span class="fn">float</span> normal_offset_bias;
+    <span class="fn">float</span> shadow_radius;
+} comp_3d_directional_light;
+
+<span class="k">typedef struct</span> {
+    <span class="fn">float</span> pos_x, pos_y, pos_z;
+    <span class="fn">float</span> color_r, color_g, color_b;
+    <span class="fn">float</span> strength;
+    <span class="fn">float</span> range;
+    <span class="t">bool</span>  enabled;
+    <span class="t">bool</span>  cast_shadows;
+    <span class="fn">float</span> shadow_bias;
+} comp_3d_point_light;
+
+<span class="k">typedef struct</span> {
+    <span class="fn">float</span> pos_x, pos_y, pos_z;
+    <span class="fn">float</span> dir_x, dir_y, dir_z;
+    <span class="fn">float</span> color_r, color_g, color_b;
+    <span class="fn">float</span> strength;
+    <span class="fn">float</span> range;
+    <span class="fn">float</span> inner_cone;
+    <span class="fn">float</span> outer_cone;
+    <span class="t">bool</span>  enabled;
+    <span class="t">bool</span>  cast_shadows;
+    <span class="fn">float</span> shadow_bias;
+} comp_3d_spot_light;</div>
+
+  <h3>衰減公式</h3>
+  <div class="grid">
+    <div class="card">
+      <h4>Point Light</h4>
+      <div class="code">att = (1 - dist/range)²</div>
+    </div>
+    <div class="card">
+      <h4>Spot Light</h4>
+      <div class="code">spotEffect = dot(L, -spotDir)
+angleAtt = smoothstep(outer, inner, spotEffect)
+totalAtt = (1 - dist/range)² × angleAtt</div>
+    </div>
+  </div>
+
+  <h3>Tiled / Clustered Lighting</h3>
+  <p>ComputeShader 把屏幕分成 16×16 tiles，每個 tile 預先計算影響它的燈光（平均 2-4 個）。省 50-80% 燈光遍歷計算。</p>
+</section>
+
+<!-- ==========================================
+     6. Culling
+     ========================================== -->
+<section id="culling">
+  <h2>6. Culling 系統</h2>
+
+  <div class="step-flow">
+    <div class="step"><div class="step-n">1</div><div class="step-text"><strong>sys_culling_frustum</strong> — GPU Frustum Culling (ComputeShader)</div></div>
+    <div class="step"><div class="step-n">2</div><div class="step-text"><strong>sys_culling_lod</strong> — LOD selection per object</div></div>
+    <div class="step"><div class="step-n">3</div><div class="step-text"><strong>sys_culling_occlusion</strong> — Baked Cell Grid + Hi-Z</div></div>
+    <div class="step"><div class="step-n">4</div><div class="step-text"><strong>DrawProceduralIndirect</strong> — GPU-driven draw call</div></div>
+  </div>
+
+  <h3>GPU Frustum Culling</h3>
+  <div class="code"><span class="c">// Object Data Buffer</span>
+<span class="k">struct</span> ObjectBounds {
+    <span class="fn">float3</span> center;
+    <span class="fn">float3</span> extents;
+    <span class="t">uint</span>   lodMask;
+};
+
+<span class="c">// AABB vs 6 frustum planes</span>
+<span class="t">bool</span> <span class="c">aabb_outside_frustum</span>(ObjectBounds obj, Plane planes[<span class="c">6</span>]) {
+    <span class="k">for</span> (<span class="t">int</span> i = <span class="c">0</span>; i < <span class="c">6</span>; i++) {
+        <span class="fn">float</span> d = dot(obj.center, planes[i].n) + planes[i].d;
+        <span class="k">if</span> (d < -length(obj.extents)) <span class="k">return</span> <span class="t">true</span>;
+    }
+    <span class="k">return</span> <span class="t">false</span>;
+}</div>
+
+  <h3>LOD System</h3>
+  <div class="code"><span class="k">typedef struct</span> {
+    <span class="fn">float</span> distances[<span class="c">4</span>];         <span class="c">// LOD0→LOD1, LOD1→LOD2, LOD2→LOD3 閾值</span>
+    <span class="t">char</span>* mesh_lod0_path;
+    <span class="t">char</span>* mesh_lod1_path;
+    <span class="t">char</span>* mesh_lod2_path;
+    <span class="t">char</span>* mesh_lod3_path;
+    <span class="t">int</span>   current_lod;
+} comp_3d_lod;</div>
+
+  <h3>Baked Occlusion + Hi-Z</h3>
+  <div class="code"><span class="c">// Cell Grid 分區 — Editor 預計算每個 cell 的可見物件列表</span>
+<span class="k">struct</span> OcclusionCell {
+    <span class="fn">float3</span> min, max;
+    <span class="t">uint</span>   visibleObjects[MAX_VIS];
+    <span class="t">uint</span>   numVisible;
+};
+
+<span class="c">// Hi-Z: GPU CS 查詢 depth mipmap</span>
+<span class="t">uint</span> hiz_level = log2(bounds_size_in_pixels / <span class="c">4.0</span>);
+<span class="fn">float</span> hi_z_depth = sample(depth_mip[hiz_level], bounds_center_uv);
+<span class="k">if</span> (bounds_min_z > hi_z_depth) cull;</div>
+</section>
+
+<!-- ==========================================
+     7. Optimizations
+     ========================================== -->
+<section id="optimize">
+  <h2>7. 效能優化</h2>
+
+  <div class="optimization">
+    <div class="opt-name">Early-Z + Depth Pre-pass <span class="priority p0">P0</span></div>
+    <div class="opt-detail">Depth pre-pass → G-buffer pass 開啟 Early-Z，自動 reject 被遮擋 fragment。省 30-60% fragment shader。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">G-Buffer 降精度 <span class="priority p0">P0</span></div>
+    <div class="opt-detail">RGBA64 → RGBA16F, D32 → D24S8。省 25-50% 頻寬，精度足夠 PBR。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">Single-Pass CSM <span class="priority p0">P0</span></div>
+    <div class="opt-detail">Viewport scissors 一次 draw call 輸出 3 個 cascade。省 2/3 shadow draw calls。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">DrawProceduralIndirect <span class="priority p0">P0</span></div>
+    <div class="opt-detail">GPU-driven draw call，減少 CPU draw call overhead。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">Tiled Lighting <span class="priority p1">P1</span></div>
+    <div class="opt-detail">Screen-space tile light binning，每個 tile 平均 2-4 個燈光。省 50-80% lighting 計算。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">Hi-Z Occlusion <span class="priority p1">P1</span></div>
+    <div class="opt-detail">GPU CS 對 visible list 中的大物件做 depth mipmap 查詢，進一步剔除被遮擋物件。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">Variable Rate Shading <span class="priority p2">P2</span></div>
+    <div class="opt-detail">周边区域像素著色降低，進一步優化效能。</div>
+  </div>
+</section>
+
+<!-- ==========================================
+     8. Minic API
+     ========================================== -->
+<section id="api">
+  <h2>8. Minic API</h2>
+
+  <div class="grid">
+    <div class="card">
+      <h4>light_api.c</h4>
+      <div class="code">entity_create_light_directional(...)
+entity_create_light_point(...)
+entity_create_light_spot(...)
+light_set_shadow(light_id, ...)
+light_set_enabled(light_id, ...)
+light_set_color(light_id, r, g, b)</div>
+    </div>
+    <div class="card">
+      <h4>camera_api.c</h4>
+      <div class="code">entity_create_camera3d(fov, near, far)
+camera3d_set_ortho(id, l,r,b,t)
+camera3d_set_active(id)</div>
+    </div>
+    <div class="card">
+      <h4>culling_api.c</h4>
+      <div class="code">culling_set_frustum_enabled(bool)
+culling_set_lod_enabled(bool)
+culling_set_occlusion_enabled(bool)</div>
+    </div>
+    <div class="card">
+      <h4>render_api.c</h4>
+      <div class="code">render_set_pipeline("deferred")
+render_set_shadow_quality("high")</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     9. Phases
+     ========================================== -->
+<section id="phases">
+  <h2>9. 實施階段</h2>
+
+  <div class="phase">
+    <div class="phase-header">
+      <span>Phase 1: 基礎建設</span>
+    </div>
+    <div class="phase-body">
+      <ul>
+        <li>G-Buffer 渲染（gbuffer0, gbuffer1, main depth）</li>
+        <li>Directional Light 基本 lighting（無陰影）</li>
+        <li>Basic camera + mesh rendering</li>
+        <li>基礎 Frustum Culling（CPU 版本）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header">
+      <span>Phase 2: 完整陰影</span>
+    </div>
+    <div class="phase-body">
+      <ul>
+        <li>CSM for Directional Light（3 cascades, Single-Pass）</li>
+        <li>Point Light + Cubemap Shadow</li>
+        <li>Spot Light + Perspective Shadow Map</li>
+        <li>完整 3 種燈光 + 陰影</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header">
+      <span>Phase 3: 高級渲染</span>
+    </div>
+    <div class="phase-body">
+      <ul>
+        <li>Post-Processing（SSAO, Bloom, TAA）</li>
+        <li>Tiled / Clustered Lighting</li>
+        <li>Hi-Z Occlusion Culling</li>
+        <li>LOD System</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-header">
+      <span>Phase 4: 優化整合</span>
+    </div>
+    <div class="phase-body">
+      <ul>
+        <li>Early-Z + Depth Pre-pass</li>
+        <li>G-Buffer 降精度（RGBA16F + D24S8）</li>
+        <li>DrawProceduralIndirect</li>
+        <li>Variable Rate Shading</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     10. Files
+     ========================================== -->
+<section id="files">
+  <h2>10. 檔案清單</h2>
+
+  <div class="file-section">
+    <h3>新建檔案</h3>
+    <div class="file-grid">
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/deferred/deferred_gbuffer.c/h</code><span class="desc">G-buffer 管理</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/deferred/deferred_lighting.c/h</code><span class="desc">Lighting pass</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/deferred/deferred_postfx.c/h</code><span class="desc">Post-processing</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/shadow/shadow_directional.c/h</code><span class="desc">CSM shadow pass</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/shadow/shadow_point.c/h</code><span class="desc">Point cubemap shadow</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/shadow/shadow_spot.c/h</code><span class="desc">Spot shadow map</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/culling/culling_frustum.c/h</code><span class="desc">GPU frustum culling CS</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/culling/culling_lod.c/h</code><span class="desc">LOD system</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/culling/culling_occlusion.c/h</code><span class="desc">Baked occlusion + Hi-Z</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/components/light.c/h</code><span class="desc">Point/Spot light components</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/components/lod.c/h</code><span class="desc">LOD component</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/light_api.c/h</code><span class="desc">Minic light API</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/camera_api.c/h</code><span class="desc">Minic camera API</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/culling_api.c/h</code><span class="desc">Minic culling API</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/render_api.c/h</code><span class="desc">Minic render API</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/world_gbuffer.kong</code><span class="desc">Geometry pass shader (MRT)</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/deferred_light.kong</code><span class="desc">Lighting pass shader</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/shadow_directional.kong</code><span class="desc">CSM shadow shader</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/shadow_cubemap.kong</code><span class="desc">Point shadow shader</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/shadow_spot.kong</code><span class="desc">Spot shadow shader</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/culling_frustum.csh</code><span class="desc">Frustum cull compute shader</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/postfx_ssao.kong</code><span class="desc">SSAO pass</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/postfx_bloom.kong</code><span class="desc">Bloom pass</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/postfx_taa.kong</code><span class="desc">TAA pass</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/postfx_compositor.kong</code><span class="desc">Compositor</span></div>
+    </div>
+  </div>
+
+  <div class="file-section">
+    <h3>修改檔案</h3>
+    <div class="file-grid">
+      <div class="file-item"><span class="mod">MOD</span><code>engine/sources/ecs/render3d_bridge.c/h</code><span class="desc">重寫為 deferred pipeline 主控制器</span></div>
+      <div class="file-item"><span class="mod">MOD</span><code>engine/sources/ecs/camera_bridge_3d.c/h</code><span class="desc">支援 camera frustum planes 導出</span></div>
+      <div class="file-item"><span class="mod">MOD</span><code>engine/sources/ecs/mesh_bridge_3d.c/h</code><span class="desc">支援 LOD mesh loading</span></div>
+      <div class="file-item"><span class="mod">MOD</span><code>engine/sources/ecs/light_bridge.c/h</code><span class="desc">支援 Point/Spot light sync</span></div>
+      <div class="file-item"><span class="mod">MOD</span><code>engine/sources/ecs/ecs_components.c/h</code><span class="desc">註冊所有新組件</span></div>
+      <div class="file-item"><span class="mod">MOD</span><code>engine/sources/ecs/ecs_world.c/h</code><span class="desc">添加新 system registrations</span></div>
+      <div class="file-item"><span class="mod">MOD</span><code>engine/sources/core/runtime_api.c/h</code><span class="desc">註冊所有 Minic API</span></div>
+      <div class="file-item"><span class="mod">MOD</span><code>engine/assets/systems.manifest</code><span class="desc">添加各 ECS system</span></div>
+      <div class="file-item"><span class="mod">MOD</span><code>engine/sources/core/game_engine.c</code><span class="desc">初始化順序更新</span></div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /container -->
+
+<footer style="text-align:center;padding:2rem;font-size:0.75rem;color:var(--muted);border-top:1px solid var(--border);margin-top:3rem;">
+  Engine 3D Render Pipeline — 重構計劃 · 2026-04-12
+</footer>
+
+</body>
+</html>
