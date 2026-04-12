@@ -837,82 +837,10 @@ for each transparent_mesh (sorted back-to-front):
 </section>
 
 <!-- ==========================================
-     8. Optimizations
-     ========================================== -->
-<section id="optimize">
-  <h2>8. 效能優化</h2>
-
-  <div class="optimization">
-    <div class="opt-name">Early-Z + Depth Pre-pass <span class="priority p0">P0</span></div>
-    <div class="opt-detail">Depth pre-pass → G-buffer pass 開啟 Early-Z，自動 reject 被遮擋 fragment。省 30-60% fragment shader。</div>
-  </div>
-  <div class="optimization">
-    <div class="opt-name">G-Buffer 降精度 <span class="priority p0">P0</span></div>
-    <div class="opt-detail">RGBA64 → RGBA16F, D32 → D24S8。省 25-50% 頻寬，精度足夠 PBR。</div>
-  </div>
-  <div class="optimization">
-    <div class="opt-name">Single-Pass CSM <span class="priority p0">P0</span></div>
-    <div class="opt-detail">Viewport scissors 一次 draw call 輸出 3 個 cascade。省 2/3 shadow draw calls。</div>
-  </div>
-  <div class="optimization">
-    <div class="opt-name">DrawProceduralIndirect <span class="priority p0">P0</span></div>
-    <div class="opt-detail">GPU-driven draw call，減少 CPU draw call overhead。</div>
-  </div>
-  <div class="optimization">
-    <div class="opt-name">Tiled Lighting <span class="priority p1">P1</span></div>
-    <div class="opt-detail">Screen-space tile light binning，每個 tile 平均 2-4 個燈光。省 50-80% lighting 計算。</div>
-  </div>
-  <div class="optimization">
-    <div class="opt-name">Hi-Z Occlusion <span class="priority p1">P1</span></div>
-    <div class="opt-detail">GPU CS 對 visible list 中的大物件做 depth mipmap 查詢，進一步剔除被遮擋物件。</div>
-  </div>
-  <div class="optimization">
-    <div class="opt-name">Variable Rate Shading <span class="priority p2">P2</span></div>
-    <div class="opt-detail">周边区域像素著色降低，進一步優化效能。</div>
-  </div>
-</section>
-
-<!-- ==========================================
-     8. Minic API
-     ========================================== -->
-<section id="api">
-  <h2>9. Minic API</h2>
-
-  <div class="grid">
-    <div class="card">
-      <h4>light_api.c</h4>
-      <div class="code">entity_create_light_directional(...)
-entity_create_light_point(...)
-entity_create_light_spot(...)
-light_set_shadow(light_id, ...)
-light_set_enabled(light_id, ...)
-light_set_color(light_id, r, g, b)</div>
-    </div>
-    <div class="card">
-      <h4>camera_api.c</h4>
-      <div class="code">entity_create_camera3d(fov, near, far)
-camera3d_set_ortho(id, l,r,b,t)
-camera3d_set_active(id)</div>
-    </div>
-    <div class="card">
-      <h4>culling_api.c</h4>
-      <div class="code">culling_set_frustum_enabled(bool)
-culling_set_lod_enabled(bool)
-culling_set_occlusion_enabled(bool)</div>
-    </div>
-    <div class="card">
-      <h4>render_api.c</h4>
-      <div class="code">render_set_pipeline("deferred")
-render_set_shadow_quality("high")</div>
-    </div>
-  </div>
-</section>
-
-<!-- ==========================================
-     9. Forward+ / Deferred Pipeline
+     8. Forward+ / Deferred Pipeline
      ========================================== -->
 <section id="pipeline-switch">
-  <h2>9. Forward+ / Deferred 雙 Pipeline 支援</h2>
+  <h2>8. Forward+ / Deferred 雙 Pipeline 支援</h2>
 
   <h3>Forward+ vs Deferred 比較</h3>
   <table>
@@ -967,10 +895,82 @@ Pass 3: Forward Tiled Rendering (每個 tile 平均 2-4 燈光)</div>
 </section>
 
 <!-- ==========================================
-     9. Phases
+     9. Optimizations
+     ========================================== -->
+<section id="optimize">
+  <h2>9. 效能優化</h2>
+
+  <div class="optimization">
+    <div class="opt-name">Early-Z + Depth Pre-pass <span class="priority p0">P0</span></div>
+    <div class="opt-detail">Depth pre-pass → G-buffer pass 開啟 Early-Z，自動 reject 被遮擋 fragment。省 30-60% fragment shader。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">G-Buffer 降精度 <span class="priority p0">P0</span></div>
+    <div class="opt-detail">RGBA64 → RGBA16F, D32 → D24S8。省 25-50% 頻寬，精度足夠 PBR。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">Single-Pass CSM <span class="priority p0">P0</span></div>
+    <div class="opt-detail">Viewport scissors 一次 draw call 輸出 3 個 cascade。省 2/3 shadow draw calls。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">DrawProceduralIndirect <span class="priority p0">P0</span></div>
+    <div class="opt-detail">GPU-driven draw call，減少 CPU draw call overhead。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">Tiled Lighting <span class="priority p1">P1</span></div>
+    <div class="opt-detail">Screen-space tile light binning，每個 tile 平均 2-4 個燈光。省 50-80% lighting 計算。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">Hi-Z Occlusion <span class="priority p1">P1</span></div>
+    <div class="opt-detail">GPU CS 對 visible list 中的大物件做 depth mipmap 查詢，進一步剔除被遮擋物件。</div>
+  </div>
+  <div class="optimization">
+    <div class="opt-name">Variable Rate Shading <span class="priority p2">P2</span></div>
+    <div class="opt-detail">周边区域像素著色降低，進一步優化效能。</div>
+  </div>
+</section>
+
+<!-- ==========================================
+     10. Minic API
+     ========================================== -->
+<section id="api">
+  <h2>10. Minic API</h2>
+
+  <div class="grid">
+    <div class="card">
+      <h4>light_api.c</h4>
+      <div class="code">entity_create_light_directional(...)
+entity_create_light_point(...)
+entity_create_light_spot(...)
+light_set_shadow(light_id, ...)
+light_set_enabled(light_id, ...)
+light_set_color(light_id, r, g, b)</div>
+    </div>
+    <div class="card">
+      <h4>camera_api.c</h4>
+      <div class="code">entity_create_camera3d(fov, near, far)
+camera3d_set_ortho(id, l,r,b,t)
+camera3d_set_active(id)</div>
+    </div>
+    <div class="card">
+      <h4>culling_api.c</h4>
+      <div class="code">culling_set_frustum_enabled(bool)
+culling_set_lod_enabled(bool)
+culling_set_occlusion_enabled(bool)</div>
+    </div>
+    <div class="card">
+      <h4>render_api.c</h4>
+      <div class="code">render_set_pipeline("deferred")
+render_set_shadow_quality("high")</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     11. Phases
      ========================================== -->
 <section id="phases">
-  <h2>10. 實施階段</h2>
+  <h2>11. 實施階段</h2>
 
   <div class="phase">
     <div class="phase-header">
@@ -1035,7 +1035,7 @@ Pass 3: Forward Tiled Rendering (每個 tile 平均 2-4 燈光)</div>
      10. Files
      ========================================== -->
 <section id="files">
-  <h2>11. 檔案清單</h2>
+  <h2>12. 檔案清單</h2>
 
   <div class="file-section">
     <h3>新建檔案</h3>

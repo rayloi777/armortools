@@ -707,7 +707,129 @@ Standard transparency 必須 back-to-front 排序。OIT 可任意順序：
 
 ---
 
-## 8. 效能優化
+## 8. Forward+ / Deferred 雙 Pipeline 支援
+
+### 問題
+
+用家需要能夠在 Forward+ 和 Deferred 之間切換，或根據平台自動選擇。
+
+### Forward+ vs Deferred
+
+| 特性 | Forward+ | Deferred |
+|------|---------|----------|
+| 原理 | Tiled Forward + Light Binning | G-buffer + Lighting Pass |
+| 燈光數量 | 中等（~64 燈光 tile） | 多（所有燈光一次處理） |
+| 透明物件 | 原生支援（Alpha Blend） | 需要 Dual-Render |
+| 硬體需求 | 中等 | 較高（G-buffer bandwidth） |
+| Post-FX | 簡單 | 複雜 |
+| 適用場景 | 少量動態燈光 | 大量燈光（如室外） |
+
+### Forward+ 原理
+
+```
+Pass 1: Depth Pre-pass（可選 Early-Z）
+Pass 2: Light Binning（ComputeShader）
+         把屏幕分成 16×16 tiles
+         每個 tile 計算影響它的燈光列表
+Pass 3: Forward Tiled Rendering
+         每個 fragment 先確定自己屬於哪個 tile
+         只遍歷該 tile 的燈光列表
+```
+
+### 架構
+
+```
+                    ┌─────────────────────────┐
+                    │   PipelineManager         │
+                    │   render_set_pipeline()  │
+                    └──────────────┬────────────┘
+                                 │
+         ┌───────────────────────┴───────────────────────┐
+         │                                               │
+ ┌──────▼──────────┐                          ┌─────────▼────────┐
+ │   Forward+     │                          │    Deferred      │
+ │                 │                          │                   │
+ │ Depth → Tiled  │                          │ G-buffer →       │
+ │ Light Bin →    │                          │ Lighting →        │
+ │ Tiled Forward  │                          │ PostFX →          │
+ └────────────────┘                          └───────────────────┘
+         │                                               │
+         └───────────────────────┬───────────────────────┘
+                                 │
+                      ┌──────────▼──────────┐
+                      │  Unified Material   │
+                      │  Shader System      │
+                      └───────────────────┘
+```
+
+### PipelineManager
+
+```c
+typedef enum {
+    PIPELINE_FORWARD_PLUS,
+    PIPELINE_DEFERRED,
+} pipeline_type;
+
+void pipeline_set(pipeline_type type) {
+    switch (type) {
+        case PIPELINE_FORWARD_PLUS:
+            render_path_commands = sys_3d_render_commands_forward_plus;
+            break;
+        case PIPELINE_DEFERRED:
+            render_path_commands = sys_3d_render_commands_deferred;
+            break;
+    }
+}
+```
+
+### Minic API
+
+```c
+// 手動切換
+void render_set_pipeline(const char* name);  // "forward+", "deferred"
+
+// Quality Preset（方便用家）
+void render_set_quality(const char* preset);
+
+enum quality_preset {
+    QUALITY_LOW,      // Forward+, no shadows, no post-fx
+    QUALITY_MEDIUM,   // Forward+, basic shadows
+    QUALITY_HIGH,    // Deferred, CSM, SSAO
+    QUALITY_ULTRA,   // Deferred, CSM×4, SSAO, Bloom, TAA
+};
+```
+
+### 平台自動選擇
+
+```c
+void pipeline_auto_select(void) {
+    if (gpu_is_mobile()) {
+        pipeline_set(PIPELINE_FORWARD_PLUS);  // 省 bandwidth
+    } else {
+        pipeline_set(PIPELINE_DEFERRED);        // PC/Console
+    }
+}
+```
+
+### 新建檔案
+
+| 檔案 | 用途 |
+|------|------|
+| `engine/sources/core/pipeline_manager.c/h` | Pipeline 切換管理 |
+| `engine/sources/core/material_system.c/h` | 統一 Material 接口 |
+| `engine/sources/ecs/forward_plus_renderer.c/h` | Forward+ rendering |
+| `engine/assets/shaders/mesh_forward_plus.kong` | Forward+ mesh shader |
+
+### 實施順序
+
+- Phase 1：Deferred Pipeline 完成後再加入 Forward+
+- Phase 2：加入 Forward+ Path
+- Phase 3：加入 PipelineManager 切換
+- Phase 4：加入 Quality Preset
+
+---
+
+## 9. 效能優化
 
 | 優化                  | 節省              | 難度 | 優先級 |
 |---------------------|-----------------|------|--------|
@@ -740,7 +862,7 @@ render_path_submit_draw("mesh_depth_only");  // 只寫深度，不算 color
 
 ---
 
-## 9. Minic API
+## 10. Minic API
 
 遊戲腳本透過 C API 控制 3D 系統：
 
@@ -779,7 +901,7 @@ void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
 
 ---
 
-## 10. 實施階段
+## 11. 實施階段
 
 ### Phase 1: 基礎建設
 - G-Buffer 渲染（gbuffer0, gbuffer1, main depth）
@@ -809,7 +931,7 @@ void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
 
 ---
 
-## 11. 文件清單
+## 12. 文件清單
 
 ### 新建檔案
 
