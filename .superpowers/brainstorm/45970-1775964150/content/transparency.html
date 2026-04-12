@@ -1,0 +1,192 @@
+<h2>透明物件處理 — Dual-Render 方案</h2>
+<p class="subtitle">Deferred Pipeline 不支援 transparency，需要特殊處理</p>
+
+<!-- Problem -->
+<div class="section">
+  <h3>問題</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Deferred Rendering 的限制</h4>
+      <ul>
+        <li>G-buffer 儲存的是 world-space data（normal, albedo, depth）</li>
+        <li>透明物件的 color 需要和場景中已渲染的像素做 alpha blending</li>
+        <li>G-buffer 無法做 alpha blending — 它只是數據儲存，不是最終顏色</li>
+        <li>透明物件的先後順序會影響結果（Order-Dependent）</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>解決方案</h4>
+      <ul>
+        <li><strong>Dual-Render</strong>：先 deferred opaque → 再 forward transparent</li>
+        <li>所有 opaque 走 deferred，所有 transparent 走 forward</li>
+        <li>透明物體的渲染在 lighting pass 之後、2D overlay 之前</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Solution Pipeline -->
+<div class="section">
+  <h3>完整 Pipeline（含透明物件）</h3>
+  <div class="pipeline-flow">
+    <div class="pass shadow">
+      <div class="pass-title">Shadow</div>
+      <div class="pass-detail">所有 opaque shadow casters</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass">
+      <div class="pass-title">G-Buffer</div>
+      <div class="pass-detail">所有 opaque meshes → gbuffer0/1/depth</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass">
+      <div class="pass-title">Lighting</div>
+      <div class="pass-detail">buf (lit opaque)</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass transparent">
+      <div class="pass-title">Transparent</div>
+      <div class="pass-detail">Forward render sorted transparent meshes</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass">
+      <div class="pass-title">Post-FX</div>
+      <div class="pass-detail">buf → last</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass">
+      <div class="pass-title">2D</div>
+    </div>
+  </div>
+</div>
+
+<!-- Transparent Pass Details -->
+<div class="section">
+  <h3>Transparent Forward Pass</h3>
+  <div class="code-block">
+// 透明物件渲染在半透明階段
+render_path_set_target("buf", NULL, NULL, GPU_CLEAR_NONE, 0, 0.0f);
+// depth_test = LESS, depth_write = false
+// blending = ALPHA_BLEND (SRC_ALPHA, ONE_MINUS_SRC_ALPHA)
+
+for each transparent_mesh (sorted back-to-front):
+    // 使用 lit gbuffer 做背景
+    // forward lighting: 只算透明物件自己的 lighting
+    // 不能受到 CSM/Point/Spot shadow（或者只受部分影響）
+    render_path_submit_draw("mesh_transparent")
+    </div>
+</div>
+
+<!-- Component Extension -->
+<div class="section">
+  <h3>新增 Component</h3>
+  <div class="code-block">
+// 透明物件標記
+typedef struct {
+    float alpha;          // 透明度 0.0-1.0
+    bool  transparency;   // 是否開啟透明渲染
+    bool  cast_shadows;   // 透明物件是否投射陰影
+} comp_transparency;
+
+Tag: CompTransparent  // 有此 tag 的物件走 transparent forward pass
+  </div>
+</div>
+
+<!-- Types of Transparency -->
+<div class="section">
+  <h3>透明類型處理</h3>
+  <table class="data-table">
+    <tr><th>類型</th><th>特性</th><th>渲染方式</th></tr>
+    <tr><td>Alpha Fade</td><td>簡單淡入淡出</td><td>Standard alpha blend, 簡單</td></tr>
+    <tr><td>Glass / Ice</td><td>有折射 + 反射</td><td>需要 env map 或 screen-space refraction, 複雜</td></tr>
+    <tr><td>Smoke / Particle</td><td>體積透明</td><td>Additive / Soft blend, 不用 depth test</td></tr>
+    <tr><td>Water</td><td>折射 + 反射 + depth</td><td>需要 reflection probe + depth-aware refraction</td></tr>
+  </table>
+</div>
+
+<!-- Advanced: OIT -->
+<div class="section">
+  <h3>進階：Order-Independent Transparency (OIT)</h3>
+  <p>Standard transparency 是 order-dependent（必須 back-to-front 排序）。OIT 可以任意順序渲染：</p>
+  <table class="data-table">
+    <tr><th>方法</th><th>原理</th><th>缺點</th></tr>
+    <tr><td>Depth Peeling</td><td>多層 depth peel，每層剝離一個透明層</td><td>4+ passes，昂貴</td></tr>
+    <tr><td>Linked Lists (A-Buffer)</td><td>Fragment shader 寫 linked list，最後 resolve</td><td>需要 atomic counter，複雜</td></tr>
+    <tr><td>Weighted Sum</td><td>加權混合，不需要排序</td><td>對重疊區域效果差</td></tr>
+    <tr><td>Weighted Blended</td><td>用 depth 作為權重，近似準確</td><td>最常用於半透明效果</td></tr>
+  </table>
+</div>
+
+<!-- Decision -->
+<div class="section">
+  <h3>建議</h3>
+  <div class="step-flow">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text"><strong>Phase 1:</strong> 先不做透明。Deferred pipeline 先完成 opaque rendering。</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text"><strong>Phase 2:</strong> 加入 <code>CompTransparent</code> tag + basic alpha fade forward pass。</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text"><strong>Phase 3:</strong> 加入 Weighted Blended OIT，處理玻璃等複雜透明。</div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」</p>
+</div>
+
+<style>
+.pipeline-flow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+.pass {
+  flex: 1;
+  min-width: 85px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.4rem;
+  font-size: 0.7rem;
+  text-align: center;
+  background: var(--surface);
+}
+.pass.shadow { border-color: var(--warning); }
+.pass.transparent { border-color: var(--purple); background: rgba(167,139,250,0.08); }
+.pass-title { font-weight: 700; font-size: 0.7rem; margin-bottom: 0.3rem; color: var(--accent); }
+.pass.transparent .pass-title { color: var(--purple); }
+.pass-detail { font-size: 0.65rem; color: var(--muted); line-height: 1.4; }
+.arrow { font-size: 1.2rem; color: var(--muted); display: flex; align-items: center; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.68rem;
+  font-family: monospace;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0.4rem 0;
+}
+.section { margin-top: 1.2rem; }
+.step-flow { display: flex; flex-direction: column; gap: 0.5rem; }
+.step { display: flex; align-items: flex-start; gap: 0.75rem; font-size: 0.8rem; }
+.step-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-fg);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.75rem; flex-shrink: 0;
+}
+.step-text { line-height: 1.4; }
+</style>

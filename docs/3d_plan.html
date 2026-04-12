@@ -897,6 +897,97 @@ for each transparent_mesh (sorted back-to-front):
 </section>
 
 <!-- ==========================================
+     7.5 Decal System
+     ========================================== -->
+<section id="decal">
+  <h2>7.5 Decal System（貼花系統）</h2>
+
+  <h3>概述</h3>
+  <p>Decal 將帶透明通道的紋理投影到場景物件表面，用於彈痕、血跡、腳印、塗鴉等。</p>
+
+  <h3>Component</h3>
+  <div class="code"><span class="k">typedef struct </span>{
+    <span class="k">const char</span> *texture;       <span class="c">// 貼圖路徑（.k）</span>
+    <span class="fn">float</span>      size;          <span class="c">// 正方形影響範圍大小</span>
+    <span class="fn">float3</span>     offset;       <span class="c">// 投影中心偏移（相對於 entity position）</span>
+    <span class="fn">float</span>      opacity;      <span class="c">// 透明度 0-1</span>
+    <span class="fn">uint</span>       layer_mask;    <span class="c">// 影響的 layers bitmask</span>
+} comp_3d_decal;
+
+<span class="k">Tag: Comp3dDecal</span>  <span class="c">// Decal tag，配合上面 component 使用</span></div>
+
+  <h3>Projection 原理</h3>
+  <p>Decal entity 是一個看不見的 axis-aligned box（size × size × size）：</p>
+  <div class="code">       ┌─────────────────┐
+       │   Decal Box     │
+       │    size³        │
+       │                 │
+       │  ┌───────────┐  │
+       │  │  texture  │←─┼── 根據 UV 投影
+       │  │   .k     │  │
+       │  └───────────┘  │
+       └─────────────────┘
+              ↓
+         World Mesh Surface</div>
+
+  <h3>UV 計算</h3>
+  <div class="code"><span class="c">// 落在 box 內的 fragment</span>
+<span class="fn">float2</span> decal_uv = (worldPos.xz - decal_center.xz) / decal_size + 0.5;
+<span class="fn">float4</span> decal_color = decal_texture.Sample(decal_uv);
+final_color = lerp(surface_color, decal_color, decal_color.a * opacity);</div>
+
+  <h3>Pipeline 位置</h3>
+
+  <p><strong>Alpha 透明 Decal（Phase 1）：</strong></p>
+  <div class="pipeline-flow">
+    <div class="pass"><div class="pass-title">...</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">Lighting</div></div>
+    <div class="arrow">→</div>
+    <div class="pass transparent"><div class="pass-title">Transparent</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">Post-FX</div></div>
+  </div>
+  <p>Decal 與其他透明物件一起 back-to-front 排序</p>
+
+  <p><strong>DBuffer Decal（Phase 2）：</strong></p>
+  <div class="pipeline-flow">
+    <div class="pass"><div class="pass-title">Shadow</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">G-Buffer</div></div>
+    <div class="arrow">→</div>
+    <div class="pass decal"><div class="pass-title">Decal</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">Lighting</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">Post-FX</div></div>
+  </div>
+  <p>讀取 gbuffer + depth，alpha blend 修改 albedo/normal/metallic</p>
+
+  <h3>Culling</h3>
+  <div class="code"><span class="c">// Decal frustum 測試（6 planes）</span>
+<span class="k">bool</span> decal_visible = !aabb_outside_frustum(decal_box, camera_frustum_planes);</div>
+
+  <h3>Minic API</h3>
+  <div class="code"><span class="c">// 創建 Decal</span>
+<span class="fn">id</span> entity_create_decal(<span class="k">const char</span> *texture, <span class="fn">float</span> size, <span class="fn">float</span> opacity);
+
+<span class="c">// 設置 decal 屬性</span>
+<span class="k">void</span> decal_set_size(id decal_id, <span class="fn">float</span> size);
+<span class="k">void</span> decal_set_opacity(id decal_id, <span class="fn">float</span> opacity);
+<span class="k">void</span> decal_set_layer_mask(id decal_id, <span class="fn">uint</span> layer_mask);</div>
+
+  <h3>實作檔案</h3>
+  <table>
+    <tr><th>檔案</th><th>用途</th></tr>
+    <tr><td><code>engine/sources/ecs/decal/decal_bridge.c/h</code></td><td>Decal system + transparent pass</td></tr>
+    <tr><td><code>engine/sources/ecs/decal/decal_dbuffer.c/h</code></td><td>DBuffer decal（Phase 2）</td></tr>
+    <tr><td><code>engine/sources/components/decal.c/h</code></td><td>Decal component</td></tr>
+    <tr><td><code>engine/assets/shaders/decal_projection.kong</code></td><td>Projection shader</td></tr>
+  </table>
+</section>
+
+<!-- ==========================================
      8. Forward+ / Deferred Pipeline
      ========================================== -->
 <section id="pipeline-switch">

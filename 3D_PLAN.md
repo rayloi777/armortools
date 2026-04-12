@@ -785,6 +785,103 @@ Standard transparency 必須 back-to-front 排序。OIT 可任意順序：
 
 ---
 
+## 7.5 Decal System（貼花系統）
+
+### 概述
+
+Decal 將帶透明通道的紋理投影到場景物件表面，用於彈痕、血跡、腳印、塗鴉等。
+
+### Component
+
+```c
+typedef struct {
+    const char *texture;       // 貼圖路徑（.k）
+    float      size;          // 正方形影響範圍大小
+    float3     offset;       // 投影中心偏移（相對於 entity position）
+    float      opacity;      // 透明度 0-1
+    uint       layer_mask;    // 影響的 layers bitmask
+} comp_3d_decal;
+
+Tag: Comp3dDecal  // Decal tag，配合上面 component 使用
+```
+
+### Projection 原理
+
+Decal entity 是一個看不見的 axis-aligned box（size × size × size）：
+
+```
+       ┌─────────────────┐
+       │   Decal Box     │
+       │    size³        │
+       │                 │
+       │  ┌───────────┐  │
+       │  │  texture  │←─┼── 根據 UV 投影
+       │  │   .k     │  │
+       │  └───────────┘  │
+       └─────────────────┘
+              ↓
+         World Mesh Surface
+```
+
+**UV 計算：**
+```glsl
+// 落在 box 內的 fragment
+float2 decal_uv = (worldPos.xz - decal_center.xz) / decal_size + 0.5;
+// 簡化：只用 XZ 平面投影（適合地面/牆壁）
+float4 decal_color = decal_texture.Sample(decal_uv);
+final_color = lerp(surface_color, decal_color, decal_color.a * opacity);
+```
+
+### Pipeline 位置
+
+**Alpha 透明 Decal（Phase 1）：**
+```
+... → Lighting → [Transparent Pass] → Post-FX
+                      ↑
+                 Decal 與其他透明物件
+                 一起 back-to-front 排序
+```
+
+**DBuffer Decal（Phase 2）：**
+```
+Shadow → G-Buffer → [Decal Pass] → Lighting → Post-FX
+                ↑          ↑
+            讀取 gbuffer   Alpha blend 修改
+            + depth        albedo/normal/metallic
+```
+
+### Culling
+
+每個 decal 的 box 與 camera frustum 做 intersection test，得出可見 decal list。
+
+```glsl
+// Decal frustum 測試（6 planes）
+bool decal_visible = !aabb_outside_frustum(decal_box, camera_frustum_planes);
+```
+
+### Minic API
+
+```c
+// 創建 Decal
+id entity_create_decal(const char *texture, float size, float opacity);
+
+// 設置 decal 屬性
+void decal_set_size(id decal_id, float size);
+void decal_set_opacity(id decal_id, float opacity);
+void decal_set_layer_mask(id decal_id, uint layer_mask);
+```
+
+### 實作檔案
+
+| 檔案 | 用途 |
+|------|------|
+| `engine/sources/ecs/decal/decal_bridge.c/h` | Decal system + transparent pass |
+| `engine/sources/ecs/decal/decal_dbuffer.c/h` | DBuffer decal（Phase 2） |
+| `engine/sources/components/decal.c/h` | Decal component |
+| `engine/assets/shaders/decal_projection.kong` | Projection shader |
+
+---
+
 ## 8. Forward+ / Deferred 雙 Pipeline 支援
 
 ### 問題
@@ -996,6 +1093,7 @@ void material_set_texture(id mat, const char* slot, const char* path);
 - LOD System
 - 透明物件 Transparent Forward Pass
 - 粒子系統 + Additive Glow + Bloom
+- Decal System（Alpha 透明貼花）
 
 ### Phase 4: 優化整合
 - Early-Z + Depth Pre-pass
@@ -1043,6 +1141,10 @@ void material_set_texture(id mat, const char* slot, const char* path);
 | `engine/assets/shaders/postfx_compositor.kong` | Compositor |
 | `engine/assets/shaders/transparent_forward.kong` | Transparent forward pass |
 | `engine/assets/shaders/particle_additive.kong` | Particle additive shader |
+| `engine/sources/ecs/decal/decal_bridge.c/h` | Decal system + transparent pass |
+| `engine/sources/ecs/decal/decal_dbuffer.c/h` | DBuffer decal（Phase 2） |
+| `engine/sources/components/decal.c/h` | Decal component |
+| `engine/assets/shaders/decal_projection.kong` | Projection shader |
 
 ### 修改檔案
 

@@ -1,0 +1,140 @@
+<h2>粒子 + Bloom 解決方案</h2>
+<p class="subtitle">Additive Particles 天然支援 Bloom</p>
+
+<!-- Key Insight -->
+<div class="section">
+  <h3>關鍵：粒子發光在 HDR buffer 裡</h3>
+  <div class="code-block">
+粒子 Additive Blend 的本質：
+  result = buf_color + particle_color
+
+粒子 Bloom 的本質：
+  bloom = threshold_extract(buf_color) → blur → add_back
+
+結論：粒子用 Additive blend 寫入 HDR buffer (buf/last)，
+      bloom threshold 會自動偵測到粒子高亮度值並做 bloom！
+  </div>
+</div>
+
+<!-- Pipeline for Glowing Particles -->
+<div class="section">
+  <h3>粒子 + Bloom Pipeline</h3>
+  <div class="pipeline-flow">
+    <div class="pass"><div class="pass-title">Shadow</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">G-Buffer</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">Lighting</div></div>
+    <div class="arrow">→</div>
+    <div class="pass particle">
+      <div class="pass-title">Particles</div>
+      <div class="pass-detail">
+        Additive blend<br/>
+        → buf (HDR)
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass bloom">
+      <div class="pass-title">Bloom</div>
+      <div class="pass-detail">
+        threshold_extract<br/>
+        → 自動吃到粒子發光
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">TAA→last</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">2D</div></div>
+  </div>
+</div>
+
+<!-- Blending Modes -->
+<div class="section">
+  <h3>粒子 Blend Mode 選擇</h3>
+  <table class="data-table">
+    <tr><th>Blend Mode</th><th>公式</th><th>適用場景</th><th>支持 Bloom？</th></tr>
+    <tr><td>Additive</td><td>buf + particle</td><td>火焰、爆炸、光環、魔法</td><td>✅ 天然支持</td></tr>
+    <tr><td>Alpha Blend</td><td>buf × (1-α) + p × α</td><td>煙霧、雲朵、半透明物體</td><td>⚠️ 低亮度難觸發</td></tr>
+    <tr><td>Soft Add</td><td>buf + p × α</td><td>柔光效果</td><td>✅ 支持</td></tr>
+    <tr><td>Multiply</td><td>buf × particle</td><td>陰影、著色</td><td>❌ 無法 bloom</td></tr>
+  </table>
+</div>
+
+<!-- Particle Component -->
+<div class="section">
+  <h3>粒子 Component 設計</h3>
+  <div class="code-block">
+Tag: CompParticle          // 粒子物件
+Tag: CompGlowingParticle   // 發光粒子（影響 bloom）
+
+typedef struct {
+    float  alpha;              // 透明度
+    float  emissive_strength;  // 發光強度（高於 1.0 才會觸發 bloom threshold）
+    float3 color;              // 粒子顏色
+    int    blend_mode;         // 0=Additive, 1=Alpha, 2=SoftAdd, 3=Multiply
+} comp_particle;
+
+// Bloom threshold: 通常設為 0.8-1.0
+// 所以 emissive_strength 需要 > threshold 才會被 bloom 吃到
+  </div>
+</div>
+
+<!-- Particle System Integration -->
+<div class="section">
+  <h3>粒子系統整合（Minic）</h3>
+  <div class="code-block">
+// Minic API
+id   particle_system_create(int max_count);
+void particle_emit(id system, float3 pos, float3 vel, float life);
+void particle_set_glow(id system, float strength, float3 color);
+void particle_set_blend(id system, int blend_mode); // 0=Additive
+
+// 使用範例
+id fire = particle_system_create(1024);
+particle_set_blend(fire, 0);  // Additive
+particle_set_glow(fire, 2.5, float3(1.0, 0.4, 0.1));  // 強度 2.5 > bloom threshold 1.0
+  </div>
+</div>
+
+<!-- Post-FX Order -->
+<div class="section">
+  <h3>Post-FX 順序（非常重要）</h3>
+  <div class="code-block">
+SSAO → Lighting → Particles(Additive) → Bloom → TAA → Compositor
+
+順序關鍵：
+1. SSAO 在 lighting 之後：AO 影響不透明物體
+2. Particles 在 Bloom 之前：粒子 HDR 值必須先寫入 buf
+3. Bloom 順序：
+   buf → BrightnessExtract → Blur → Composite → last
+4. TAA 在 Bloom 之後：TAA 需要乾淨的 frame
+  </div>
+</div>
+
+<!-- Particle Shadow -->
+<div class="section">
+  <h3>粒子需要陰影嗎？</h3>
+  <p>一般粒子（火焰、爆炸）<strong>不投射陰影</strong>，節省效能。</p>
+  <p>特殊情況（如體積雲、濃密煙霧）可用 <strong>Light Shaft</strong> 或 <strong>Volumetric Light</strong> 模擬。</p>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」</p>
+</div>
+
+<style>
+.pipeline-flow { display: flex; align-items: flex-start; gap: 0.3rem; margin: 1rem 0; flex-wrap: wrap; }
+.pass { flex: 1; min-width: 75px; border: 2px solid var(--border); border-radius: 8px; padding: 0.5rem 0.4rem; font-size: 0.68rem; text-align: center; background: var(--surface); }
+.pass.particle { border-color: #a78bfa; background: rgba(167,139,250,0.08); }
+.pass.bloom { border-color: #f472b6; background: rgba(244,114,182,0.08); }
+.pass-title { font-weight: 700; font-size: 0.7rem; margin-bottom: 0.3rem; color: var(--accent); }
+.pass.particle .pass-title { color: #a78bfa; }
+.pass.bloom .pass-title { color: #f472b6; }
+.pass-detail { font-size: 0.62rem; color: var(--muted); line-height: 1.4; }
+.arrow { font-size: 1.2rem; color: var(--muted); display: flex; align-items: center; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block { background: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.68rem; font-family: monospace; line-height: 1.6; white-space: pre; overflow-x: auto; margin: 0.4rem 0; }
+.section { margin-top: 1.2rem; }
+</style>

@@ -1,0 +1,207 @@
+<h2>全局光照（GI）— 物件之間互相照射</h2>
+<p class="subtitle">Baked GI · Real-time GI · 混合方案</p>
+
+<!-- Problem -->
+<div class="section">
+  <h3>問題</h3>
+  <div class="code-block">
+場景中物件互相照射：
+  - 紅色地板反彈紅光到牆壁
+  - 白色天花板反彈白光到所有物件
+  - 窗戶外陽光反射到室內
+
+Direct Lighting: 只計算燈光直射
+SH Irradiance:  環境光照，不能表達物件之間的互相照射
+
+所以場景會看起來很"平"，缺乏真實感。
+  </div>
+</div>
+
+<!-- Three Approaches -->
+<div class="section">
+  <h3>三種解決方案</h3>
+
+  <div class="grid">
+    <div class="card" style="border-left: 3px solid #4ade80;">
+      <h4>1. Baked GI（烘焙 GI）</h4>
+      <p class="desc">Editor 預計算 lightmap / light probe。運行時直接使用。</p>
+      <ul>
+        <li>Unity Enlighten, Unreal LPV</li>
+        <li>最高質量，靜態場景必備</li>
+        <li>缺點：只適合靜態物件</li>
+      </ul>
+      <div class="tag-box" style="background:rgba(74,222,128,0.15);color:#4ade80">Production Ready</div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid #fbbf24;">
+      <h4>2. Real-time GI（即時 GI）</h4>
+      <p class="desc">運行時即時計算。可以處理動態物件。</p>
+      <ul>
+        <li>Ray Tracing GI (DXR, RTX)</li>
+        <li>Voxel GI (UE5 Nanite Lumen)</li>
+        <li>缺點：硬體要求高</li>
+      </ul>
+      <div class="tag-box" style="background:rgba(251,191,36,0.15);color:#fbbf24">High Cost</div>
+    </div>
+
+    <div class="card" style="border-left: 3px solid #6c9fff;">
+      <h4>3. Screen-space GI</h4>
+      <p class="desc">利用 depth buffer 和 normal buffer 估算 GI。便宜的近似。</p>
+      <ul>
+        <li>SSAO（只算遮擋）</li>
+        <li>SSDO（計算方向性反彈）</li>
+        <li>缺點：只看得到螢幕上的像素</li>
+      </ul>
+      <div class="tag-box" style="background:rgba(108,159,255,0.15);color:#6c9fff">Approximation</div>
+    </div>
+  </div>
+</div>
+
+<!-- Baked GI Details -->
+<div class="section">
+  <h3>1. Baked GI — Lightmap + Light Probe</h3>
+
+  <div class="split">
+    <div>
+      <h4>Lightmap</h4>
+      <div class="code-block">
+每個 static 靜態物件的表面 UV 展開，
+烘焙時 ray trace 計算每個 texel 的光照：
+
+texel(u,v) = direct_light + Σ(indirect_light from all directions)
+
+運行時：texture sampling 即可
+優點：超高質量
+缺點：需要 UV 展開，靜態物件
+      </div>
+    </div>
+    <div>
+      <h4>Light Probe</h4>
+      <div class="code-block">
+場景中均勻放置 probe：
+每個 probe 記錄 SH irradiance 係數（27 floats）
+
+runtime 時：
+nearest_probes = find_N_nearest_probes(world_pos)
+color = interpolate_SH(probes, N)
+
+動態物件經過時，採樣最近的 probe
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Real-time GI -->
+<div class="section">
+  <h3>2. Real-time GI — Voxel GI + Ray Trace</h3>
+
+  <div class="split">
+    <div>
+      <h4>Voxel GI（Lumen / LPV）</h4>
+      <div class="code-block">
+1. 把場景 voxelize 成 3D grid
+2. 用 SH 表示每個 voxel 的光照
+3. 光線傳播（Light Propagation）：
+   每幀把光照在 voxel grid 中傳播
+4. 渲染時查詢 fragment 位置的 voxel GI
+
+UE5 Lumen 用 Hardware Ray Trace + Voxel Hybrid
+      </div>
+    </div>
+    <div>
+      <h4>Ray Tracing GI</h4>
+      <div class="code-block">
+每個 fragment 發射 1-4 條 ray：
+ray_bounce_0 = direct lighting
+ray_bounce_1 = trace(pos, random_dir)  // 第一次反彈
+ray_bounce_2 = trace(pos, random_dir)  // 第二次反彈
+
+多次 bounce 的結果混合：
+color = direct + 0.5*indirect_1 + 0.2*indirect_2
+
+DXR / Metal Ray Tracing 硬體支援
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Screen-space GI -->
+<div class="section">
+  <h3>3. Screen-space GI — SSDO</h3>
+
+  <div class="code-block">
+利用 G-buffer（depth + normal）估算 indirect lighting：
+
+for each pixel p:
+    for each sample s in hemisphere(N, p):
+        if depth(s) < depth(p) + threshold:
+            // s 在 p 的"遮擋物後面"
+            indirect += light_from_direction(s - p) * ao_weight
+        else:
+            // s 是可見的天空/物件
+            indirect += sample_gbuffer_normal(s) * visibility(s,p)
+
+SSDO = SSAO + 方向性 light bounce
+比 SSAO 貴，但能得到 light bounce 效果
+  </div>
+</div>
+
+<!-- Recommendation -->
+<div class="section">
+  <h3>Engine 建議方案</h3>
+  <div class="step-flow">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text"><strong>Phase 1-2:</strong> SH Light Probe 烘焙。Editor 中放置 probes，烘焙 SH irradiance。動態物件採樣最近 probe。</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text"><strong>Phase 3:</strong> 加入 SSDO（基於現有 SSAO pass）。便宜能得到 light bounce 效果。</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text"><strong>Phase 4+:</strong> 如果 GPU 支援，加入 Voxel GI 或 Ray Trace GI。</div>
+    </div>
+  </div>
+</div>
+
+<!-- Probe Placement -->
+<div class="section">
+  <h3>Light Probe 放置</h3>
+  <div class="code-block">
+室外場景：
+  每 10m 放置一個 probe（基於場景大小調整）
+  只需要 1 套 SH coefficients
+
+室內場景：
+  每個房間 4-8 個 probes（角落、光源附近更密集）
+  每個 probe 的 SH 代表"房間的整體光照"
+
+創意放置：
+  - 光源附近放置更密集
+  - 角落（light bounce 多的地方）放置更密集
+  </div>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」</p>
+</div>
+
+<style>
+.section { margin-top: 1.2rem; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block { background: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.68rem; font-family: monospace; line-height: 1.6; white-space: pre; overflow-x: auto; margin: 0.4rem 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin: 0.6rem 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1rem; }
+.card h4 { margin-top: 0; color: var(--accent); font-size: 0.82rem; margin-bottom: 0.3rem; }
+.card .desc { font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem; }
+.card ul { font-size: 0.75rem; padding-left: 1.2rem; margin-top: 0.3rem; }
+.step-flow { display: flex; flex-direction: column; gap: 0.5rem; }
+.step { display: flex; align-items: flex-start; gap: 0.75rem; font-size: 0.8rem; }
+.step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; flex-shrink: 0; }
+.step-text { line-height: 1.4; }
+.split { display: flex; gap: 1.5rem; }
+.split > div { flex: 1; }
+</style>

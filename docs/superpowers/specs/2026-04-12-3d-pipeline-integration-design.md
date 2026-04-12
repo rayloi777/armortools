@@ -247,12 +247,17 @@ Pass 3: Present (unchanged)
 **Render Flow:**
 ```
 Pass 0-2: Shadow → G-Buffer → Lighting (unchanged)
-Pass 3: Post-Processing (new)
-  → SSAO: read depth + normal → ao buffer
+Pass 3a: SSAO
+  → Read depth + normal → ao buffer
+  → Multiply AO into lighting result
+Pass 3b: Bloom
   → Bloom_down: progressive downsample (1/2, 1/4, 1/8, 1/16)
   → Bloom_up: progressive upsample + composite
   → Write to "last"
 Pass 4: Present → "last" to screen
+
+Note: Transparent pass (M6) will be inserted between Pass 3a (SSAO)
+and Pass 3b (Bloom) so particles write to HDR before bloom runs.
 ```
 
 **Design Decision:** TAA is deferred to a later optimization phase. It requires history frame buffers + motion vectors, which adds significant complexity without a clear visual milestone.
@@ -297,14 +302,17 @@ Pass 4: Present → "last" to screen
 **Render Flow:**
 ```
 Pass 0-2: Shadow → G-Buffer → Lighting (unchanged)
-Pass 3.5: Transparent Forward (new, before Bloom)
+Pass 3a: SSAO (from M5, unchanged)
+Pass 3.5: Transparent Forward (new)
   → Read "buf" depth for depth test (LESS, depth_write = false)
   → Alpha blend (SRC_ALPHA, ONE_MINUS_SRC_ALPHA)
   → Particles use Additive blend
-Pass 4: Bloom → Present
+  → Writes to HDR "buf" (after SSAO, before Bloom)
+Pass 3b: Bloom (from M5, reads HDR including transparent particles)
+Pass 4: Present
 ```
 
-**Design Note:** Transparent pass executes before Bloom so particles write to HDR buffer and correctly trigger bloom effects.
+**Design Note:** Transparent pass is inserted between SSAO (Pass 3a) and Bloom (Pass 3b) so particles write to HDR buffer before bloom runs, allowing emissive particles to trigger bloom correctly.
 
 **New Files:**
 
@@ -346,11 +354,13 @@ Pass 4: Bloom → Present
 
 **Render Flow:**
 ```
-Pass 0-3: Shadow → G-Buffer → Lighting → Post-FX (unchanged)
+Pass 0-2: Shadow → G-Buffer → Lighting (unchanged)
+Pass 3a: SSAO (unchanged)
 Pass 3.5: Transparent Forward (expanded)
   → Transparent objects
   → Decals (sorted back-to-front with transparent objects)
-Pass 4: Bloom → Present
+Pass 3b: Bloom (unchanged)
+Pass 4: Present
 ```
 
 **Decal Principle:** An invisible AABB box projects texture onto scene surfaces within the box. Uses world position + depth reconstruction for UV calculation.
@@ -399,6 +409,8 @@ Pass 0.5: Depth Pre-pass (new)
   → Early-Z lets G-buffer pass skip occluded fragments
 
 Pass 1: G-Buffer (benefits from Early-Z)
+Pass 2: Lighting (unchanged)
+Pass 3a: SSAO → Pass 3.5: Transparent → Pass 3b: Bloom → Pass 4: Present (unchanged)
 
 LOD System:
   → CPU frustum culling → select LOD level

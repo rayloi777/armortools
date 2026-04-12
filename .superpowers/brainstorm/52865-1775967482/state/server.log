@@ -1,0 +1,9 @@
+{"type":"server-started","port":57407,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:57407","screen_dir":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/content","state_dir":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/state"}
+{"type":"screen-added","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/content/transparency.html"}
+{"type":"screen-added","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/content/particle-bloom.html"}
+{"type":"screen-added","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/content/pbr-env.html"}
+{"type":"screen-added","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/content/sh原理.html"}
+{"type":"screen-added","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/content/gi.html"}
+{"type":"screen-added","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/content/pipeline-switch.html"}
+{"type":"screen-updated","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/52865-1775967482/content/pipeline-switch.html"}
+{"type":"server-stopped","reason":"idle timeout"}

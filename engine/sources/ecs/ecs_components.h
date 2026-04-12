@@ -67,6 +67,14 @@ typedef struct {
     bool  enabled;
 } comp_directional_light;
 
+typedef struct {
+    float metallic;
+    float roughness;
+    float albedo_r, albedo_g, albedo_b;
+    float emissive_r, emissive_g, emissive_b;
+    float ao;
+} comp_3d_material;
+
 void ecs_register_components(void *world);
 void ecs_register_builtin_fields(void);
 
@@ -90,3 +98,4 @@ uint64_t ecs_component_comp_3d_camera(void);
 uint64_t ecs_component_comp_3d_mesh_renderer(void);
 uint64_t ecs_component_RenderObject3D(void);
 uint64_t ecs_component_comp_directional_light(void);
+uint64_t ecs_component_comp_3d_material(void);

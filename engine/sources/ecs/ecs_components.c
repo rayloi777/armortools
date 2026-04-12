@@ -24,6 +24,7 @@ static ecs_entity_t comp_3d_camera_entity = 0;
 static ecs_entity_t comp_3d_mesh_renderer_entity = 0;
 static ecs_entity_t comp_RenderObject3D_entity = 0;
 static ecs_entity_t comp_directional_light_entity = 0;
+static ecs_entity_t comp_3d_material_entity = 0;
 
 ecs_entity_t ecs_component_comp_2d_position(void) { return comp_2d_position_entity; }
 ecs_entity_t ecs_component_comp_2d_rotation(void) { return comp_2d_rotation_entity; }
@@ -42,6 +43,7 @@ ecs_entity_t ecs_component_comp_3d_camera(void) { return comp_3d_camera_entity; 
 ecs_entity_t ecs_component_comp_3d_mesh_renderer(void) { return comp_3d_mesh_renderer_entity; }
 ecs_entity_t ecs_component_RenderObject3D(void) { return comp_RenderObject3D_entity; }
 ecs_entity_t ecs_component_comp_directional_light(void) { return comp_directional_light_entity; }
+ecs_entity_t ecs_component_comp_3d_material(void) { return comp_3d_material_entity; }
 
 static ecs_entity_t register_component(ecs_world_t *ecs, const char *name, size_t size, size_t alignment) {
     ecs_component_desc_t desc = {0};
@@ -85,6 +87,7 @@ void ecs_register_components(void *world) {
     comp_3d_mesh_renderer_entity = register_component(ecs, "comp_3d_mesh_renderer", sizeof(comp_3d_mesh_renderer), _Alignof(comp_3d_mesh_renderer));
     comp_RenderObject3D_entity = register_component(ecs, "RenderObject3D", sizeof(RenderObject3D), _Alignof(RenderObject3D));
     comp_directional_light_entity = register_component(ecs, "comp_directional_light", sizeof(comp_directional_light), _Alignof(comp_directional_light));
+    comp_3d_material_entity = register_component(ecs, "comp_3d_material", sizeof(comp_3d_material), _Alignof(comp_3d_material));
 }
 
 void ecs_register_builtin_fields(void) {
@@ -208,6 +211,17 @@ void ecs_register_builtin_fields(void) {
     ecs_dynamic_component_add_field(id, "color_b", DYNAMIC_TYPE_FLOAT, offsetof(comp_directional_light, color_b));
     ecs_dynamic_component_add_field(id, "strength", DYNAMIC_TYPE_FLOAT, offsetof(comp_directional_light, strength));
     ecs_dynamic_component_add_field(id, "enabled", DYNAMIC_TYPE_BOOL, offsetof(comp_directional_light, enabled));
+
+    id = comp_3d_material_entity;
+    ecs_dynamic_component_add_field(id, "metallic", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, metallic));
+    ecs_dynamic_component_add_field(id, "roughness", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, roughness));
+    ecs_dynamic_component_add_field(id, "albedo_r", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, albedo_r));
+    ecs_dynamic_component_add_field(id, "albedo_g", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, albedo_g));
+    ecs_dynamic_component_add_field(id, "albedo_b", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, albedo_b));
+    ecs_dynamic_component_add_field(id, "emissive_r", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, emissive_r));
+    ecs_dynamic_component_add_field(id, "emissive_g", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, emissive_g));
+    ecs_dynamic_component_add_field(id, "emissive_b", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, emissive_b));
+    ecs_dynamic_component_add_field(id, "ao", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_material, ao));
 }
 
 uint64_t ecs_get_builtin_component(const char *name) {
@@ -229,6 +243,7 @@ uint64_t ecs_get_builtin_component(const char *name) {
     if (strcmp(name, "comp_3d_mesh_renderer") == 0) return comp_3d_mesh_renderer_entity;
     if (strcmp(name, "RenderObject3D") == 0) return comp_RenderObject3D_entity;
     if (strcmp(name, "comp_directional_light") == 0) return comp_directional_light_entity;
+    if (strcmp(name, "comp_3d_material") == 0) return comp_3d_material_entity;
     return 0;
 }
 
@@ -250,5 +265,6 @@ const char *ecs_get_builtin_component_name(uint64_t component_id) {
     if (component_id == comp_3d_mesh_renderer_entity) return "comp_3d_mesh_renderer";
     if (component_id == comp_RenderObject3D_entity) return "RenderObject3D";
     if (component_id == comp_directional_light_entity) return "comp_directional_light";
+    if (component_id == comp_3d_material_entity) return "comp_3d_material";
     return NULL;
 }

@@ -1,0 +1,178 @@
+<h2>PBR 環境光 — IBL / Environment Lighting</h2>
+<p class="subtitle">G-buffer 只儲存 material，環境光需要另外處理</p>
+
+<!-- Problem -->
+<div class="section">
+  <h3>問題</h3>
+  <div class="code-block">
+G-buffer 儲存的是 material properties：
+  - Normal, Albedo, Roughness, Metallic, AO
+  - 沒有 lighting 資訊
+
+Deferred Lighting Pass 只能計算 direct lighting（燈光直射）
+
+缺失的環境光：
+  1. 天空顏色（sky ambient）
+  2. 間接光（interreflection, bounce light）
+  3. 反射（environment reflections）
+  </div>
+</div>
+
+<!-- Three Layers -->
+<div class="section">
+  <h3>環境光三層次</h3>
+  <table class="data-table">
+    <tr><th>層次</th><th>內容</th><th>計算方式</th><th>成本</th></tr>
+    <tr><td>Ambient</td><td>簡單常數或天空顏色</td><td>albedo × ambient × ao</td><td>極低</td></tr>
+    <tr><td>SH Irradiance</td><td>球諧函數預計算的間接光</td><td>albedo × SH_probe(pos, N)</td><td>低</td></tr>
+    <tr><td>IBL Reflection</td><td>Environment map 反射</td><td>env_map.sample(R, roughness)</td><td>中</td></tr>
+  </table>
+</div>
+
+<!-- IBL Formula -->
+<div class="section">
+  <h3>完整 IBL 計算公式</h3>
+  <div class="code-block">
+// Diffuse (SH Irradiance)
+float3 diffuse = albedo * SampleSH(normal) * ao;
+
+// Specular IBL (Environment Map)
+float3 R = reflect(-V, N);
+float mip = roughness * (num_mips - 1);
+float3 specular = environment_map.SampleLevel(R, mip);
+
+// PBR specular BRDF
+float3 F0 = lerp(float3(0.04), albedo, metallic);
+float3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+float3 kD = (1 - F) * (1 - metallic);
+float3 ambient = kD * diffuse + specular * F;
+
+// 最終
+color = ambient + direct_lighting;
+  </div>
+</div>
+
+<!-- Environment Map -->
+<div class="section">
+  <h3>Environment Map 生成</h3>
+  <div class="code-block">
+Editor 或 runtime 生成預過濾的 environment map：
+
+Cubemap → Convolve with GGX → Mipmap levels
+
+每個 mip level 對應不同的 roughness：
+  Mip 0: roughness = 0.0 (完美鏡面)
+  Mip 1: roughness = 0.1
+  Mip N: roughness = 1.0 (完全漫反射)
+
+的好處：一次採樣即可得到正確的 specular IBL
+（不需要複雜的 importance sampling）
+  </div>
+</div>
+
+<!-- Skybox -->
+<div class="section">
+  <h3>天空盒（Skybox）</h3>
+  <p>天空盒也是一個環境光源。需要渲染到 cubemap 或在 shader 中計算。</p>
+  <div class="code-block">
+Phase 1（推薦）：固定天空顏色
+  float3 sky_color = float3(0.5, 0.7, 1.0);  // 藍天
+
+Phase 2：Procedural skybox（在 shader 計算）
+  - Rayleigh / Mie scattering 模擬大氣
+  - 太陽方向 + 強度
+
+Phase 3：Cubemap skybox（烘焙或 runtime 生成）
+  - 從場景某位置捕獲 cubemap
+  - 預計算 irradiance map + prefiltered env map
+  </div>
+</div>
+
+<!-- Spherical Harmonics -->
+<div class="section">
+  <h3>球諧函數（SH）Irradiance</h3>
+  <p>SH 是一種壓縮環境光照的方法，用 9 個 float 係數（3 channels × 3 bands）表示 irradiance。</p>
+  <div class="code-block">
+// 9 coefficients per channel (27 floats total)
+struct SHIrradiance {
+    float3 L00, L1m1, L10, L11, L2m2, L2m1, L20, L21, L22;
+};
+
+// 採樣
+float3 SampleSH(SHIrradiance sh, float3 N) {
+    return sh.L00
+         + sh.L1m1 * (N.y) + sh.L10 * (N.z) + sh.L11 * (N.x)
+         + sh.L20 * (N.y*N.z) + sh.L21 * (N.y*N.x) + sh.L22 * (N.z*N.x)
+         + sh.L2m2 * (N.x*N.y) + sh.L2m1 * (N.z*N.z - 1.0/3.0);
+}
+  </div>
+  <p>SH irradiance 非常便宜（27 floats，幾次乘法），適合靜態場景。</p>
+</div>
+
+<!-- Reflection Probe -->
+<div class="section">
+  <h3>Reflection Probe</h3>
+  <p>多個位置放置 reflection probe，每個 probe 有自己的 environment map + SH。物體採樣最近的 probe。</p>
+  <div class="code-block">
+每個 probe：
+  - position (world space)
+  - irradiance SH
+  - prefiltered environment cubemap
+  - blend radius (與其他 probe 的過渡半徑)
+
+物體渲染時：
+  1. 找最近的 N 個 probes
+  2. 根據 blend radius 混合
+  3. 對每個 probe 計算 IBL
+  4. 混合結果
+  </div>
+</div>
+
+<!-- Recommended Implementation Order -->
+<div class="section">
+  <h3>建議實施順序</h3>
+  <div class="step-flow">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><strong>Phase 1:</strong> 固定天空 ambient color + AO factor。不需要 extra texture。</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><strong>Phase 2:</strong> 加入 SH irradiance。烘焙到文件或 runtime 計算。</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><strong>Phase 3:</strong> 加入 IBL reflection（prefiltered env cubemap, mipmapped）。</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text"><strong>Phase 4:</strong> Reflection Probe 系統。多個 probe 混合。</div></div>
+  </div>
+</div>
+
+<!-- Component -->
+<div class="section">
+  <h3>Component 設計</h3>
+  <div class="code-block">
+Tag: CompEnvironmentProbe   // 環境 probe 標記
+
+typedef struct {
+    float3  position;           // probe 世界座標
+    float   blend_radius;        // 混合半徑
+    SHIrradiance sh_irradiance; // 9×3 floats (27 floats)
+    bool    has_envmap;          // 是否有 prefiltered env cubemap
+} comp_environment_probe;
+
+// 全域天空設定
+typedef struct {
+    float3 sky_color;            // 天空顏色
+    float  ambient_strength;     // 環境光強度
+    float3 ground_color;        // 地面反射顏色
+} comp_sky_settings;
+  </div>
+</div>
+
+<div style="margin-top:2rem;text-align:center">
+  <p class="subtitle">看完後回覆「繼續」</p>
+</div>
+
+<style>
+.section { margin-top: 1.2rem; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th, .data-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+.data-table th { background: var(--muted); }
+.code-block { background: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.68rem; font-family: monospace; line-height: 1.6; white-space: pre; overflow-x: auto; margin: 0.4rem 0; }
+.step-flow { display: flex; flex-direction: column; gap: 0.5rem; }
+.step { display: flex; align-items: flex-start; gap: 0.75rem; font-size: 0.8rem; }
+.step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; flex-shrink: 0; }
+.step-text { line-height: 1.4; }
+</style>
