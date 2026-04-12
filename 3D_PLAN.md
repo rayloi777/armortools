@@ -779,18 +779,8 @@ void pipeline_set(pipeline_type type) {
 ### Minic API
 
 ```c
-// 手動切換
+// 手動切換 Pipeline
 void render_set_pipeline(const char* name);  // "forward+", "deferred"
-
-// Quality Preset（方便用家）
-void render_set_quality(const char* preset);
-
-enum quality_preset {
-    QUALITY_LOW,      // Forward+, no shadows, no post-fx
-    QUALITY_MEDIUM,   // Forward+, basic shadows
-    QUALITY_HIGH,    // Deferred, CSM, SSAO
-    QUALITY_ULTRA,   // Deferred, CSM×4, SSAO, Bloom, TAA
-};
 ```
 
 ### 平台自動選擇
@@ -819,7 +809,6 @@ void pipeline_auto_select(void) {
 - Phase 1：Deferred Pipeline 完成後再加入 Forward+
 - Phase 2：加入 Forward+ Path
 - Phase 3：加入 PipelineManager 切換
-- Phase 4：加入 Quality Preset
 
 ---
 

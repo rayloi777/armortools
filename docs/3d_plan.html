@@ -872,17 +872,7 @@ Pass 3: Forward Tiled Rendering (每個 tile 平均 2-4 燈光)</div>
 <span class="k">void</span> <span class="c">pipeline_set</span>(pipeline_type type) { ... }
 
 <span class="c">// Minic API</span>
-<span class="k">void</span> render_set_pipeline(<span class="k">const char</span>* name);  <span class="c">// "forward+", "deferred"</span>
-<span class="k">void</span> render_set_quality(<span class="k">const char</span>* preset);</div>
-
-  <h3>Quality Preset</h3>
-  <table>
-    <tr><th>Preset</th><th>Pipeline</th><th>Features</th></tr>
-    <tr><td>LOW</td><td>Forward+</td><td>No shadows, no post-fx</td></tr>
-    <tr><td>MEDIUM</td><td>Forward+</td><td>Basic shadows</td></tr>
-    <tr><td>HIGH</td><td>Deferred</td><td>CSM, SSAO</td></tr>
-    <tr><td>ULTRA</td><td>Deferred</td><td>CSM×4, SSAO, Bloom, TAA</td></tr>
-  </table>
+<span class="k">void</span> render_set_pipeline(<span class="k">const char</span>* name);  <span class="c">// "forward+", "deferred"</span></div>
 
   <h3>新建檔案</h3>
   <table>
@@ -899,7 +889,6 @@ Pass 3: Forward Tiled Rendering (每個 tile 平均 2-4 燈光)</div>
     <tr><td>Phase 1</td><td>Deferred Pipeline 完成後再加入 Forward+</td></tr>
     <tr><td>Phase 2</td><td>加入 Forward+ Path</td></tr>
     <tr><td>Phase 3</td><td>加入 PipelineManager 切換</td></tr>
-    <tr><td>Phase 4</td><td>加入 Quality Preset</td></tr>
   </table>
 </section>
 
