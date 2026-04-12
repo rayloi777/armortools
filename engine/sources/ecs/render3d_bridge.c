@@ -28,12 +28,23 @@ static void sys_3d_render_commands(void) {
     render_path_submit_draw("mesh");
     gpu_end();
 
-    // Pass 2: Forward render to screen (temporary fallback until M2
-    // adds the deferred lighting pass). This keeps visual output while
-    // the gbuffer MRT is exercised in Pass 1.
-    _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH,
-               0xff1a1a2e, 1.0f);
-    render_path_submit_draw("mesh");
+    // Pass 2: Debug display — show a G-buffer texture to screen.
+    // Selects which texture to visualize based on g_debug_mode.
+    _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR, 0xff1a1a2e, 1.0f);
+
+    gpu_texture_t *display_tex = NULL;
+    switch (g_debug_mode) {
+        case 1: display_tex = gb->depth_target; break;   // Depth
+        case 2: display_tex = gb->gbuffer1; break;        // Albedo
+        case 0: // Normal (fallthrough)
+        case 3: display_tex = gb->gbuffer0; break;        // Normal / RoughMet
+        default: display_tex = gb->gbuffer0; break;
+    }
+
+    if (display_tex) {
+        draw_scaled_image(display_tex, 0.0f, 0.0f, (float)w, (float)h);
+    }
+
     gpu_end();
 
     g_3d_rendered = true;
