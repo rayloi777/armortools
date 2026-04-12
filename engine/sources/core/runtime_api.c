@@ -13,6 +13,7 @@
 #include "ecs/ecs_dynamic.h"
 #include "ecs/camera_bridge.h"
 #include "ecs/sprite_bridge.h"
+#include "ecs/render3d_bridge.h"
 
 #include <minic.h>
 #include <iron_input.h>
@@ -751,6 +752,17 @@ static float minic_sys_fps(void) {
     return g_fps;
 }
 
+static minic_val_t minic_sys_3d_set_debug_mode(minic_val_t *args, int argc) {
+    if (argc < 1) return minic_val_void();
+    sys_3d_set_debug_mode((int)minic_val_to_d(args[0]));
+    return minic_val_void();
+}
+
+static minic_val_t minic_sys_3d_get_debug_mode(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    return minic_val_int(sys_3d_get_debug_mode());
+}
+
 static struct timespec g_bench_epoch = {0, 0};
 static bool g_bench_epoch_set = false;
 
@@ -1411,6 +1423,9 @@ void runtime_api_register(void) {
 
     // 3D scene API (camera, mesh, entity transforms)
     scene_3d_api_register();
+
+    minic_register_native("sys_3d_set_debug_mode", minic_sys_3d_set_debug_mode);
+    minic_register_native("sys_3d_get_debug_mode", minic_sys_3d_get_debug_mode);
 
     printf("Runtime APIs registered\n");
 }

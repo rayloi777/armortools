@@ -1,0 +1,81 @@
+// test_m1_gbuffer — G-buffer debug visualization test
+// Keys: 1=Normal, 2=Depth, 3=Albedo, 4=Roughness/Metallic
+
+id g_pos_comp = 0;
+id g_rot_comp = 0;
+id g_scale_comp = 0;
+id g_cam_comp = 0;
+id g_mesh_comp = 0;
+id g_render_comp = 0;
+
+id g_cam = 0;
+id g_mesh = 0;
+int g_debug_mode = 0;
+
+int init(void) {
+    printf("\n=== M1 G-Buffer Debug Test ===\n");
+
+    g_pos_comp = component_lookup("comp_3d_position");
+    g_rot_comp = component_lookup("comp_3d_rotation");
+    g_scale_comp = component_lookup("comp_3d_scale");
+    g_cam_comp = component_lookup("comp_3d_camera");
+    g_mesh_comp = component_lookup("comp_3d_mesh_renderer");
+    g_render_comp = component_lookup("RenderObject3D");
+
+    // Load mesh
+    void *mesh_obj = mesh_load_arm("ship.arm");
+    printf("Ship.arm loaded, mesh_obj=%p\n", mesh_obj);
+
+    // Create mesh entity
+    g_mesh = entity_create();
+    entity_add(g_mesh, g_pos_comp);
+    entity_add(g_mesh, g_rot_comp);
+    entity_add(g_mesh, g_scale_comp);
+    entity_add(g_mesh, g_mesh_comp);
+    entity_add(g_mesh, g_render_comp);
+    comp_set_floats(g_pos_comp, entity_get(g_mesh, g_pos_comp), "x,y,z", 0.0, 0.0, 0.0);
+    comp_set_floats(g_rot_comp, entity_get(g_mesh, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+    comp_set_floats(g_scale_comp, entity_get(g_mesh, g_scale_comp), "x,y,z", 1.0, 1.0, 1.0);
+    comp_set_ptr(g_render_comp, entity_get(g_mesh, g_render_comp), "iron_mesh_object", mesh_obj);
+    comp_set_bool(g_render_comp, entity_get(g_mesh, g_render_comp), "dirty", 1);
+    comp_set_bool(g_mesh_comp, entity_get(g_mesh, g_mesh_comp), "visible", 1);
+    printf("Mesh entity created: %llu\n", g_mesh);
+
+    // Create camera
+    g_cam = entity_create();
+    entity_add(g_cam, g_pos_comp);
+    entity_add(g_cam, g_rot_comp);
+    entity_add(g_cam, g_cam_comp);
+    comp_set_floats(g_pos_comp, entity_get(g_cam, g_pos_comp), "x,y,z", 0.0, 2.0, 5.0);
+    comp_set_floats(g_rot_comp, entity_get(g_cam, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+    comp_set_floats(g_cam_comp, entity_get(g_cam, g_cam_comp), "fov,near_plane,far_plane", 1.047, 0.1, 100.0);
+    comp_set_bool(g_cam_comp, entity_get(g_cam, g_cam_comp), "perspective", 1);
+    comp_set_bool(g_cam_comp, entity_get(g_cam, g_cam_comp), "active", 1);
+    entity_set_name(g_cam, "main_camera");
+    printf("Camera entity created: %llu\n", g_cam);
+
+    printf("=== M1 Init Complete ===\n\n");
+    return 0;
+}
+
+int step(void) {
+    // Debug mode switching
+    if (keyboard_started("1") != 0.0) { g_debug_mode = 0; sys_3d_set_debug_mode(0); }
+    if (keyboard_started("2") != 0.0) { g_debug_mode = 1; sys_3d_set_debug_mode(1); }
+    if (keyboard_started("3") != 0.0) { g_debug_mode = 2; sys_3d_set_debug_mode(2); }
+    if (keyboard_started("4") != 0.0) { g_debug_mode = 3; sys_3d_set_debug_mode(3); }
+    return 0;
+}
+
+int draw(void) {
+    draw_set_font("font.ttf", 16);
+    draw_set_color(0xffffffff);
+    draw_string("M1: G-Buffer Debug View", 10.0, 10.0);
+    if (g_debug_mode == 0) draw_string("Mode: Normal", 10.0, 30.0);
+    if (g_debug_mode == 1) draw_string("Mode: Depth", 10.0, 30.0);
+    if (g_debug_mode == 2) draw_string("Mode: Albedo", 10.0, 30.0);
+    if (g_debug_mode == 3) draw_string("Mode: Roughness/Metallic", 10.0, 30.0);
+    draw_string("1=Normal 2=Depth 3=Albedo 4=RoughMet", 10.0, 50.0);
+    draw_fps(10.0, 70.0);
+    return 0;
+}

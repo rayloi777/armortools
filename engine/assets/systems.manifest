@@ -10,6 +10,6 @@
 # draw_ui_ext_system
 # vampire_system
 # 3D ---------------
- scene3d_test
+ test_m1_gbuffer
  camera3d_control_system
 # ------------------
