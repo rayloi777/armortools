@@ -1,5 +1,6 @@
 #include "render3d_bridge.h"
 #include "ecs_world.h"
+#include "deferred/deferred_gbuffer.h"
 #include <iron.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -8,10 +9,30 @@
 // When true, the 2D overlay should NOT clear the framebuffer.
 static bool g_3d_rendered = false;
 
+// Debug visualization mode: 0=Normal, 1=Depth, 2=Albedo, 3=RoughMet
+static int g_debug_mode = 0;
+
 static void sys_3d_render_commands(void) {
-    // Use _gpu_begin directly — render_path_set_target calls gpu_viewport
-    // with znear=0.1/zfar=100.0 which breaks Metal's depth range
-    _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff1a1a2e, 1.0f);
+    int w = sys_w();
+    int h = sys_h();
+    if (w <= 0 || h <= 0) return;
+
+    gbuffer_resize(w, h);
+    gbuffer_t *gb = gbuffer_get();
+    if (!gb || !gb->initialized) return;
+
+    // Pass 1: G-Buffer geometry pass (MRT)
+    gpu_texture_t *targets[2] = { gb->gbuffer0, gb->gbuffer1 };
+    gpu_begin(targets, 2, gb->depth_target,
+              GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff000000, 1.0f);
+    render_path_submit_draw("mesh");
+    gpu_end();
+
+    // Pass 2: Forward render to screen (temporary fallback until M2
+    // adds the deferred lighting pass). This keeps visual output while
+    // the gbuffer MRT is exercised in Pass 1.
+    _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH,
+               0xff1a1a2e, 1.0f);
     render_path_submit_draw("mesh");
     gpu_end();
 
@@ -26,12 +47,14 @@ void sys_3d_init(void) {
     render_path_commands = sys_3d_render_commands;
     render_path_current_w = sys_w();
     render_path_current_h = sys_h();
-    printf("3D Render Bridge: initialized (forward rendering)\n");
+    printf("3D Render Bridge: initialized (deferred G-buffer pipeline)\n");
 }
 
 void sys_3d_shutdown(void) {
+    gbuffer_shutdown();
     render_path_commands = NULL;
     g_3d_rendered = false;
+    g_debug_mode = 0;
     printf("3D Render Bridge: shutdown\n");
 }
 
@@ -46,4 +69,15 @@ bool sys_3d_was_rendered(void) {
 
 void sys_3d_reset_frame(void) {
     g_3d_rendered = false;
+}
+
+void sys_3d_set_debug_mode(int mode) {
+    if (mode < 0) mode = 0;
+    if (mode > 3) mode = 3;
+    g_debug_mode = mode;
+    printf("3D Render Bridge: debug mode set to %d\n", g_debug_mode);
+}
+
+int sys_3d_get_debug_mode(void) {
+    return g_debug_mode;
 }
