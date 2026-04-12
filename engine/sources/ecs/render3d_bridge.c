@@ -21,30 +21,18 @@ static void sys_3d_render_commands(void) {
     gbuffer_t *gb = gbuffer_get();
     if (!gb || !gb->initialized) return;
 
-    // Pass 1: G-Buffer geometry pass (MRT)
-    gpu_texture_t *targets[2] = { gb->gbuffer0, gb->gbuffer1 };
-    gpu_begin(targets, 2, gb->depth_target,
+    // Pass 1: Render mesh to gbuffer0
+    gpu_texture_t *targets[1] = { gb->gbuffer0 };
+    gpu_begin(targets, 1, gb->depth_target,
               GPU_CLEAR_COLOR | GPU_CLEAR_DEPTH, 0xff000000, 1.0f);
     render_path_submit_draw("mesh");
     gpu_end();
 
-    // Pass 2: Debug display — show a G-buffer texture to screen.
-    // Selects which texture to visualize based on g_debug_mode.
+    // Pass 2: Display gbuffer0 to screen
     _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR, 0xff1a1a2e, 1.0f);
-
-    gpu_texture_t *display_tex = NULL;
-    switch (g_debug_mode) {
-        case 1: display_tex = gb->depth_target; break;   // Depth
-        case 2: display_tex = gb->gbuffer1; break;        // Albedo
-        case 0: // Normal (fallthrough)
-        case 3: display_tex = gb->gbuffer0; break;        // Normal / RoughMet
-        default: display_tex = gb->gbuffer0; break;
+    if (gb->gbuffer0) {
+        draw_scaled_image(gb->gbuffer0, 0.0f, 0.0f, (float)w, (float)h);
     }
-
-    if (display_tex) {
-        draw_scaled_image(display_tex, 0.0f, 0.0f, (float)w, (float)h);
-    }
-
     gpu_end();
 
     g_3d_rendered = true;
@@ -55,9 +43,12 @@ void sys_3d_set_world(game_world_t *world) {
 }
 
 void sys_3d_init(void) {
+    int w = sys_w();
+    int h = sys_h();
+    gbuffer_init(w > 0 ? w : 1280, h > 0 ? h : 720);
     render_path_commands = sys_3d_render_commands;
-    render_path_current_w = sys_w();
-    render_path_current_h = sys_h();
+    render_path_current_w = w;
+    render_path_current_h = h;
     printf("3D Render Bridge: initialized (deferred G-buffer pipeline)\n");
 }
 

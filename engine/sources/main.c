@@ -33,6 +33,10 @@
 #include "ecs/camera_bridge_3d.c"
 #include "ecs/mesh_bridge_3d.c"
 #include "ecs/render3d_bridge.c"
+#include "ecs/deferred/deferred_gbuffer.c"
+
+// 3D Components
+#include "components/material.c"
 #include "core/asset_loader.c"
 #include "core/scene_api.c"
 #include "core/scene_3d_api.c"

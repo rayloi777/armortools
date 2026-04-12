@@ -86,18 +86,14 @@ void scene_ensure_defaults(scene_t *scene) {
                          (void *[]){
                              GC_ALLOC_INIT(material_context_t,
                                  {.name          = "mesh",
-                                  .bind_textures = any_array_create_from_raw(
-                                      (void *[]){
-                                          GC_ALLOC_INIT(bind_tex_t, {.name = "my_texture", .file = "colormap.k"}),
-                                      },
-                                      1)}),
+                                  .bind_textures = NULL}),
                          },
                          1)}),
             },
             1);
     }
 
-    // Shader data — forward rendering pipeline
+    // Shader data — deferred G-buffer pipeline
     if (scene->shader_datas == NULL || scene->shader_datas->length == 0) {
         scene->shader_datas = any_array_create_from_raw(
             (void *[]){
@@ -107,11 +103,16 @@ void scene_ensure_defaults(scene_t *scene) {
                          (void *[]){
                              GC_ALLOC_INIT(shader_context_t,
                                  {.name            = "mesh",
-                                  .vertex_shader   = "mesh.vert",
-                                  .fragment_shader = "mesh.frag",
+                                  .vertex_shader   = "mesh_gbuffer.vert",
+                                  .fragment_shader = "mesh_gbuffer.frag",
                                   .compare_mode    = "less",
                                   .cull_mode       = "none",
                                   .depth_write     = true,
+                                  .color_attachments = any_array_create_from_raw(
+                                      (void *[]){
+                                          (void *)"RGBA64",
+                                      },
+                                      1),
                                   .vertex_elements = any_array_create_from_raw(
                                       (void *[]){
                                           GC_ALLOC_INIT(vertex_element_t, {.name = "pos", .data = "short4norm"}),
@@ -125,11 +126,7 @@ void scene_ensure_defaults(scene_t *scene) {
                                               {.name = "WVP", .type = "mat4", .link = "_world_view_proj_matrix"}),
                                       },
                                       1),
-                                  .texture_units = any_array_create_from_raw(
-                                      (void *[]){
-                                          GC_ALLOC_INIT(tex_unit_t, {.name = "my_texture"}),
-                                      },
-                                      1),
+                                  .texture_units = NULL,
                                   .depth_attachment = "D32"}),
                          },
                          1)}),
