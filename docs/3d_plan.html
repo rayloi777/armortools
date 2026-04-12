@@ -385,19 +385,19 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
     </div>
     <div class="card">
       <h4>Tags</h4>
-      <div class="tag-box tag">CompRenderable</div>
-      <div class="tag-box tag">CompShadowCaster</div>
-      <div class="tag-box tag">CompShadowReceiver</div>
-      <div class="tag-box tag">CompVisible</div>
-      <div class="tag-box tag">CompTransparent</div>
-      <div class="tag-box tag">CompParticle</div>
-      <div class="tag-box tag">CompGlowingParticle</div>
+      <div class="tag-box tag">Comp3dRenderable</div>
+      <div class="tag-box tag">Comp3dShadowCaster</div>
+      <div class="tag-box tag">Comp3dShadowReceiver</div>
+      <div class="tag-box tag">Comp3dVisible</div>
+      <div class="tag-box tag">Comp3dTransparent</div>
+      <div class="tag-box tag">Comp3dParticle</div>
+      <div class="tag-box tag">Comp3dGlowingParticle</div>
     </div>
   </div>
 
   <h3>ECS System 執行順序</h3>
   <div class="step-flow">
-    <div class="step"><div class="step-n">1</div><div class="step-text"><strong>sys_culling_frustum</strong> — GPU Frustum Culling → writes CompVisible</div></div>
+    <div class="step"><div class="step-n">1</div><div class="step-text"><strong>sys_culling_frustum</strong> — GPU Frustum Culling → writes Comp3dVisible</div></div>
     <div class="step"><div class="step-n">2</div><div class="step-text"><strong>sys_culling_lod</strong> — LOD selection → updates comp_3d_lod.current_lod</div></div>
     <div class="step"><div class="step-n">3</div><div class="step-text"><strong>sys_shadow_directional</strong> — CSM × 4 directional lights</div></div>
     <div class="step"><div class="step-n">4</div><div class="step-text"><strong>sys_shadow_point</strong> — Cubemap shadows × 8 point lights</div></div>
@@ -680,7 +680,7 @@ totalAtt = (1 - dist/range)² × angleAtt</div>
   <h4>Editor 烘焙流程</h4>
   <div class="code"><span class="c">// 1. 在每個 probe 位置發射 rays，採樣周圍環境</span>
 <span class="c">// 2. 對採樣結果做 SH projection，得到 9 個係數</span>
-<span class="c">// 3. 儲存到 comp_environment_probe.sh</span>
+<span class="c">// 3. 儲存到 comp_3d_environment_probe.sh</span>
 
 <span class="k">struct</span> SHIrradiance {
     <span class="fn">float3</span> L00, L1m1, L10, L11;   <span class="c">// Band 0+1</span>
@@ -689,7 +689,7 @@ totalAtt = (1 - dist/range)² × angleAtt</div>
 
   <h4>運行時使用</h4>
   <div class="code"><span class="c">// 根據 world position 找最近的 probe</span>
-<span class="t">comp_environment_probe</span>* probe = find_nearest_probe(world_pos);
+<span class="t">comp_3d_environment_probe</span>* probe = find_nearest_probe(world_pos);
 
 <span class="c">// 計算該方向的 irradiance</span>
 <span class="fn">float3</span> indirect_light = SampleSH(probe->sh, normal);
@@ -807,22 +807,22 @@ for each transparent_mesh (sorted back-to-front):
   <p>Engine G-buffer 已是 HDR（<code>buf</code> = RGBA16F），粒子 Additive blend 天然支持 Bloom。</p>
 
   <h3>Components</h3>
-  <div class="code"><span class="k">Tag: CompTransparent  // 走 transparent forward pass
+  <div class="code"><span class="k">Tag: Comp3dTransparent  // 走 transparent forward pass
 
 <span class="k">typedef struct </span>{
     <span class="fn">float</span> alpha;
     <span class="t">bool</span>  cast_shadows;
-} comp_transparency;
+} comp_3d_transparency;
 
-<span class="k">Tag: CompParticle           // 粒子物件
-<span class="k">Tag: CompGlowingParticle    // 發光粒子（影響 bloom）
+<span class="k">Tag: Comp3dParticle           // 粒子物件
+<span class="k">Tag: Comp3dGlowingParticle    // 發光粒子（影響 bloom）
 
 <span class="k">typedef struct </span>{
     <span class="fn">float</span>  alpha;
     <span class="fn">float</span>  emissive_strength;  <span class="c">// 需 > bloom_threshold</span>
     <span class="fn">float</span>3 color;
     <span class="t">int</span>    blend_mode;         <span class="c">// 0=Additive, 1=Alpha, 2=SoftAdd</span>
-} comp_particle;</div>
+} comp_3d_particle;</div>
 
   <h3>Post-FX 順序</h3>
   <div class="code">SSAO → Lighting → Particles(Additive) → Bloom → TAA → Compositor</div>

@@ -57,16 +57,16 @@ comp_3d_point_light       — pos(xyz), color(rgb), strength, range, enabled, ca
 comp_3d_spot_light        — pos(xyz), dir(xyz), color(rgb), strength, range, inner_cone, outer_cone, enabled, cast_shadows, shadow_bias
 
 // Rendering Tags
-Tag: CompRenderable      — 可被渲染的實體
-Tag: CompShadowCaster    — 投射陰影
-Tag: CompShadowReceiver  — 接收陰影
-Tag: CompVisible         — 當前幀可見（culling 結果）
+Tag: Comp3dRenderable      — 可被渲染的實體
+Tag: Comp3dShadowCaster    — 投射陰影
+Tag: Comp3dShadowReceiver  — 接收陰影
+Tag: Comp3dVisible         — 當前幀可見（culling 結果）
 ```
 
 ### ECS System 執行順序
 
 ```
-1.  sys_culling_frustum    // GPU frustum culling → writes CompVisible
+1.  sys_culling_frustum    // GPU frustum culling → writes Comp3dVisible
 2.  sys_culling_lod        // LOD selection → updates comp_3d_lod.current_lod
 3.  sys_shadow_directional  // CSM × 4 directional lights
 4.  sys_shadow_point        // Cubemap shadows × 8 point lights
@@ -449,7 +449,7 @@ Light Probe 解決物件之間的全局光照（light bounce）。Editor 中放�
 ```c
 // 1. 在每個 probe 位置發射 rays，採樣周圍環境
 // 2. 對採樣結果做 SH projection，得到 9 個係數
-// 3. 儲存到 comp_environment_probe.sh
+// 3. 儲存到 comp_3d_environment_probe.sh
 
 struct SHIrradiance {
     float3 L00, L1m1, L10, L11;   // Band 0+1
@@ -461,7 +461,7 @@ struct SHIrradiance {
 
 ```glsl
 // 根據 world position 找最近的 probe
-comp_environment_probe* probe = find_nearest_probe(world_pos);
+comp_3d_environment_probe* probe = find_nearest_probe(world_pos);
 
 // 計算該方向的 irradiance
 float3 indirect_light = SampleSH(probe->sh, normal);
@@ -498,7 +498,7 @@ typedef struct {
     float   blend_radius;
     SHIrradiance sh;
     bool    has_envmap;
-} comp_environment_probe;
+} comp_3d_environment_probe;
 ```
 
 #### Component
@@ -509,7 +509,7 @@ typedef struct {
     float3 sky_color;       // float3(0.5, 0.7, 1.0) 藍天
     float3 ground_color;    // float3(0.2, 0.2, 0.2) 灰色地
     float  ambient_strength; // 環境光強度
-} comp_sky_settings;
+} comp_3d_sky_settings;
 ```
 
 ---
@@ -665,22 +665,22 @@ Engine G-buffer 已是 HDR（`buf` = RGBA16F），粒子 Additive blend 天然�
 ### Component
 
 ```c
-Tag: CompTransparent  // 有此 tag 的物件走 transparent forward pass
+Tag: Comp3dTransparent  // 有此 tag 的物件走 transparent forward pass
 
 typedef struct {
     float alpha;
     bool  cast_shadows;
-} comp_transparency;
+} comp_3d_transparency;
 
-Tag: CompParticle           // 粒子物件
-Tag: CompGlowingParticle    // 發光粒子（影響 bloom）
+Tag: Comp3dParticle           // 粒子物件
+Tag: Comp3dGlowingParticle    // 發光粒子（影響 bloom）
 
 typedef struct {
     float  alpha;              // 透明度
     float  emissive_strength;  // 發光強度（需 > bloom_threshold 才生效）
     float3 color;              // 粒子顏色
     int    blend_mode;         // 0=Additive, 1=Alpha, 2=SoftAdd, 3=Multiply
-} comp_particle;
+} comp_3d_particle;
 ```
 
 ### Post-FX 執行順序
@@ -826,7 +826,7 @@ void pipeline_auto_select(void) {
 ### 實施順序
 
 - Phase 1：不作透明，專注 deferred opaque rendering
-- Phase 2：加入 `CompTransparent` tag + basic alpha fade forward pass
+- Phase 2：加入 `Comp3dTransparent` tag + basic alpha fade forward pass
 - Phase 3：加入 Weighted Blended OIT
 
 ---
