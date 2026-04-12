@@ -37,31 +37,14 @@
 ### .arm 資產流程
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  .arm 資產來源                                                     │
-│                                                                   │
-│  Blender ──► Scene .arm ──► 網格 + Transform（無材質）              │
-│  ArmorPaint ──► Project .arm ──► Material + Texture               │
-└──────────────────────────────────────────────────────────────────┘
-                               ↓
-┌──────────────────────────────────────────────────────────────────┐
-│  載入函數                                                          │
-│                                                                   │
-│  scene_load("scene.arm")     → scene_t → ECS entities            │
-│  material_load("mat.arm")     → material_data_t                  │
-│  mesh_load("mesh.mesh")       → mesh_data_t                      │
-└──────────────────────────────────────────────────────────────────┘
-                               ↓
-┌──────────────────────────────────────────────────────────────────┐
-│  ECS Components                                                    │
-│                                                                   │
-│  comp_3d_mesh_renderer {                                          │
-│      .mesh_path,       // "meshes/cube.mesh" (from Scene .arm)   │
-│      .arm_path,        // "materials/wood.arm" (from Project .arm)│
-│      .material_name    // "Wood" (material name in .arm)          │
-│  }                                                                │
-└──────────────────────────────────────────────────────────────────┘
+Blender ──► Scene .arm ──► scene_load() ──► ECS entities
+                                           └──► comp_3d_mesh_renderer
 ```
+
+Blender 匯出的 Scene .arm 包含：
+- 網格幾何（頂點位置、法線、UV、tangent）
+- 物件 transform hierarchy
+- **不含材質**（材質由程式建立）
 
 ### ECS World — 所有 3D 組件
 
@@ -72,11 +55,11 @@ comp_3d_rotation     — float x, y, z, w (quaternion)
 comp_3d_scale        — float x, y, z
 
 // Mesh
-comp_3d_mesh_renderer — mesh_path, arm_path, material_name
+comp_3d_mesh_renderer — mesh_path
 comp_3d_lod           — distances[4], mesh_lod0/1/2/3 paths, current_lod
 
 // Material（見 Section 1.1）
-// ...
+comp_3d_material     — shader, metallic, roughness, albedo, textures...
 
 // Camera
 comp_3d_camera        — fov, near, far, perspective
@@ -97,75 +80,71 @@ Tag: Comp3dParticle       — 粒子物件
 
 ---
 
-## 1.1 Material System（.arm 格式）
+## 1.1 Material System
 
-.arm 有兩種格式，Engine 同時支持兩者：
+程式建立的 Material，用於給 Mesh 添加視覺效果。
 
-| 格式 | 來源 | 內容 |
-|------|------|------|
-| **Scene format** | Blender 匯出 | 網格幾何 + Transform，**不含材質** |
-| **Project format** | ArmorPaint 匯出 | Material + Texture + Layer |
-
-**重要：Blender .arm 不包含材質！** 需另行從 ArmorPaint 匯出。
-
-### Iron Material 結構
+### Material 結構
 
 ```c
-// material_data_t — 來自 .arm 或程式建立
-typedef struct {
-    const char *name;              // material 名稱
-    const char *shader;            // shader 名稱 (e.g., "World PBR")
-    void       *_;                 // runtime data
-} material_data_t;
-
-// material_context_t — 每個 material 的 render context
-typedef struct {
-    const char *name;              // context 名稱 (e.g., "mesh")
-    bind_const_t_array_t *bind_constants;  // metallic, roughness...
-    bind_tex_t_array_t  *bind_textures;    // 紋理槽位
-} material_context_t;
+comp_3d_material — shader_name, metallic, roughness, albedo, textures...
 ```
 
-### 使用流程
+### 使用方式
 
 ```c
-// 方式 1：直接使用 .arm 中的 material
-entity_add(entity, comp_3d_mesh_renderer{
-    .mesh          = "meshes/cube.mesh",       // Blender Scene .arm
-    .arm_path      = "materials/wood.arm",    // ArmorPaint Project .arm
-    .material_name = "Wood"
+// Material component
+typedef struct {
+    const char *shader;            // shader 名稱 (e.g., "World PBR")
+    float metallic;               // 金屬度
+    float roughness;               // 粗糙度
+    float3 albedo;               // 基礎顏色
+    float3 emissive;              // 自發光
+    // Texture slots
+    const char *albedo_map;
+    const char *normal_map;
+    const char *roughness_map;
+    const char *metallic_map;
+    const char *ao_map;
+} comp_3d_material;
+```
+
+### 使用方式
+
+```c
+// 1. 創建 Entity + Mesh
+id entity = entity_create();
+entity_add(entity, comp_3d_position{0, 0, 0});
+entity_add(entity, comp_3d_mesh_renderer{"meshes/cube.mesh"});
+
+// 2. 附加 Material
+entity_add(entity, comp_3d_material{
+    .shader     = "World PBR",
+    .metallic   = 0.0f,
+    .roughness  = 0.7f,
+    .albedo_map = "textures/brick.ktx"
 });
-
-// 方式 2：程式建立 material（無需 .arm 文件）
-id mat = material_create("my_material");
-material_set_shader(mat, "World PBR");
-material_set_float(mat, "metallic", 0.0f);
-material_set_float(mat, "roughness", 0.7f);
-material_set_texture(mat, "albedo_map", "textures/brick.ktx");
-
-// 方式 3：使用 .arm 並覆蓋參數
-id mat = material_override("materials/wood.arm", "Wood");
-material_set_float(mat, "roughness", 0.3f);
 ```
 
 ### Shader 映射
 
-| Iron Shader | 用途 | Pipeline |
-|-------------|------|----------|
+| Shader | 用途 | Pipeline |
+|--------|------|----------|
 | `World PBR` | PBR 渲染 | Deferred / Forward+ |
-| `World PBR Double Side` | 雙面 PBR | Deferred / Forward+ |
 | `Sky` | 天空盒 | Forward |
 | `Shadow` | 陰影 casting | Shadow Pass |
 
 ### Minic API
 
 ```c
-id material_create(const char* name);
-id material_override(const char* arm_path, const char* material_name);
-void material_set_shader(id mat, const char* shader);
-void material_set_float(id mat, const char* param, float val);
-void material_set_vec3(id mat, const char* param, float x, float y, float z);
-void material_set_texture(id mat, const char* slot, const char* path);
+// 附加 Material 到 Entity
+void entity_add_material(id entity, const char *shader,
+    float metallic, float roughness,
+    const char *albedo_map, const char *normal_map);
+
+// 快捷方式
+void entity_set_color(id entity, float r, float g, float b);
+void entity_set_texture(id entity, const char *slot, const char *path);
 ```
 
 ### ECS System 執行順序
