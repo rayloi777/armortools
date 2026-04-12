@@ -481,7 +481,92 @@ struct DrawIndexedIndirectArgs {
 
 ---
 
-## 7. 效能優化
+## 7. 透明物件處理（Dual-Render）
+
+### 問題
+
+Deferred Rendering 的 G-buffer 無法做 alpha blending。透明物件需要走獨立的 Forward Pass。
+
+### Pipeline（含透明物件）
+
+```
+Shadow → G-Buffer → Lighting → [Transparent Forward] → Post-FX → 2D
+```
+
+### Transparent Forward Pass
+
+渲染順序：**back-to-front**（Order-Dependent）
+
+```c
+render_path_set_target("buf", NULL, NULL, GPU_CLEAR_NONE, 0, 0.0f);
+// depth_test = LESS, depth_write = false
+// blending = ALPHA_BLEND (SRC_ALPHA, ONE_MINUS_SRC_ALPHA)
+
+for each transparent_mesh (sorted back-to-front):
+    render_path_submit_draw("mesh_transparent")
+```
+
+### 透明類型
+
+| 類型 | 特性 | 渲染方式 |
+|------|------|---------|
+| Alpha Fade | 簡單淡入淡出 | Standard alpha blend |
+| Glass / Ice | 折射 + 反射 | Env map 或 screen-space refraction |
+| Smoke / Particle | 體積透明 | Additive / Soft blend |
+
+### HDR 的重要性
+
+- **LDR (RGBA8)**：像素值 [0, 1]，bloom threshold 1.0 → 粒子被 clamp，**無 Bloom**
+- **HDR (RGBA16F)**：可超過 1.0 → 粒子 Additive 寫入 HDR buffer，bloom 自動偵測高亮度
+
+Engine G-buffer 已是 HDR（`buf` = RGBA16F），粒子 Additive blend 天然支持 Bloom。
+
+### Component
+
+```c
+Tag: CompTransparent  // 有此 tag 的物件走 transparent forward pass
+
+typedef struct {
+    float alpha;
+    bool  cast_shadows;
+} comp_transparency;
+
+Tag: CompParticle           // 粒子物件
+Tag: CompGlowingParticle    // 發光粒子（影響 bloom）
+
+typedef struct {
+    float  alpha;              // 透明度
+    float  emissive_strength;  // 發光強度（需 > bloom_threshold 才生效）
+    float3 color;              // 粒子顏色
+    int    blend_mode;         // 0=Additive, 1=Alpha, 2=SoftAdd, 3=Multiply
+} comp_particle;
+```
+
+### Post-FX 執行順序
+
+```
+SSAO → Lighting → Particles(Additive) → Bloom → TAA → Compositor
+```
+
+### Order-Independent Transparency (OIT)
+
+Standard transparency 必須 back-to-front 排序。OIT 可任意順序：
+
+| 方法 | 原理 | 缺點 |
+|------|------|------|
+| Depth Peeling | 多層 peel，每層剝離一個透明層 | 4+ passes，昂貴 |
+| Linked Lists (A-Buffer) | Fragment 寫 linked list，最後 resolve | 需要 atomic counter |
+| Weighted Blended | 用 depth 作為權重，近似準確 | Phase 3 做 |
+
+### 實施順序
+
+- Phase 1：不作透明，專注 deferred opaque rendering
+- Phase 2：加入 `CompTransparent` tag + basic alpha fade forward pass
+- Phase 3：加入 Weighted Blended OIT
+
+---
+
+## 8. 效能優化
 
 | 優化                  | 節省              | 難度 | 優先級 |
 |---------------------|-----------------|------|--------|
@@ -514,7 +599,7 @@ render_path_submit_draw("mesh_depth_only");  // 只寫深度，不算 color
 
 ---
 
-## 8. Minic API
+## 9. Minic API
 
 遊戲腳本透過 C API 控制 3D 系統：
 
@@ -553,7 +638,7 @@ void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
 
 ---
 
-## 9. 實施階段
+## 10. 實施階段
 
 ### Phase 1: 基礎建設
 - G-Buffer 渲染（gbuffer0, gbuffer1, main depth）
@@ -572,6 +657,8 @@ void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
 - Tiled / Clustered Lighting
 - Hi-Z Occlusion Culling
 - LOD System
+- 透明物件 Transparent Forward Pass
+- 粒子系統 + Additive Glow + Bloom
 
 ### Phase 4: 優化整合
 - Early-Z + Depth Pre-pass
@@ -581,7 +668,7 @@ void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
 
 ---
 
-## 10. 文件清單
+## 11. 文件清單
 
 ### 新建檔案
 
@@ -598,6 +685,9 @@ void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
 | `engine/sources/ecs/culling/culling_occlusion.c/h` | Baked occlusion + Hi-Z |
 | `engine/sources/components/light.c/h` | Point/Spot light components |
 | `engine/sources/components/lod.c/h` | LOD component |
+| `engine/sources/components/transparency.c/h` | Transparent + Particle components |
+| `engine/sources/ecs/transparent_bridge.c/h` | Transparent forward pass |
+| `engine/sources/ecs/particle_system.c/h` | Particle system |
 | `engine/sources/core/light_api.c/h` | Minic light API |
 | `engine/sources/core/camera_api.c/h` | Minic camera API |
 | `engine/sources/core/culling_api.c/h` | Minic culling API |
@@ -612,6 +702,8 @@ void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
 | `engine/assets/shaders/postfx_bloom.kong` | Bloom pass |
 | `engine/assets/shaders/postfx_taa.kong` | TAA pass |
 | `engine/assets/shaders/postfx_compositor.kong` | Compositor |
+| `engine/assets/shaders/transparent_forward.kong` | Transparent forward pass |
+| `engine/assets/shaders/particle_additive.kong` | Particle additive shader |
 
 ### 修改檔案
 

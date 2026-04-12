@@ -317,6 +317,7 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
     <a href="#csm">CSM</a>
     <a href="#lighting">燈光</a>
     <a href="#culling">Culling</a>
+    <a href="#transparent">透明</a>
     <a href="#optimize">優化</a>
     <a href="#api">Minic API</a>
     <a href="#phases">階段</a>
@@ -386,6 +387,9 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
       <div class="tag-box tag">CompShadowCaster</div>
       <div class="tag-box tag">CompShadowReceiver</div>
       <div class="tag-box tag">CompVisible</div>
+      <div class="tag-box tag">CompTransparent</div>
+      <div class="tag-box tag">CompParticle</div>
+      <div class="tag-box tag">CompGlowingParticle</div>
     </div>
   </div>
 
@@ -667,10 +671,79 @@ totalAtt = (1 - dist/range)² × angleAtt</div>
 </section>
 
 <!-- ==========================================
-     7. Optimizations
+     7. Transparent Objects (Dual-Render)
+     ========================================== -->
+<section id="transparent">
+  <h2>7. 透明物件處理（Dual-Render）</h2>
+
+  <p><strong>問題：</strong>Deferred Rendering 的 G-buffer 無法做 alpha blending。透明物件需要走獨立的 Forward Pass。</p>
+
+  <h3>Pipeline（含透明物件）</h3>
+  <div class="pipeline-flow">
+    <div class="pass"><div class="pass-title">Shadow</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">G-Buffer</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">Lighting</div></div>
+    <div class="arrow">→</div>
+    <div class="pass transparent"><div class="pass-title">Transparent</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">Post-FX</div></div>
+    <div class="arrow">→</div>
+    <div class="pass"><div class="pass-title">2D</div></div>
+  </div>
+
+  <h3>Transparent Forward Pass</h3>
+  <div class="code">render_path_set_target("buf", NULL, NULL, GPU_CLEAR_NONE, 0, 0.0f);
+// depth_test = LESS, depth_write = false
+// blending = ALPHA_BLEND (SRC_ALPHA, ONE_MINUS_SRC_ALPHA)
+
+for each transparent_mesh (sorted back-to-front):
+    render_path_submit_draw("mesh_transparent")</div>
+
+  <h3>HDR 的重要性</h3>
+  <table>
+    <tr><th>Format</th><th>Range</th><th>粒子 Bloom</th></tr>
+    <tr><td>LDR (RGBA8)</td><td>[0, 1]</td><td>❌ 被 clamp，無效</td></tr>
+    <tr><td>HDR (RGBA16F)</td><td>> 1.0</td><td>✅ 天然支持</td></tr>
+  </table>
+  <p>Engine G-buffer 已是 HDR（<code>buf</code> = RGBA16F），粒子 Additive blend 天然支持 Bloom。</p>
+
+  <h3>Components</h3>
+  <div class="code"><span class="k">Tag: CompTransparent  // 走 transparent forward pass
+
+<span class="k">typedef struct </span>{
+    <span class="fn">float</span> alpha;
+    <span class="t">bool</span>  cast_shadows;
+} comp_transparency;
+
+<span class="k">Tag: CompParticle           // 粒子物件
+<span class="k">Tag: CompGlowingParticle    // 發光粒子（影響 bloom）
+
+<span class="k">typedef struct </span>{
+    <span class="fn">float</span>  alpha;
+    <span class="fn">float</span>  emissive_strength;  <span class="c">// 需 > bloom_threshold</span>
+    <span class="fn">float</span>3 color;
+    <span class="t">int</span>    blend_mode;         <span class="c">// 0=Additive, 1=Alpha, 2=SoftAdd</span>
+} comp_particle;</div>
+
+  <h3>Post-FX 順序</h3>
+  <div class="code">SSAO → Lighting → Particles(Additive) → Bloom → TAA → Compositor</div>
+
+  <h3>粒子 Blend Mode</h3>
+  <table>
+    <tr><th>Mode</th><th>Formula</th><th>場景</th><th>Bloom</th></tr>
+    <tr><td>Additive</td><td>buf + p</td><td>火焰、爆炸</td><td>✅ 天然</td></tr>
+    <tr><td>Alpha</td><td>buf×(1-α) + p×α</td><td>煙霧、雲</td><td>⚠️ 低亮度</td></tr>
+    <tr><td>SoftAdd</td><td>buf + p×α</td><td>柔光</td><td>✅</td></tr>
+  </table>
+</section>
+
+<!-- ==========================================
+     8. Optimizations
      ========================================== -->
 <section id="optimize">
-  <h2>7. 效能優化</h2>
+  <h2>8. 效能優化</h2>
 
   <div class="optimization">
     <div class="opt-name">Early-Z + Depth Pre-pass <span class="priority p0">P0</span></div>
@@ -706,7 +779,7 @@ totalAtt = (1 - dist/range)² × angleAtt</div>
      8. Minic API
      ========================================== -->
 <section id="api">
-  <h2>8. Minic API</h2>
+  <h2>9. Minic API</h2>
 
   <div class="grid">
     <div class="card">
@@ -742,7 +815,7 @@ render_set_shadow_quality("high")</div>
      9. Phases
      ========================================== -->
 <section id="phases">
-  <h2>9. 實施階段</h2>
+  <h2>10. 實施階段</h2>
 
   <div class="phase">
     <div class="phase-header">
@@ -782,6 +855,8 @@ render_set_shadow_quality("high")</div>
         <li>Tiled / Clustered Lighting</li>
         <li>Hi-Z Occlusion Culling</li>
         <li>LOD System</li>
+        <li>透明物件 Transparent Forward Pass</li>
+        <li>粒子系統 + Additive Glow + Bloom</li>
       </ul>
     </div>
   </div>
@@ -805,7 +880,7 @@ render_set_shadow_quality("high")</div>
      10. Files
      ========================================== -->
 <section id="files">
-  <h2>10. 檔案清單</h2>
+  <h2>11. 檔案清單</h2>
 
   <div class="file-section">
     <h3>新建檔案</h3>
@@ -821,6 +896,9 @@ render_set_shadow_quality("high")</div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/culling/culling_occlusion.c/h</code><span class="desc">Baked occlusion + Hi-Z</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/components/light.c/h</code><span class="desc">Point/Spot light components</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/components/lod.c/h</code><span class="desc">LOD component</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/components/transparency.c/h</code><span class="desc">Transparent + Particle components</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/transparent_bridge.c/h</code><span class="desc">Transparent forward pass</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/ecs/particle_system.c/h</code><span class="desc">Particle system</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/light_api.c/h</code><span class="desc">Minic light API</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/camera_api.c/h</code><span class="desc">Minic camera API</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/culling_api.c/h</code><span class="desc">Minic culling API</span></div>
@@ -835,6 +913,8 @@ render_set_shadow_quality("high")</div>
       <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/postfx_bloom.kong</code><span class="desc">Bloom pass</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/postfx_taa.kong</code><span class="desc">TAA pass</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/postfx_compositor.kong</code><span class="desc">Compositor</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/transparent_forward.kong</code><span class="desc">Transparent forward pass</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/particle_additive.kong</code><span class="desc">Particle additive shader</span></div>
     </div>
   </div>
 
