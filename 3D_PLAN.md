@@ -15,23 +15,52 @@
 │  Minic Scripts (.minic)                              │
 │  遊戲邏輯腳本 — 創建實體、添加組件、查詢系統          │
 └──────────────────────────────┬──────────────────────┘
-                               ↓ calls C API registered via minic_register()
+                               ↓ calls C API
 ┌─────────────────────────────────────────────────────┐
 │  Core API (core/)                                    │
-│  entity_api · light_api · camera_api · culling_api   │
-│  render_api                                          │
+│  entity_api · light_api · camera_api                │
+│  culling_api · render_api · material_api            │
 └──────────────────────────────┬──────────────────────┘
                                ↓ operates on
 ┌─────────────────────────────────────────────────────┐
 │  Flecs ECS (ecs/)                                    │
 │  Systems: culling · shadow · gbuffer · lighting      │
-│  Components: position, rotation, scale, mesh, light   │
+│  Components: transform, mesh, light, camera          │
 └──────────────────────────────┬──────────────────────┘
                                ↓ syncs to
 ┌─────────────────────────────────────────────────────┐
 │  Iron Engine (base/)                                 │
 │  GPU render targets · render_path · mesh_object      │
 └─────────────────────────────────────────────────────┘
+```
+
+### .arm 資產流程
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  .arm 資產來源                                                     │
+│                                                                   │
+│  Blender ──► Scene .arm ──► 網格 + Transform（無材質）              │
+│  ArmorPaint ──► Project .arm ──► Material + Texture               │
+└──────────────────────────────────────────────────────────────────┘
+                               ↓
+┌──────────────────────────────────────────────────────────────────┐
+│  載入函數                                                          │
+│                                                                   │
+│  scene_load("scene.arm")     → scene_t → ECS entities            │
+│  material_load("mat.arm")     → material_data_t                  │
+│  mesh_load("mesh.mesh")       → mesh_data_t                      │
+└──────────────────────────────────────────────────────────────────┘
+                               ↓
+┌──────────────────────────────────────────────────────────────────┐
+│  ECS Components                                                    │
+│                                                                   │
+│  comp_3d_mesh_renderer {                                          │
+│      .mesh_path,       // "meshes/cube.mesh" (from Scene .arm)   │
+│      .arm_path,        // "materials/wood.arm" (from Project .arm)│
+│      .material_name    // "Wood" (material name in .arm)          │
+│  }                                                                │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ### ECS World — 所有 3D 組件
@@ -43,45 +72,43 @@ comp_3d_rotation     — float x, y, z, w (quaternion)
 comp_3d_scale        — float x, y, z
 
 // Mesh
-comp_3d_mesh_renderer — mesh_path, material_path
-RenderObject3D        — iron_mesh_object ptr, iron_transform ptr
+comp_3d_mesh_renderer — mesh_path, arm_path, material_name
 comp_3d_lod           — distances[4], mesh_lod0/1/2/3 paths, current_lod
+
+// Material（見 Section 1.1）
+// ...
 
 // Camera
 comp_3d_camera        — fov, near, far, perspective
 comp_3d_ortho         — left, right, bottom, top
 
 // Lights
-comp_3d_directional_light — dir(xyz), color(rgb), strength, enabled, cast_shadows, shadow_bias, normal_offset_bias, shadow_radius
-comp_3d_point_light       — pos(xyz), color(rgb), strength, range, enabled, cast_shadows, shadow_bias
-comp_3d_spot_light        — pos(xyz), dir(xyz), color(rgb), strength, range, inner_cone, outer_cone, enabled, cast_shadows, shadow_bias
+comp_3d_directional_light — dir(xyz), color(rgb), strength, enabled...
+comp_3d_point_light       — pos(xyz), color(rgb), strength, range...
+comp_3d_spot_light        — pos(xyz), dir(xyz), color(rgb), range...
 
 // Rendering Tags
 Tag: Comp3dRenderable      — 可被渲染的實體
 Tag: Comp3dShadowCaster    — 投射陰影
 Tag: Comp3dShadowReceiver  — 接收陰影
 Tag: Comp3dVisible         — 當前幀可見（culling 結果）
+Tag: Comp3dTransparent     — 透明物件
+Tag: Comp3dParticle       — 粒子物件
 
-### Material System（.arm 格式）
+---
 
-Engine 使用 Iron 的 `.arm` 格式。.arm 有兩種格式：
+## 1.1 Material System（.arm 格式）
+
+.arm 有兩種格式，Engine 同時支持兩者：
 
 | 格式 | 來源 | 內容 |
 |------|------|------|
-| **Scene format** | Blender 匯出 | 網格幾何 + 物件 transform，**不含材質** |
-| **Project format** | ArmorPaint 匯出 | 完整專案：材質、圖層、筆刷、紋理 |
+| **Scene format** | Blender 匯出 | 網格幾何 + Transform，**不含材質** |
+| **Project format** | ArmorPaint 匯出 | Material + Texture + Layer |
 
-**重要：Blender 匯出的 .arm 沒有材質！** 材質需單獨從 ArmorPaint 匯出。
+**重要：Blender .arm 不包含材質！** 需另行從 ArmorPaint 匯出。
 
-**Material 載入：**
-
-| 來源 | 載入方式 |
-|------|---------|
-| ArmorPaint .arm（Project format） | `data_get_material("materials/wood.arm", "Wood")` |
-| 程式建立 | `material_create("name")` |
-| 覆蓋參數 | `material_override(arm_path, mat_name)` |
-
-**Iron Material 結構：**
+### Iron Material 結構
 
 ```c
 // material_data_t — 來自 .arm 或程式建立
@@ -94,52 +121,43 @@ typedef struct {
 // material_context_t — 每個 material 的 render context
 typedef struct {
     const char *name;              // context 名稱 (e.g., "mesh")
-    bind_const_t_array_t *bind_constants;  // 常量 (metallic, roughness...)
+    bind_const_t_array_t *bind_constants;  // metallic, roughness...
     bind_tex_t_array_t  *bind_textures;    // 紋理槽位
 } material_context_t;
 ```
 
-**Component 定義：**
+### 使用流程
 
 ```c
-comp_3d_mesh_renderer — mesh_path, arm_path, material_name
-```
-
-**使用流程：**
-
-```c
-// 1. Blender 匯出網格（Scene .arm，無材質）
-// 2. ArmorPaint 建立材質（Project .arm）
-// 3. 遊戲中組合：
-
+// 方式 1：直接使用 .arm 中的 material
 entity_add(entity, comp_3d_mesh_renderer{
-    .mesh          = "meshes/cube.mesh",       // 來自 Blender .arm
-    .arm_path      = "materials/wood.arm",    // 來自 ArmorPaint .arm
-    .material_name = "Wood"                    // material 名稱
+    .mesh          = "meshes/cube.mesh",       // Blender Scene .arm
+    .arm_path      = "materials/wood.arm",    // ArmorPaint Project .arm
+    .material_name = "Wood"
 });
 
-// 程式建立 material（無需 .arm 文件）
+// 方式 2：程式建立 material（無需 .arm 文件）
 id mat = material_create("my_material");
 material_set_shader(mat, "World PBR");
 material_set_float(mat, "metallic", 0.0f);
 material_set_float(mat, "roughness", 0.7f);
 material_set_texture(mat, "albedo_map", "textures/brick.ktx");
 
-// 使用 .arm 並覆蓋參數
+// 方式 3：使用 .arm 並覆蓋參數
 id mat = material_override("materials/wood.arm", "Wood");
 material_set_float(mat, "roughness", 0.3f);
 ```
 
-**Shader 映射：**
+### Shader 映射
 
-| Iron Shader | 用途 | 對應 Pipeline |
-|-------------|------|------------|
+| Iron Shader | 用途 | Pipeline |
+|-------------|------|----------|
 | `World PBR` | PBR 渲染 | Deferred / Forward+ |
 | `World PBR Double Side` | 雙面 PBR | Deferred / Forward+ |
 | `Sky` | 天空盒 | Forward |
 | `Shadow` | 陰影 casting | Shadow Pass |
 
-**Minic API：**
+### Minic API
 
 ```c
 id material_create(const char* name);
