@@ -61,7 +61,88 @@ Tag: Comp3dRenderable      — 可被渲染的實體
 Tag: Comp3dShadowCaster    — 投射陰影
 Tag: Comp3dShadowReceiver  — 接收陰影
 Tag: Comp3dVisible         — 當前幀可見（culling 結果）
+
+### Material System（自訂 Shader）
+
+每個 Mesh 可以指定自訂 Material，Material 決定使用哪個 Shader。
+
+```c
+// Material 結構
+typedef struct {
+    const char* shader_name;       // e.g. "world_gbuffer", "custom_pbr"
+    float metallic;               // 覆蓋 global material
+    float roughness;               // 覆蓋 global material
+    float3 albedo;                // 覆蓋 global material
+    float normal_strength;         // 法線強度
+    float ao_strength;             // AO 強度
+    float emissive;                // 自發光強度
+    // Texture slots
+    const char* albedo_map;       // 紋理路徑
+    const char* normal_map;
+    const char* roughness_map;
+    const char* metallic_map;
+    const char* ao_map;
+    const char* emissive_map;
+} comp_3d_material;
+
+// Mesh Renderer 引用 Material
+comp_3d_mesh_renderer — mesh_path, material_path
+comp_3d_material       — shader_name, PBR params, texture slots
 ```
+
+**使用流程：**
+
+```c
+// 1. 創建自訂 Material
+id mat = entity_create_material("my_custom_material");
+material_set_shader(mat, "custom_pbr");
+material_set_float(mat, "roughness", 0.5f);
+material_set_texture(mat, "albedo_map", "textures/brick_diffuse.ktx");
+
+// 2. 附加到 Entity
+entity_add(entity, get_comp_3d_material(mat));
+
+// 3. Mesh 指向同一 Material
+entity_add(entity, comp_3d_mesh_renderer{.mesh = "meshes/cube.mesh", .material = mat});
+```
+
+**Shader 查找順序：**
+
+```
+mesh.material.shader_name
+    ↓ 如果為空
+material_library_get_default(mesh.mesh_type)  // e.g. "opaque" → "world_gbuffer"
+    ↓
+"fallback_pbr"
+```
+
+**Minic API：**
+
+```c
+// 創建 Material
+id material_create(const char* name);
+
+// 設置參數
+void material_set_shader(id mat, const char* shader);  // "world_gbuffer", "custom_pbr"
+void material_set_float(id mat, const char* param, float val);
+void material_set_vec3(id mat, const char* param, float x, y, z);
+void material_set_texture(id mat, const char* slot, const char* path);
+
+// 快捷方式：直接創建並附加
+entity_add(entity, comp_3d_material{.shader_name = "custom_pbr", .roughness = 0.3f});
+```
+
+**內建 Shader：**
+
+| Shader Name       | 用途                        |
+|-------------------|---------------------------|
+| `world_gbuffer`   | Deferred G-buffer (預設)   |
+| `transparent`     | 透明物體 Forward Pass      |
+| `particle`        | 粒子 Additive              |
+| `unlit`           | 無光照 (僅紋理)             |
+| `outline`         | 輪廓線                     |
+| `toon`            | 卡通渲染                   |
+| `custom_*`        | 用家自訂                   |
 
 ### ECS System 執行順序
 
@@ -876,8 +957,15 @@ void culling_set_lod_enabled(bool enabled);
 void culling_set_occlusion_enabled(bool enabled);
 
 // === Render API ===
-void render_set_pipeline(const char* pipeline);  // "forward", "deferred"
+void render_set_pipeline(const char* pipeline);  // "forward+", "deferred"
 void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
+
+// === Material API ===
+id material_create(const char* name);
+void material_set_shader(id mat, const char* shader);  // "world_gbuffer", "transparent", "unlit", "custom_xxx"
+void material_set_float(id mat, const char* param, float val);
+void material_set_vec3(id mat, const char* param, float x, float y, float z);
+void material_set_texture(id mat, const char* slot, const char* path);
 ```
 
 所有 API 透過 `minic_register()` 註冊，遊戲腳本直接調用。
@@ -938,6 +1026,8 @@ void render_set_shadow_quality(const char* quality);  // "low", "medium", "high"
 | `engine/sources/core/camera_api.c/h` | Minic camera API |
 | `engine/sources/core/culling_api.c/h` | Minic culling API |
 | `engine/sources/core/render_api.c/h` | Minic render API |
+| `engine/sources/core/material_api.c/h` | Minic material API |
+| `engine/sources/core/material_system.c/h` | Material system |
 | `engine/assets/shaders/world_gbuffer.kong` | Geometry pass shader (MRT) |
 | `engine/assets/shaders/deferred_light.kong` | Lighting pass shader |
 | `engine/assets/shaders/shadow_directional.kong` | CSM shadow shader |
