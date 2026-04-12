@@ -218,6 +218,61 @@ On vulkan: `.spv` (SPIR-V)
 On direct3d12: `.cso`
 On wasm/webgpu: `.wgsl`
 
+## Including Other project.js Files
+
+Use `project.add_project(path)` to include another project's `project.js`. This recursively loads the referenced project, merging its sources, shaders, asset matchers, and defines into the parent project.
+
+```javascript
+// In paint/project.js
+if (flags.with_plugins) {
+    project.add_project("../paint/plugins");  // Loads paint/plugins/project.js
+    project.add_cfiles("sources/plugins/plugin_api.c");
+}
+```
+
+How it works:
+
+```javascript
+add_project(directory) {
+    let project = load_project(directory, false);  // is_root_project = false
+    this.subProjects.push(project);
+    this.asset_matchers  = this.asset_matchers.concat(project.asset_matchers);
+    this.sources         = this.sources.concat(project.sources);
+    this.shader_matchers = this.shader_matchers.concat(project.shader_matchers);
+    this.defines         = this.defines.concat(project.defines);
+    return project;
+}
+```
+
+Key points:
+- `load_project()` is called with `is_root_project = false`, so it does **not** reset `globalThis.platform` or `globalThis.flags` — the parent's settings are inherited
+- The included project's `project.js` runs with access to the same `platform`, `graphics`, and `flags` globals
+- Included projects can themselves include further projects (nested inclusion is supported)
+- The included project's `export_iron_project()` is **not** called when loaded via `add_project()` — only when `is_root_project = true`
+
+### Example: Plugin System
+
+In `paint/project.js`:
+
+```javascript
+if (flags.with_plugins) {
+    project.add_define("WITH_PLUGINS");
+    project.add_project("../paint/plugins");  // Merges plugin sources into paint build
+}
+```
+
+The `paint/plugins/project.js` might look like:
+
+```javascript
+let project = new Project("ArmorPaint Plugins");
+project.add_cfiles("sources/plugins/*.c");
+project.add_define("ARM_PAINT");
+project.flatten();
+return project;
+```
+
+Note: `add_project()` returns the sub-project, but you typically don't need to capture it. The merge is done inline.
+
 ## Adding a New Flag
 
 To add a new build flag (e.g., `--with-foo`):
