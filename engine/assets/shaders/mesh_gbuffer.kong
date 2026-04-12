@@ -21,9 +21,9 @@ struct vert_out {
 }
 
 fun oct_encode(n: float3): float2 {
-    var nn = normalize(n);
-    var sum = abs(nn.x) + abs(nn.y) + abs(nn.z);
-    var oct = nn.xy * (1.0 / sum);
+    var nn: float3 = normalize(n);
+    var sum: float = abs(nn.x) + abs(nn.y) + abs(nn.z);
+    var oct: float2 = nn.xy * (1.0 / sum);
     oct = oct * 0.5 + 0.5;
     return oct;
 }
