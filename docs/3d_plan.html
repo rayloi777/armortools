@@ -892,6 +892,15 @@ Pass 3: Forward Tiled Rendering (每個 tile 平均 2-4 燈光)</div>
     <tr><td><code>forward_plus_renderer.c/h</code></td><td>Forward+ rendering</td></tr>
     <tr><td><code>mesh_forward_plus.kong</code></td><td>Forward+ mesh shader</td></tr>
   </table>
+
+  <h3>實施順序</h3>
+  <table>
+    <tr><th>Phase</th><th>內容</th></tr>
+    <tr><td>Phase 1</td><td>Deferred Pipeline 完成後再加入 Forward+</td></tr>
+    <tr><td>Phase 2</td><td>加入 Forward+ Path</td></tr>
+    <tr><td>Phase 3</td><td>加入 PipelineManager 切換</td></tr>
+    <tr><td>Phase 4</td><td>加入 Quality Preset</td></tr>
+  </table>
 </section>
 
 <!-- ==========================================

@@ -823,14 +823,6 @@ void pipeline_auto_select(void) {
 
 ---
 
-### 實施順序
-
-- Phase 1：不作透明，專注 deferred opaque rendering
-- Phase 2：加入 `Comp3dTransparent` tag + basic alpha fade forward pass
-- Phase 3：加入 Weighted Blended OIT
-
----
-
 ## 9. 效能優化
 
 | 優化                  | 節省              | 難度 | 優先級 |
