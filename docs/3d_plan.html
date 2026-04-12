@@ -344,7 +344,7 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
     <div class="arch-arrow">↓ calls C API registered via minic_register()</div>
     <div class="arch-layer api">
       <div class="layer-label">Core API (core/)</div>
-      <div class="layer-content">entity_api · light_api · camera_api · culling_api · render_api</div>
+      <div class="layer-content">entity_api · light_api · camera_api · culling_api · render_api · material_api</div>
     </div>
     <div class="arch-arrow">↓ operates on</div>
     <div class="arch-layer ecs">
@@ -394,6 +394,57 @@ td code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4p
       <div class="tag-box tag">Comp3dGlowingParticle</div>
     </div>
   </div>
+
+  <h3>Material System（自訂 Shader）</h3>
+
+  <div class="code"><span class="c">// Material 結構</span>
+<span class="k">typedef struct </span>{
+    <span class="k">const char</span>* shader_name;       <span class="c">// e.g. "world_gbuffer", "custom_pbr"</span>
+    <span class="fn">float</span> metallic;
+    <span class="fn">float</span> roughness;
+    <span class="fn">float3</span> albedo;
+    <span class="fn">float</span> normal_strength;
+    <span class="fn">float</span> ao_strength;
+    <span class="fn">float</span> emissive;
+    <span class="c">// Texture slots</span>
+    <span class="k">const char</span>* albedo_map;
+    <span class="k">const char</span>* normal_map;
+    <span class="k">const char</span>* roughness_map;
+    <span class="k">const char</span>* metallic_map;
+    <span class="k">const char</span>* ao_map;
+    <span class="k">const char</span>* emissive_map;
+} <span class="t">comp_3d_material</span>;</div>
+
+  <h4>使用流程</h4>
+  <div class="code"><span class="c">// 1. 創建自訂 Material</span>
+<span class="t">id</span> mat = <span class="fn">material_create</span>(<span class="s">"my_custom_material"</span>);
+<span class="fn">material_set_shader</span>(mat, <span class="s">"custom_pbr"</span>);
+<span class="fn">material_set_float</span>(mat, <span class="s">"roughness"</span>, 0.5f);
+
+<span class="c">// 2. 附加到 Entity</span>
+<span class="fn">entity_add</span>(entity, get_comp_3d_material(mat));
+
+<span class="c">// 3. Mesh 指向同一 Material</span>
+<span class="fn">entity_add</span>(entity, comp_3d_mesh_renderer{.mesh = <span class="s">"meshes/cube.mesh"</span>, .material = mat});</div>
+
+  <h4>Shader 查找順序</h4>
+  <div class="code">mesh.material.shader_name
+    ↓ 如果為空
+material_library_get_default(mesh_type)  <span class="c">// e.g. "opaque" → "world_gbuffer"</span>
+    ↓
+<span class="s">"fallback_pbr"</span></div>
+
+  <h4>內建 Shader</h4>
+  <table>
+    <tr><th>Shader</th><th>用途</th></tr>
+    <tr><td><code>world_gbuffer</code></td><td>Deferred G-buffer (預設)</td></tr>
+    <tr><td><code>transparent</code></td><td>透明 Forward Pass</td></tr>
+    <tr><td><code>particle</code></td><td>粒子 Additive</td></tr>
+    <tr><td><code>unlit</code></td><td>無光照 (僅紋理)</td></tr>
+    <tr><td><code>outline</code></td><td>輪廓線</td></tr>
+    <tr><td><code>toon</code></td><td>卡通渲染</td></tr>
+    <tr><td><code>custom_*</code></td><td>用家自訂</td></tr>
+  </table>
 
   <h3>ECS System 執行順序</h3>
   <div class="step-flow">
@@ -961,6 +1012,14 @@ culling_set_occlusion_enabled(bool)</div>
       <div class="code">render_set_pipeline("deferred")
 render_set_shadow_quality("high")</div>
     </div>
+    <div class="card">
+      <h4>material_api.c</h4>
+      <div class="code">material_create("name")
+material_set_shader(mat, "world_gbuffer")
+material_set_float(mat, "roughness", 0.5)
+material_set_vec3(mat, "albedo", 1, 0, 0)
+material_set_texture(mat, "albedo_map", "tex.ktx")</div>
+    </div>
   </div>
 </section>
 
@@ -1056,6 +1115,8 @@ render_set_shadow_quality("high")</div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/camera_api.c/h</code><span class="desc">Minic camera API</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/culling_api.c/h</code><span class="desc">Minic culling API</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/render_api.c/h</code><span class="desc">Minic render API</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/material_api.c/h</code><span class="desc">Minic material API</span></div>
+      <div class="file-item"><span class="new">NEW</span><code>engine/sources/core/material_system.c/h</code><span class="desc">Material system</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/world_gbuffer.kong</code><span class="desc">Geometry pass shader (MRT)</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/deferred_light.kong</code><span class="desc">Lighting pass shader</span></div>
       <div class="file-item"><span class="new">NEW</span><code>engine/assets/shaders/shadow_directional.kong</code><span class="desc">CSM shadow shader</span></div>
