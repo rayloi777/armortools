@@ -91,3 +91,16 @@ Dear ImGui-based GUI components:
 - armortools/base: iron_json, iron_lz4, iron_file, iron_array, iron_map
 - NFD (Native File Dialog)
 - Dear ImGui v1.90+
+
+## Testing
+
+The CDB library is tested using a dedicated test suite located in `base/tests/castle_c/`.
+
+```bash
+# Build and run tests
+cd base/tests/castle_c
+make -f Makefile
+./CastleCDBTest
+```
+
+Expected: `=== 25 tests, 0 failures ===`

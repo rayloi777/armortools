@@ -7,8 +7,8 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "../sources/lib/cdb.h"
-#include "../sources/lib/cdb_internal.h"
+#include "cdb.h"
+#include "cdb_internal.h"
 
 #define TEST(name) void test_##name(void)
 #define ASSERT(cond, msg) do { if (!(cond)) { printf("FAIL: %s\n", msg); failures++; } } while(0)
