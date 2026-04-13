@@ -4,7 +4,8 @@
 #include <iron.h>
 
 typedef struct {
-    gpu_texture_t *shadow_map;  // Single D32 texture (2048x2048)
+    gpu_texture_t *shadow_map;     // RGBA32 color texture with encoded depth
+    gpu_texture_t *shadow_depth;   // D32 depth buffer for depth testing
     int size;
     bool initialized;
 } shadow_data_t;

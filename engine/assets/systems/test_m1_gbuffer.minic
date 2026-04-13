@@ -92,8 +92,8 @@ int draw(void) {
     if (g_debug_mode == 0) draw_string("Mode: Normal", 10.0, 30.0);
     if (g_debug_mode == 1) draw_string("Mode: Depth", 10.0, 30.0);
     if (g_debug_mode == 2) draw_string("Mode: Albedo", 10.0, 30.0);
-    if (g_debug_mode == 3) draw_string("Mode: Roughness/Metallic", 10.0, 30.0);
-    draw_string("1=Normal 2=Depth 3=Albedo 4=RoughMet", 10.0, 50.0);
+    if (g_debug_mode == 3) draw_string("Mode: Shadow Map", 10.0, 30.0);
+    draw_string("1=Normal 2=Depth 3=Albedo 4=ShadowMap", 10.0, 50.0);
     draw_fps(10.0, 70.0);
     return 0;
 }
