@@ -143,10 +143,11 @@ fun calc_point_light(light_pos: float3, light_color: float3, light_strength: flo
 }
 
 fun mesh_gbuffer_frag(input: vert_out): float4 {
-	// Shadow pass: output NDC depth as color for shadow map
+	// Shadow pass: output depth as color for shadow map
 	if (constants.shadow_pass > 0.5) {
-		var ndc_depth: float = input.pos.z;
-		return float4(ndc_depth, ndc_depth, ndc_depth, 1.0);
+		// Remap NDC z from [-1,1] to [0,1] to match the comparison below
+		var depth: float = input.pos.z * 0.5 + 0.5;
+		return float4(depth, depth, depth, 1.0);
 	}
 
 	var n: float3 = normalize(input.wnor);
