@@ -115,7 +115,7 @@ fun mesh_gbuffer_frag(input: vert_out): float4 {
 	color = color / (color + float3(1.0, 1.0, 1.0));
 
 	// Gamma correction (1/2.2)
-	color = float3(pow(color.x, 0.454545454), pow(color.y, 0.454545454), pow(color.z, 0.454545454));
+	color = pow3(color, float3(0.454545454, 0.454545454, 0.454545454));
 
 	return float4(color, 1.0);
 }
