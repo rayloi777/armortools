@@ -4,6 +4,8 @@
 #include <iron.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
+#include <stdlib.h>
 
 static game_world_t *g_asset_loader_world = NULL;
 
@@ -46,40 +48,89 @@ void scene_ensure_defaults(scene_t *scene) {
         }
     }
 
-    // Ensure mesh_datas have a "nor" vertex array for PBR shading.
-    // Some .arm exports (e.g., Blender) only include pos + tex.
+    // Ensure mesh_datas have a "nor" vertex array using short4norm format
+    // for full 3D normals. Converts existing short2norm normals and computes
+    // face normals from geometry for meshes missing normals entirely.
     if (scene->mesh_datas != NULL) {
         for (int m = 0; m < scene->mesh_datas->length; m++) {
             mesh_data_t *md = (mesh_data_t *)scene->mesh_datas->buffer[m];
             if (!md->vertex_arrays) continue;
 
-            bool has_nor = false;
             int pos_vert_count = 0;
+            vertex_array_t *pos_va = NULL;
+            vertex_array_t *nor_va = NULL;
+
             for (int v = 0; v < md->vertex_arrays->length; v++) {
                 vertex_array_t *va = (vertex_array_t *)md->vertex_arrays->buffer[v];
-                if (va->attrib && strcmp(va->attrib, "nor") == 0) has_nor = true;
                 if (va->attrib && strcmp(va->attrib, "pos") == 0 && va->values) {
-                    // short4norm = 4 values per vertex
+                    pos_va = va;
                     pos_vert_count = va->values->length / 4;
+                }
+                if (va->attrib && strcmp(va->attrib, "nor") == 0) {
+                    nor_va = va;
                 }
             }
 
-            if (!has_nor && pos_vert_count > 0) {
-                // Create zero-filled nor array (short2norm: 2 x i16 per vertex)
-                i16_array_t *nor_vals = i16_array_create(pos_vert_count * 2);
-                nor_vals->length = pos_vert_count * 2;
-                for (int j = 0; j < nor_vals->length; j++) {
-                    nor_vals->buffer[j] = 0;
+            if (pos_vert_count == 0) continue;
+
+            // Generate face normals from geometry for meshes missing nor
+            if (nor_va == NULL && pos_va != NULL && md->index_array != NULL) {
+                int num_verts = pos_vert_count;
+                // Accumulate per-vertex normals (float, unnormalized)
+                float *accum = (float *)calloc(num_verts * 3, sizeof(float));
+
+                // Decode packed i16 positions to float [-1, 1]
+                float *positions = (float *)malloc(num_verts * 3 * sizeof(float));
+                for (int j = 0; j < num_verts; j++) {
+                    positions[j * 3 + 0] = (float)pos_va->values->buffer[j * 4 + 0] / 32767.0f;
+                    positions[j * 3 + 1] = (float)pos_va->values->buffer[j * 4 + 1] / 32767.0f;
+                    positions[j * 3 + 2] = (float)pos_va->values->buffer[j * 4 + 2] / 32767.0f;
                 }
-                vertex_array_t *nor_va = GC_ALLOC_INIT(vertex_array_t, {
+
+                // Compute face normals from triangles
+                int num_tri = md->index_array->length / 3;
+                for (int t = 0; t < num_tri; t++) {
+                    int i0 = md->index_array->buffer[t * 3 + 0];
+                    int i1 = md->index_array->buffer[t * 3 + 1];
+                    int i2 = md->index_array->buffer[t * 3 + 2];
+                    float *p0 = &positions[i0 * 3];
+                    float *p1 = &positions[i1 * 3];
+                    float *p2 = &positions[i2 * 3];
+                    // Cross product (p1-p0) x (p2-p0)
+                    float e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
+                    float e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
+                    float nx = e1y * e2z - e1z * e2y;
+                    float ny = e1z * e2x - e1x * e2z;
+                    float nz = e1x * e2y - e1y * e2x;
+                    accum[i0 * 3 + 0] += nx; accum[i0 * 3 + 1] += ny; accum[i0 * 3 + 2] += nz;
+                    accum[i1 * 3 + 0] += nx; accum[i1 * 3 + 1] += ny; accum[i1 * 3 + 2] += nz;
+                    accum[i2 * 3 + 0] += nx; accum[i2 * 3 + 1] += ny; accum[i2 * 3 + 2] += nz;
+                }
+
+                // Normalize and pack to short2norm (nx, ny only; shader reconstructs nz)
+                i16_array_t *nor_vals = i16_array_create(num_verts * 2);
+                nor_vals->length = num_verts * 2;
+                for (int j = 0; j < num_verts; j++) {
+                    float nx = accum[j * 3 + 0];
+                    float ny = accum[j * 3 + 1];
+                    float nz = accum[j * 3 + 2];
+                    float len = sqrtf(nx * nx + ny * ny + nz * nz);
+                    if (len > 0.0001f) { nx /= len; ny /= len; nz /= len; }
+                    else { nx = 0; ny = 1; nz = 0; } // fallback: up
+                    nor_vals->buffer[j * 2 + 0] = (int16_t)(nx * 32767.0f);
+                    nor_vals->buffer[j * 2 + 1] = (int16_t)(ny * 32767.0f);
+                }
+
+                vertex_array_t *new_nor = GC_ALLOC_INIT(vertex_array_t, {
                     .attrib = "nor",
                     .data = "short2norm",
                     .values = nor_vals,
                 });
-                // Append nor array
-                any_array_push(md->vertex_arrays, nor_va);
-                printf("[asset_loader] Added default nor array to mesh '%s' (%d verts)\n",
-                    md->name ? md->name : "?", pos_vert_count);
+                any_array_push(md->vertex_arrays, new_nor);
+                free(positions);
+                free(accum);
+                printf("[asset_loader] Generated face normals for mesh '%s' (%d verts, %d tris)\n",
+                    md->name ? md->name : "?", num_verts, num_tri);
             }
         }
     }

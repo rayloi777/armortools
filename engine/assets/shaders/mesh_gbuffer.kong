@@ -52,8 +52,15 @@ fun mesh_gbuffer_vert(input: vert_in): vert_out {
 	var wpos: float4 = constants.World * float4(input.pos.xyz, 1.0);
 	output.wpos = wpos.xyz;
 	output.pos = constants.WVP * float4(input.pos.xyz, 1.0);
+	// Reconstruct z from xy (short2norm only stores 2 components)
+	// Assumes normals point outward; sign of z is always positive
+	var nx: float = input.nor.x;
+	var ny: float = input.nor.y;
+	var nz_sq: float = 1.0 - nx * nx - ny * ny;
+	var nz: float = 0.0;
+	if (nz_sq > 0.0) { nz = sqrt(nz_sq); }
 	// Transform normal via World matrix (upper 3x3)
-	var wn: float4 = constants.World * float4(input.nor.x, input.nor.y, 0.0, 0.0);
+	var wn: float4 = constants.World * float4(nx, ny, nz, 0.0);
 	output.wnor = normalize(wn.xyz);
 	return output;
 }
