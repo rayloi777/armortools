@@ -1,6 +1,7 @@
 #include "render3d_bridge.h"
 #include "ecs_world.h"
 #include "deferred/deferred_gbuffer.h"
+#include "shadow/shadow_directional.h"
 #include <iron.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -79,6 +80,7 @@ void sys_3d_init(void) {
     int w = sys_w();
     int h = sys_h();
     gbuffer_init(w > 0 ? w : 1280, h > 0 ? h : 720);
+    shadow_init(2048);
     render_path_commands = sys_3d_render_commands;
     render_path_current_w = w;
     render_path_current_h = h;
@@ -86,6 +88,7 @@ void sys_3d_init(void) {
 }
 
 void sys_3d_shutdown(void) {
+    shadow_shutdown();
     gbuffer_shutdown();
     render_path_commands = NULL;
     g_3d_rendered = false;

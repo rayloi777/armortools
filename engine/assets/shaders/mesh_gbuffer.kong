@@ -11,6 +11,8 @@ const constants: {
 	light_strength: float;
 	ambient_strength: float;
 	cam_pos: float3;
+	shadow_enabled: float;
+	ground_y: float;
 };
 
 struct vert_in {
@@ -110,6 +112,32 @@ fun mesh_gbuffer_frag(input: vert_out): float4 {
 	var ambient: float3 = albedo * (constants.ambient_strength * constants.ao);
 
 	var color: float3 = ambient + lo;
+
+	// Planar shadow: darken ground-plane fragments near scene center
+	// to simulate a shadow cast by objects above. The shadow offset
+	// follows the light direction projected onto the ground plane.
+	var shadow_factor: float = 1.0;
+	if (constants.shadow_enabled > 0.5) {
+		var ldir: float3 = normalize(constants.light_dir);
+		var height_above_ground: float = input.wpos.y - constants.ground_y;
+		// Only apply to fragments on or near the ground plane
+		if (height_above_ground < 0.05 && height_above_ground >= -0.1) {
+			// Project light direction onto ground to get shadow offset direction
+			var shadow_offset_x: float = ldir.x;
+			var shadow_offset_z: float = ldir.z;
+			// Shift shadow position along light projection on ground
+			var sx: float = input.wpos.x - shadow_offset_x * 3.0;
+			var sz: float = input.wpos.z - shadow_offset_z * 3.0;
+			var shadow_dist_sq: float = sx * sx + sz * sz;
+			var shadow_radius: float = 2.0;
+			if (shadow_dist_sq < shadow_radius * shadow_radius) {
+				var falloff: float = 1.0 - shadow_dist_sq / (shadow_radius * shadow_radius);
+				shadow_factor = 1.0 - 0.5 * falloff;
+			}
+		}
+	}
+
+	color = color * shadow_factor;
 
 	// Simple Reinhard tone mapping
 	color = color / (color + float3(1.0, 1.0, 1.0));
