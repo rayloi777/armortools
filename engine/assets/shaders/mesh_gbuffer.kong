@@ -1,33 +1,127 @@
 #[set(everything)]
 const constants: {
-    WVP: float4x4;
+	WVP: float4x4;
+	World: float4x4;
+	metallic: float;
+	roughness: float;
+	albedo_rgb: float3;
+	ao: float;
+	light_dir: float3;
+	light_color: float3;
+	light_strength: float;
+	ambient_strength: float;
+	cam_pos: float3;
 };
 
 struct vert_in {
-    pos: float4;
-    nor: float2;
-    tex: float2;
+	pos: float4;
+	nor: float2;
+	tex: float2;
 }
 
 struct vert_out {
-    pos: float4;
-    tex: float2;
+	pos: float4;
+	tex: float2;
+	wpos: float3;
+	wnor: float3;
 }
 
 fun mesh_gbuffer_vert(input: vert_in): vert_out {
-    var output: vert_out;
-    output.tex = input.tex;
-    output.pos = constants.WVP * float4(input.pos.xyz, 1.0);
-    return output;
+	var output: vert_out;
+	output.tex = input.tex;
+	var wpos: float4 = constants.World * float4(input.pos.xyz, 1.0);
+	output.wpos = wpos.xyz;
+	output.pos = constants.WVP * float4(input.pos.xyz, 1.0);
+	// Transform normal via World matrix (upper 3x3)
+	var wn: float4 = constants.World * float4(input.nor.x, input.nor.y, 0.0, 0.0);
+	output.wnor = normalize(wn.xyz);
+	return output;
+}
+
+// Fresnel-Schlick approximation
+fun fresnel_schlick(cos_theta: float, f0: float3): float3 {
+	var t: float = pow(1.0 - cos_theta, 5.0);
+	return f0 + (float3(1.0, 1.0, 1.0) - f0) * t;
+}
+
+// GGX/Trowbridge-Reitz normal distribution function
+fun distribution_ggx(n: float3, h: float3, a: float): float {
+	var a2: float = a * a;
+	var n_dot_h: float = dot(n, h);
+	var n_dot_h2: float = n_dot_h * n_dot_h;
+	var denom: float = n_dot_h2 * (a2 - 1.0) + 1.0;
+	denom = 3.14159265 * denom * denom;
+	return a2 / denom;
+}
+
+// Schlick-GGX geometry function
+fun geometry_schlick_ggx(n_dot_v: float, k: float): float {
+	var denom: float = n_dot_v * (1.0 - k) + k;
+	return n_dot_v / denom;
+}
+
+// Smith's method for geometry obstruction
+fun geometry_smith(n: float3, v: float3, l: float3, k: float): float {
+	var n_dot_v: float = max(dot(n, v), 0.0);
+	var n_dot_l: float = max(dot(n, l), 0.0);
+	var ggx1: float = geometry_schlick_ggx(n_dot_v, k);
+	var ggx2: float = geometry_schlick_ggx(n_dot_l, k);
+	return ggx1 * ggx2;
 }
 
 fun mesh_gbuffer_frag(input: vert_out): float4 {
-    // Simple pass-through for M1 debug: just output UV as color
-    return float4(input.tex.x, input.tex.y, 0.0, 1.0);
+	var n: float3 = normalize(input.wnor);
+	var v: float3 = normalize(constants.cam_pos - input.wpos);
+	var l: float3 = normalize(-constants.light_dir);
+	var h: float3 = normalize(v + l);
+
+	// Material properties
+	var albedo: float3 = constants.albedo_rgb;
+	var rough: float = max(constants.roughness, 0.04);
+	var metal: float = constants.metallic;
+
+	// Dielectric F0 = 0.04, metallic F0 = albedo
+	var f0: float3 = float3(0.04, 0.04, 0.04);
+	f0 = f0 + (albedo - f0) * metal;
+
+	// Cook-Torrance BRDF
+	var n_dot_l: float = max(dot(n, l), 0.0);
+	var ndf: float = distribution_ggx(n, h, rough);
+	var k: float = (rough + 1.0) * (rough + 1.0) * 0.125; // / 8.0
+	var g: float = geometry_smith(n, v, l, k);
+	var n_dot_h: float = max(dot(n, h), 0.0);
+	var v_dot_h: float = max(dot(v, h), 0.0);
+	var fres: float3 = fresnel_schlick(v_dot_h, f0);
+	var numerator: float3 = fres * (ndf * g);
+	var denom: float = 4.0 * max(dot(n, v), 0.0) * n_dot_l + 0.0001;
+	var specular: float3 = numerator * (1.0 / denom);
+
+	// Fresnel at normal incidence
+	var ks: float3 = fresnel_schlick(v_dot_h, f0);
+	var kd: float3 = (float3(1.0, 1.0, 1.0) - ks) * (1.0 - metal);
+
+	// Lambertian diffuse (multiply by 1/PI)
+	var diffuse: float3 = kd * albedo * 0.318309886; // 1.0 / 3.14159265
+
+	// Direct lighting
+	var lo: float3 = (diffuse + specular) * constants.light_color * constants.light_strength * n_dot_l;
+
+	// Ambient
+	var ambient: float3 = albedo * (constants.ambient_strength * constants.ao);
+
+	var color: float3 = ambient + lo;
+
+	// Simple Reinhard tone mapping
+	color = color / (color + float3(1.0, 1.0, 1.0));
+
+	// Gamma correction (1/2.2)
+	color = float3(pow(color.x, 0.454545454), pow(color.y, 0.454545454), pow(color.z, 0.454545454));
+
+	return float4(color, 1.0);
 }
 
 #[pipe]
 struct pipe {
-    vertex = mesh_gbuffer_vert;
-    fragment = mesh_gbuffer_frag;
+	vertex = mesh_gbuffer_vert;
+	fragment = mesh_gbuffer_frag;
 }

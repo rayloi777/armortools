@@ -12,6 +12,31 @@ static bool g_3d_rendered = false;
 // Debug visualization mode: 0=Normal, 1=Depth, 2=Albedo, 3=RoughMet
 static int g_debug_mode = 0;
 
+// Update cam_pos in the material bind_constants to match the current camera position.
+static void update_cam_pos_material(void) {
+    if (!scene_camera || !scene_camera->base || !scene_camera->base->transform) return;
+    if (!scene_meshes || scene_meshes->length == 0) return;
+
+    vec4_t cam_loc = scene_camera->base->transform->loc;
+
+    // Get material from the first mesh object's material pointer
+    mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[0];
+    if (!mesh_obj || !mesh_obj->material) return;
+
+    material_context_t *mctx = material_data_get_context(mesh_obj->material, "mesh");
+    if (!mctx || !mctx->bind_constants) return;
+
+    for (int i = 0; i < mctx->bind_constants->length; i++) {
+        bind_const_t *bc = (bind_const_t *)mctx->bind_constants->buffer[i];
+        if (bc->name && strcmp(bc->name, "cam_pos") == 0 && bc->vec && bc->vec->length >= 3) {
+            bc->vec->buffer[0] = cam_loc.x;
+            bc->vec->buffer[1] = cam_loc.y;
+            bc->vec->buffer[2] = cam_loc.z;
+            break;
+        }
+    }
+}
+
 static void sys_3d_render_commands(void) {
     int w = sys_w();
     int h = sys_h();
@@ -20,6 +45,9 @@ static void sys_3d_render_commands(void) {
     gbuffer_resize(w, h);
     gbuffer_t *gb = gbuffer_get();
     if (!gb || !gb->initialized) return;
+
+    // Update camera position in material before rendering
+    update_cam_pos_material();
 
     // Pass 1: Render mesh to gbuffer0
     gpu_texture_t *targets[1] = { gb->gbuffer0 };
