@@ -29,11 +29,22 @@ static void update_cam_pos_material(void) {
 
     for (int i = 0; i < mctx->bind_constants->length; i++) {
         bind_const_t *bc = (bind_const_t *)mctx->bind_constants->buffer[i];
-        if (bc->name && strcmp(bc->name, "cam_pos") == 0 && bc->vec && bc->vec->length >= 3) {
+        if (!bc->name || !bc->vec) continue;
+        if (strcmp(bc->name, "cam_pos") == 0 && bc->vec->length >= 3) {
             bc->vec->buffer[0] = cam_loc.x;
             bc->vec->buffer[1] = cam_loc.y;
             bc->vec->buffer[2] = cam_loc.z;
-            break;
+        }
+        else if (strcmp(bc->name, "point_light_pos0") == 0 && bc->vec->length >= 3) {
+            bc->vec->buffer[0] = 2.0f;
+            bc->vec->buffer[1] = 2.0f;
+            bc->vec->buffer[2] = 0.0f;
+        }
+        else if (strcmp(bc->name, "point_light_strength0") == 0) {
+            bc->vec->buffer[0] = 5.0f;
+        }
+        else if (strcmp(bc->name, "num_point_lights") == 0) {
+            bc->vec->buffer[0] = 1.0f;
         }
     }
 }

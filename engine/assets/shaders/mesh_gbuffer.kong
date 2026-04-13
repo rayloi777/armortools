@@ -13,6 +13,24 @@ const constants: {
 	cam_pos: float3;
 	shadow_enabled: float;
 	ground_y: float;
+	// Point lights (up to 4)
+	point_light_pos0: float3;
+	point_light_pos1: float3;
+	point_light_pos2: float3;
+	point_light_pos3: float3;
+	point_light_color0: float3;
+	point_light_color1: float3;
+	point_light_color2: float3;
+	point_light_color3: float3;
+	point_light_strength0: float;
+	point_light_strength1: float;
+	point_light_strength2: float;
+	point_light_strength3: float;
+	point_light_radius0: float;
+	point_light_radius1: float;
+	point_light_radius2: float;
+	point_light_radius3: float;
+	num_point_lights: float;
 };
 
 struct vert_in {
@@ -71,6 +89,36 @@ fun geometry_smith(n: float3, v: float3, l: float3, k: float): float {
 	return ggx1 * ggx2;
 }
 
+fun calc_point_light(light_pos: float3, light_color: float3, light_strength: float, light_radius: float, frag_pos: float3, n: float3, v: float3, albedo: float3, rough: float, metal: float, f0: float3): float3 {
+	var to_light: float3 = light_pos - frag_pos;
+	var dist: float = sqrt(to_light.x * to_light.x + to_light.y * to_light.y + to_light.z * to_light.z);
+	if (dist > light_radius) {
+		return float3(0.0, 0.0, 0.0);
+	}
+	var l: float3 = to_light / float3(dist, dist, dist);
+	var h: float3 = normalize(v + l);
+
+	var n_dot_l: float = max(dot(n, l), 0.0);
+	var ndf: float = distribution_ggx(n, h, rough);
+	var k: float = (rough + 1.0) * (rough + 1.0) * 0.125;
+	var g: float = geometry_smith(n, v, l, k);
+	var v_dot_h: float = max(dot(v, h), 0.0);
+	var fres: float3 = fresnel_schlick(v_dot_h, f0);
+	var numerator: float3 = fres * (ndf * g);
+	var denom: float = 4.0 * max(dot(n, v), 0.0) * n_dot_l + 0.0001;
+	var specular: float3 = numerator * (1.0 / denom);
+
+	var ks: float3 = fresnel_schlick(v_dot_h, f0);
+	var kd: float3 = (float3(1.0, 1.0, 1.0) - ks) * (1.0 - metal);
+	var diffuse: float3 = kd * albedo * 0.318309886;
+
+	// Attenuation: quadratic falloff
+	var atten: float = 1.0 - (dist / light_radius) * (dist / light_radius);
+	atten = atten * atten;
+
+	return (diffuse + specular) * light_color * light_strength * n_dot_l * atten;
+}
+
 fun mesh_gbuffer_frag(input: vert_out): float4 {
 	var n: float3 = normalize(input.wnor);
 	var v: float3 = normalize(constants.cam_pos - input.wpos);
@@ -107,6 +155,20 @@ fun mesh_gbuffer_frag(input: vert_out): float4 {
 
 	// Direct lighting
 	var lo: float3 = (diffuse + specular) * constants.light_color * constants.light_strength * n_dot_l;
+
+	// Point lights
+	if (constants.num_point_lights > 0.5) {
+		lo = lo + calc_point_light(constants.point_light_pos0, constants.point_light_color0, constants.point_light_strength0, constants.point_light_radius0, input.wpos, n, v, albedo, rough, metal, f0);
+	}
+	if (constants.num_point_lights > 1.5) {
+		lo = lo + calc_point_light(constants.point_light_pos1, constants.point_light_color1, constants.point_light_strength1, constants.point_light_radius1, input.wpos, n, v, albedo, rough, metal, f0);
+	}
+	if (constants.num_point_lights > 2.5) {
+		lo = lo + calc_point_light(constants.point_light_pos2, constants.point_light_color2, constants.point_light_strength2, constants.point_light_radius2, input.wpos, n, v, albedo, rough, metal, f0);
+	}
+	if (constants.num_point_lights > 3.5) {
+		lo = lo + calc_point_light(constants.point_light_pos3, constants.point_light_color3, constants.point_light_strength3, constants.point_light_radius3, input.wpos, n, v, albedo, rough, metal, f0);
+	}
 
 	// Ambient
 	var ambient: float3 = albedo * (constants.ambient_strength * constants.ao);
