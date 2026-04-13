@@ -454,6 +454,67 @@ static minic_val_t minic_mesh_load_arm(minic_val_t *args, int argc) {
     return minic_val_ptr(NULL);
 }
 
+// mesh_add_arm(path) -> ptr — loads .arm mesh objects into the EXISTING scene
+// without replacing it. Returns the first mesh object pointer.
+static minic_val_t minic_mesh_add_arm(minic_val_t *args, int argc) {
+    if (!g_runtime_world) return minic_val_ptr(NULL);
+
+    const char *mesh_path = (argc > 0 && args[0].type == MINIC_T_PTR) ? (const char *)args[0].p : NULL;
+    if (!mesh_path) return minic_val_ptr(NULL);
+
+    // Parse .arm file
+    scene_t *scene_raw = data_get_scene_raw(mesh_path);
+    if (!scene_raw) {
+        fprintf(stderr, "[mesh_add] Failed to load scene '%s'\n", mesh_path);
+        return minic_val_ptr(NULL);
+    }
+
+    scene_ensure_defaults(scene_raw);
+
+    if (scene_raw->name != NULL) {
+        any_map_set(data_cached_scene_raws, scene_raw->name, scene_raw);
+    }
+
+    // Do NOT call scene_remove() — keep existing scene intact.
+    // Instead, only create mesh objects from the new scene and add them.
+    int existing_count = scene_meshes ? scene_meshes->length : 0;
+
+    // Reuse material from first existing mesh (has initialized runtime/shader/pipeline).
+    // The new scene's material would have uninitialized runtime data (mat->_ == NULL).
+    material_data_t *mat = NULL;
+    if (scene_meshes != NULL && scene_meshes->length > 0) {
+        mesh_object_t *first = (mesh_object_t *)scene_meshes->buffer[0];
+        if (first) mat = first->material;
+    }
+
+    // Traverse only mesh objects and create them
+    if (scene_raw->objects != NULL && _scene_root != NULL) {
+        for (int i = 0; i < scene_raw->objects->length; i++) {
+            obj_t *o = (obj_t *)scene_raw->objects->buffer[i];
+            if (o->type && strcmp(o->type, "mesh_object") == 0 && o->spawn) {
+                scene_create_mesh_object(o, scene_raw, _scene_root, mat);
+            }
+        }
+    }
+
+    void *first_new_mesh = NULL;
+    if (scene_meshes != NULL) {
+        for (int i = existing_count; i < scene_meshes->length; i++) {
+            mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[i];
+            if (m && m->base && !first_new_mesh) {
+                first_new_mesh = m->base;
+            }
+        }
+    }
+
+    printf("[mesh_add] Added '%s' (%d new meshes, total %d)\n",
+        mesh_path,
+        scene_meshes ? scene_meshes->length - existing_count : 0,
+        scene_meshes ? scene_meshes->length : 0);
+
+    return minic_val_ptr(first_new_mesh);
+}
+
 void scene_3d_api_register(void) {
     minic_register_native("camera_3d_create", minic_camera_3d_create);
     minic_register_native("camera_3d_set_fov", minic_camera_3d_set_fov);
@@ -474,6 +535,7 @@ void scene_3d_api_register(void) {
 
     minic_register_native("light_directional", minic_light_directional);
     minic_register_native("mesh_load_arm", minic_mesh_load_arm);
+    minic_register_native("mesh_add_arm", minic_mesh_add_arm);
 
     printf("3D Scene API registered\n");
 }

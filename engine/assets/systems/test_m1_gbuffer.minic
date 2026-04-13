@@ -41,6 +41,24 @@ int init(void) {
     comp_set_bool(g_mesh_comp, entity_get(g_mesh, g_mesh_comp), "visible", 1);
     printf("Mesh entity created: %llu\n", g_mesh);
 
+    // Add cube.arm as ground plane
+    void *ground_obj = mesh_add_arm("cube.arm");
+    printf("Cube.arm loaded, ground_obj=%p\n", ground_obj);
+
+    id ground = entity_create();
+    entity_add(ground, g_pos_comp);
+    entity_add(ground, g_rot_comp);
+    entity_add(ground, g_scale_comp);
+    entity_add(ground, g_mesh_comp);
+    entity_add(ground, g_render_comp);
+    comp_set_floats(g_pos_comp, entity_get(ground, g_pos_comp), "x,y,z", 0.0, -0.5, 0.0);
+    comp_set_floats(g_rot_comp, entity_get(ground, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+    comp_set_floats(g_scale_comp, entity_get(ground, g_scale_comp), "x,y,z", 5.0, 0.1, 5.0);
+    comp_set_ptr(g_render_comp, entity_get(ground, g_render_comp), "iron_mesh_object", ground_obj);
+    comp_set_bool(g_render_comp, entity_get(ground, g_render_comp), "dirty", 1);
+    comp_set_bool(g_mesh_comp, entity_get(ground, g_mesh_comp), "visible", 1);
+    printf("Ground entity created: %llu\n", ground);
+
     // Create camera
     g_cam = entity_create();
     entity_add(g_cam, g_pos_comp);

@@ -46,6 +46,44 @@ void scene_ensure_defaults(scene_t *scene) {
         }
     }
 
+    // Ensure mesh_datas have a "nor" vertex array for PBR shading.
+    // Some .arm exports (e.g., Blender) only include pos + tex.
+    if (scene->mesh_datas != NULL) {
+        for (int m = 0; m < scene->mesh_datas->length; m++) {
+            mesh_data_t *md = (mesh_data_t *)scene->mesh_datas->buffer[m];
+            if (!md->vertex_arrays) continue;
+
+            bool has_nor = false;
+            int pos_vert_count = 0;
+            for (int v = 0; v < md->vertex_arrays->length; v++) {
+                vertex_array_t *va = (vertex_array_t *)md->vertex_arrays->buffer[v];
+                if (va->attrib && strcmp(va->attrib, "nor") == 0) has_nor = true;
+                if (va->attrib && strcmp(va->attrib, "pos") == 0 && va->values) {
+                    // short4norm = 4 values per vertex
+                    pos_vert_count = va->values->length / 4;
+                }
+            }
+
+            if (!has_nor && pos_vert_count > 0) {
+                // Create zero-filled nor array (short2norm: 2 x i16 per vertex)
+                i16_array_t *nor_vals = i16_array_create(pos_vert_count * 2);
+                nor_vals->length = pos_vert_count * 2;
+                for (int j = 0; j < nor_vals->length; j++) {
+                    nor_vals->buffer[j] = 0;
+                }
+                vertex_array_t *nor_va = GC_ALLOC_INIT(vertex_array_t, {
+                    .attrib = "nor",
+                    .data = "short2norm",
+                    .values = nor_vals,
+                });
+                // Append nor array
+                any_array_push(md->vertex_arrays, nor_va);
+                printf("[asset_loader] Added default nor array to mesh '%s' (%d verts)\n",
+                    md->name ? md->name : "?", pos_vert_count);
+            }
+        }
+    }
+
     // Camera data
     if (scene->camera_datas == NULL || scene->camera_datas->length == 0) {
         scene->camera_datas = any_array_create_from_raw(
