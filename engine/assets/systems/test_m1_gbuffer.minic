@@ -1,5 +1,5 @@
-// test_m1_gbuffer — G-buffer debug visualization test
-// Keys: 1=Normal, 2=Depth, 3=Albedo, 4=Roughness/Metallic
+// test_m1_gbuffer — G-buffer + PostFX debug visualization test
+// Keys: 1=Normal, 2=Depth, 3=Shadow, 4=SSAO, 5=Bloom
 
 id g_pos_comp = 0;
 id g_rot_comp = 0;
@@ -80,20 +80,22 @@ int step(void) {
     // Debug mode switching
     if (keyboard_started("1") != 0.0) { g_debug_mode = 0; sys_3d_set_debug_mode(0); }
     if (keyboard_started("2") != 0.0) { g_debug_mode = 1; sys_3d_set_debug_mode(1); }
-    if (keyboard_started("3") != 0.0) { g_debug_mode = 2; sys_3d_set_debug_mode(2); }
-    if (keyboard_started("4") != 0.0) { g_debug_mode = 3; sys_3d_set_debug_mode(3); }
+    if (keyboard_started("3") != 0.0) { g_debug_mode = 3; sys_3d_set_debug_mode(3); }
+    if (keyboard_started("4") != 0.0) { g_debug_mode = 4; sys_3d_set_debug_mode(4); }
+    if (keyboard_started("5") != 0.0) { g_debug_mode = 5; sys_3d_set_debug_mode(5); }
     return 0;
 }
 
 int draw(void) {
     draw_set_font("font.ttf", 16);
     draw_set_color(0xffffffff);
-    draw_string("M1: G-Buffer Debug View", 10.0, 10.0);
+    draw_string("M5: PostFX Debug View", 10.0, 10.0);
     if (g_debug_mode == 0) draw_string("Mode: Normal", 10.0, 30.0);
     if (g_debug_mode == 1) draw_string("Mode: Depth", 10.0, 30.0);
-    if (g_debug_mode == 2) draw_string("Mode: Albedo", 10.0, 30.0);
     if (g_debug_mode == 3) draw_string("Mode: Shadow Map", 10.0, 30.0);
-    draw_string("1=Normal 2=Depth 3=Albedo 4=ShadowMap", 10.0, 50.0);
+    if (g_debug_mode == 4) draw_string("Mode: SSAO", 10.0, 30.0);
+    if (g_debug_mode == 5) draw_string("Mode: Bloom", 10.0, 30.0);
+    draw_string("1=Normal 2=Depth 3=Shadow 4=SSAO 5=Bloom", 10.0, 50.0);
     draw_fps(10.0, 70.0);
     return 0;
 }

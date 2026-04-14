@@ -422,7 +422,7 @@ void sys_3d_reset_frame(void) {
 
 void sys_3d_set_debug_mode(int mode) {
     if (mode < 0) mode = 0;
-    if (mode > 4) mode = 4;
+    if (mode > 5) mode = 5;
     g_debug_mode = mode;
 }
 
