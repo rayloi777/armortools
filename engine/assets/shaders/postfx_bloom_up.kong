@@ -1,0 +1,61 @@
+// postfx_bloom_up.kong — Bloom upsample with tent filter blur
+
+#[set(everything)]
+const constants: {
+	pos: float4;
+	tex: float4;
+	col: float4;
+	texel_w: float;
+	texel_h: float;
+};
+
+#[set(everything)]
+const sampler_linear: sampler;
+
+#[set(everything)]
+const tex: tex2d;
+
+struct vert_in {
+	pos: float2;
+}
+
+struct vert_out {
+	pos: float4;
+	tex: float2;
+	col: float4;
+}
+
+fun postfx_bloom_up_vert(input: vert_in): vert_out {
+	var output: vert_out;
+	var cpos: float4 = constants.pos;
+	var ctex: float4 = constants.tex;
+	output.pos = float4(input.pos, 0.0, 1.0);
+	output.pos.xy = output.pos.xy * cpos.zw + cpos.xy;
+	output.pos.xy = output.pos.xy * 2.0 - 1.0;
+	output.pos.y = -output.pos.y;
+	output.tex = input.pos * ctex.zw + ctex.xy;
+	output.col = constants.col;
+	return output;
+}
+
+fun postfx_bloom_up_frag(input: vert_out): float4 {
+	var ts: float2 = float2(constants.texel_w, constants.texel_h);
+	var color: float4 = float4(0.0, 0.0, 0.0, 0.0);
+	color = color + sample(tex, sampler_linear, input.tex + float2(-ts.x, -ts.y)) * 1.0;
+	color = color + sample(tex, sampler_linear, input.tex + float2(0.0, -ts.y)) * 2.0;
+	color = color + sample(tex, sampler_linear, input.tex + float2( ts.x, -ts.y)) * 1.0;
+	color = color + sample(tex, sampler_linear, input.tex + float2(-ts.x, 0.0)) * 2.0;
+	color = color + sample(tex, sampler_linear, input.tex) * 4.0;
+	color = color + sample(tex, sampler_linear, input.tex + float2( ts.x, 0.0)) * 2.0;
+	color = color + sample(tex, sampler_linear, input.tex + float2(-ts.x,  ts.y)) * 1.0;
+	color = color + sample(tex, sampler_linear, input.tex + float2(0.0,  ts.y)) * 2.0;
+	color = color + sample(tex, sampler_linear, input.tex + float2( ts.x,  ts.y)) * 1.0;
+	color = color * (1.0 / 16.0);
+	return float4(color.x, color.y, color.z, 1.0);
+}
+
+#[pipe]
+struct pipe {
+	vertex = postfx_bloom_up_vert;
+	fragment = postfx_bloom_up_frag;
+}

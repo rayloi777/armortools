@@ -1,6 +1,7 @@
 #include "render3d_bridge.h"
 #include "ecs_world.h"
 #include "deferred/deferred_gbuffer.h"
+#include "deferred/deferred_postfx.h"
 #include "shadow/shadow_directional.h"
 #include <iron.h>
 #include <stdio.h>
@@ -233,13 +234,144 @@ static void sys_3d_render_commands(void) {
     render_path_submit_draw("mesh");
     gpu_end();
 
-    // Pass 3: Display
+    // --- Post-Processing ---
+    postfx_t *pfx = postfx_get();
+    if (!pfx || !pfx->initialized) {
+        // Fallback: display gbuffer0 directly
+        _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR, 0xff1a1a2e, 1.0f);
+        draw_scaled_image(gb->gbuffer0, 0.0f, 0.0f, (float)w, (float)h);
+        gpu_end();
+        g_3d_rendered = true;
+        return;
+    }
+
+    postfx_resize(w, h);
+
+    // Debug modes 1,3 show raw textures directly
+    if (g_debug_mode == 1 || g_debug_mode == 3) {
+        _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR, 0xff1a1a2e, 1.0f);
+        gpu_texture_t *debug_tex = (g_debug_mode == 1) ? gb->depth_target : sd->shadow_map;
+        draw_scaled_image(debug_tex, 0.0f, 0.0f, (float)w, (float)h);
+        gpu_end();
+        g_3d_rendered = true;
+        return;
+    }
+
+    // Copy lit scene to scene_copy for bloom input
+    gpu_texture_t *copy_targets[1] = { pfx->scene_copy };
+    gpu_begin(copy_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
+    draw_scaled_image(gb->gbuffer0, 0.0f, 0.0f, (float)w, (float)h);
+    gpu_end();
+
+    // Pass 3a: SSAO (half-res, reads depth via SSAO shader pipeline)
+    if (pfx->ssao_enabled && pfx->ssao_pipeline) {
+        gpu_texture_t *ao_targets[1] = { pfx->ao_result };
+        gpu_begin(ao_targets, 1, NULL, GPU_CLEAR_COLOR, 0xffffffff, 1.0f);
+        draw_set_pipeline(pfx->ssao_pipeline);
+        // Set constants for SSAO shader (matching Iron's draw_image layout + custom params)
+        // offset 0: pos (float4), offset 16: tex (float4), offset 32: col (float4)
+        float hw = (float)(w / 2);
+        float hh = (float)(h / 2);
+        gpu_set_float4(0, 0.0f, 0.0f, hw / w, hh / h);        // pos: fullscreen at half-res
+        gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);            // tex: full texture
+        gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);            // col: white
+        gpu_set_float(48, (float)w);                             // screen_w
+        gpu_set_float(52, (float)h);                             // screen_h
+        gpu_set_float(56, pfx->ssao_radius);                    // radius
+        gpu_set_float(60, pfx->ssao_strength);                  // strength
+        gpu_set_float(64, 0.1f);                                 // near_plane
+        gpu_set_float(68, 100.0f);                               // far_plane
+        draw_scaled_image(gb->depth_target, 0.0f, 0.0f, hw, hh);
+        draw_set_pipeline(NULL);
+        gpu_end();
+    }
+
+    // Pass 3b: Bloom downsample chain
+    if (pfx->bloom_enabled && pfx->bloom_down_pipeline) {
+        // First downsample from scene_copy with brightness extraction
+        gpu_texture_t *bd0_targets[1] = { pfx->bloom_down[0] };
+        gpu_begin(bd0_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
+        draw_set_pipeline(pfx->bloom_down_pipeline);
+        gpu_set_float4(0, 0.0f, 0.0f, 1.0f, 1.0f);
+        gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);
+        gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);
+        gpu_set_float(48, pfx->bloom_threshold);
+        draw_scaled_image(pfx->scene_copy, 0.0f, 0.0f, (float)w / 2, (float)h / 2);
+        draw_set_pipeline(NULL);
+        gpu_end();
+
+        // Progressive downsample with blur
+        for (int i = 1; i < 4; i++) {
+            gpu_texture_t *bd_targets[1] = { pfx->bloom_down[i] };
+            int bw = w >> (i + 1);
+            int bh = h >> (i + 1);
+            if (bw < 1) bw = 1;
+            if (bh < 1) bh = 1;
+            int prev_bw = w >> i;
+            int prev_bh = h >> i;
+            if (prev_bw < 1) prev_bw = 1;
+            if (prev_bh < 1) prev_bh = 1;
+            gpu_begin(bd_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
+            draw_set_pipeline(pfx->bloom_down_pipeline);
+            gpu_set_float4(0, 0.0f, 0.0f, 1.0f, 1.0f);
+            gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);
+            gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);
+            gpu_set_float(48, 0.0f); // no threshold for subsequent passes
+            draw_scaled_image(pfx->bloom_down[i - 1], 0.0f, 0.0f, (float)bw, (float)bh);
+            draw_set_pipeline(NULL);
+            gpu_end();
+        }
+
+        // Progressive upsample with tent blur
+        if (pfx->bloom_up_pipeline) {
+            for (int i = 3; i >= 1; i--) {
+                gpu_texture_t *bu_targets[1] = { pfx->bloom_up[i] };
+                int bw = w >> i;
+                int bh = h >> i;
+                if (bw < 1) bw = 1;
+                if (bh < 1) bh = 1;
+                int src_bw = w >> (i + 1);
+                int src_bh = h >> (i + 1);
+                if (src_bw < 1) src_bw = 1;
+                if (src_bh < 1) src_bh = 1;
+                gpu_begin(bu_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
+                draw_set_pipeline(pfx->bloom_up_pipeline);
+                gpu_set_float4(0, 0.0f, 0.0f, 1.0f, 1.0f);
+                gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);
+                gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);
+                gpu_set_float(48, 1.0f / (float)src_bw);
+                gpu_set_float(52, 1.0f / (float)src_bh);
+                draw_scaled_image(pfx->bloom_down[i], 0.0f, 0.0f, (float)bw, (float)bh);
+                draw_set_pipeline(NULL);
+                gpu_end();
+            }
+
+            // Final upsample to half-res bloom result
+            gpu_texture_t *bu0_targets[1] = { pfx->bloom_up[0] };
+            int src2_bw = w >> 2;
+            int src2_bh = h >> 2;
+            if (src2_bw < 1) src2_bw = 1;
+            if (src2_bh < 1) src2_bh = 1;
+            gpu_begin(bu0_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
+            draw_set_pipeline(pfx->bloom_up_pipeline);
+            gpu_set_float4(0, 0.0f, 0.0f, 1.0f, 1.0f);
+            gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);
+            gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);
+            gpu_set_float(48, 1.0f / (float)src2_bw);
+            gpu_set_float(52, 1.0f / (float)src2_bh);
+            draw_scaled_image(pfx->bloom_up[1], 0.0f, 0.0f, (float)w / 2, (float)h / 2);
+            draw_set_pipeline(NULL);
+            gpu_end();
+        }
+    }
+
+    // Pass 4: Final composite to screen
     _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR, 0xff1a1a2e, 1.0f);
     gpu_texture_t *display_tex = NULL;
     switch (g_debug_mode) {
-        case 1: display_tex = gb->depth_target; break;  // Depth
-        case 3: display_tex = sd->shadow_map; break;    // Shadow map
-        default: display_tex = gb->gbuffer0; break;      // Color/Normal/Albedo
+        case 4: display_tex = pfx->ao_result; break;         // SSAO debug
+        case 5: display_tex = pfx->bloom_down[2]; break;     // Bloom debug
+        default: display_tex = gb->gbuffer0; break;
     }
     if (display_tex) {
         draw_scaled_image(display_tex, 0.0f, 0.0f, (float)w, (float)h);
@@ -258,6 +390,7 @@ void sys_3d_init(void) {
     int h = sys_h();
     gbuffer_init(w > 0 ? w : 1280, h > 0 ? h : 720);
     shadow_init(2048);
+    postfx_init(w > 0 ? w : 1280, h > 0 ? h : 720);
     render_path_commands = sys_3d_render_commands;
     render_path_current_w = w;
     render_path_current_h = h;
@@ -266,6 +399,7 @@ void sys_3d_init(void) {
 
 void sys_3d_shutdown(void) {
     shadow_shutdown();
+    postfx_shutdown();
     gbuffer_shutdown();
     render_path_commands = NULL;
     g_3d_rendered = false;

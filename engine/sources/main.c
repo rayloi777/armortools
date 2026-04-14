@@ -34,6 +34,7 @@
 #include "ecs/mesh_bridge_3d.c"
 #include "ecs/render3d_bridge.c"
 #include "ecs/deferred/deferred_gbuffer.c"
+#include "ecs/deferred/deferred_postfx.c"
 #include "ecs/shadow/shadow_directional.c"
 
 // 3D Components

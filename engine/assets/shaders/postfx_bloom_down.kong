@@ -1,0 +1,53 @@
+// postfx_bloom_down.kong — Bloom downsample with brightness threshold
+
+#[set(everything)]
+const constants: {
+	pos: float4;
+	tex: float4;
+	col: float4;
+	threshold: float;
+};
+
+#[set(everything)]
+const sampler_linear: sampler;
+
+#[set(everything)]
+const tex: tex2d;
+
+struct vert_in {
+	pos: float2;
+}
+
+struct vert_out {
+	pos: float4;
+	tex: float2;
+	col: float4;
+}
+
+fun postfx_bloom_down_vert(input: vert_in): vert_out {
+	var output: vert_out;
+	var cpos: float4 = constants.pos;
+	var ctex: float4 = constants.tex;
+	output.pos = float4(input.pos, 0.0, 1.0);
+	output.pos.xy = output.pos.xy * cpos.zw + cpos.xy;
+	output.pos.xy = output.pos.xy * 2.0 - 1.0;
+	output.pos.y = -output.pos.y;
+	output.tex = input.pos * ctex.zw + ctex.xy;
+	output.col = constants.col;
+	return output;
+}
+
+fun postfx_bloom_down_frag(input: vert_out): float4 {
+	var texcolor: float4 = sample(tex, sampler_linear, input.tex);
+	var brightness: float = max(max(texcolor.x, texcolor.y), texcolor.z);
+	if (brightness > constants.threshold) {
+		return float4(texcolor.x, texcolor.y, texcolor.z, 1.0);
+	}
+	return float4(0.0, 0.0, 0.0, 1.0);
+}
+
+#[pipe]
+struct pipe {
+	vertex = postfx_bloom_down_vert;
+	fragment = postfx_bloom_down_frag;
+}
