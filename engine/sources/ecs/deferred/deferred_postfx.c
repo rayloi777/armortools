@@ -17,12 +17,10 @@ static gpu_pipeline_t *create_postfx_pipeline(const char *name) {
 	snprintf(vert_name, sizeof(vert_name), "%s.vert", name);
 	snprintf(frag_name, sizeof(frag_name), "%s.frag", name);
 
-	printf("PostFX: loading shader %s...\n", name);
 	gpu_shader_t *vert = sys_get_shader(vert_name);
 	gpu_shader_t *frag = sys_get_shader(frag_name);
-	printf("PostFX: shader %s loaded (vert=%p frag=%p)\n", name, (void *)vert, (void *)frag);
 	if (!vert || !frag) {
-		printf("PostFX: FAILED to load shader %s\n", name);
+		printf("PostFX: failed to load shader %s (vert=%p frag=%p)\n", name, (void *)vert, (void *)frag);
 		return NULL;
 	}
 
@@ -66,7 +64,7 @@ void postfx_init(int width, int height) {
 	g_postfx.scene_copy = gpu_create_render_target(width, height, GPU_TEXTURE_FORMAT_RGBA64);
 
 	// Load shader pipelines
-	g_postfx.ssao_pipeline = NULL; // TODO: create_postfx_pipeline("postfx_ssao");
+	g_postfx.ssao_pipeline = create_postfx_pipeline("postfx_ssao");
 	g_postfx.bloom_down_pipeline = create_postfx_pipeline("postfx_bloom_down");
 	g_postfx.bloom_up_pipeline = create_postfx_pipeline("postfx_bloom_up");
 	g_postfx.composite_pipeline = create_postfx_pipeline("postfx_compositor");
@@ -81,9 +79,7 @@ void postfx_init(int width, int height) {
 	g_postfx.bloom_strength = 0.3f;
 	g_postfx.initialized = true;
 
-	printf("PostFX initialized: %dx%d (SSAO half: %dx%d) ssao_pipe=%p bd_pipe=%p\n",
-	       width, height, hw, hh, (void *)g_postfx.ssao_pipeline, (void *)g_postfx.bloom_down_pipeline);
-	fflush(stdout);
+	printf("PostFX initialized: %dx%d (SSAO half: %dx%d)\n", width, height, hw, hh);
 }
 
 void postfx_resize(int width, int height) {
