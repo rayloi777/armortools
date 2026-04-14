@@ -1,0 +1,50 @@
+// particle_additive.kong — Additive-blend particle billboard
+// Renders camera-facing quads with emissive color added to the scene
+
+#[set(everything)]
+const constants: {
+	WVP: float4x4;
+	World: float4x4;
+	particle_color: float3;
+	particle_opacity: float;
+	cam_pos: float3;
+};
+
+#[set(everything)]
+const sampler_linear: sampler;
+
+struct vert_in {
+	pos: float4;
+	nor: float2;
+	tex: float2;
+}
+
+struct vert_out {
+	pos: float4;
+	tex: float2;
+}
+
+fun particle_additive_vert(input: vert_in): vert_out {
+	var output: vert_out;
+	output.tex = input.tex;
+	output.pos = constants.WVP * float4(input.pos.xyz, 1.0);
+	return output;
+}
+
+fun particle_additive_frag(input: vert_out): float4 {
+	// Soft circular falloff from UV center
+	var cx: float = input.tex.x - 0.5;
+	var cy: float = input.tex.y - 0.5;
+	var dist: float = sqrt(cx * cx + cy * cy) * 2.0;
+	var alpha: float = 1.0 - dist;
+	if (alpha < 0.0) { alpha = 0.0; }
+	alpha = alpha * alpha * constants.particle_opacity;
+
+	return float4(constants.particle_color.x * alpha, constants.particle_color.y * alpha, constants.particle_color.z * alpha, alpha);
+}
+
+#[pipe]
+struct pipe {
+	vertex = particle_additive_vert;
+	fragment = particle_additive_frag;
+}

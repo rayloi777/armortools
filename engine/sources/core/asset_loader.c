@@ -276,8 +276,11 @@ void scene_ensure_defaults(scene_t *scene) {
                                          GC_ALLOC_INIT(bind_const_t,
                                               {.name = "shadow_pass",
                                                .vec = f32_array_create_from_raw((f32[]){0.0f}, 1)}),
+                                         GC_ALLOC_INIT(bind_const_t,
+                                              {.name = "opacity",
+                                               .vec = f32_array_create_from_raw((f32[]){1.0f}, 1)}),
                                       },
-                                      33),
+                                      34),
                                   .bind_textures = any_array_create_from_raw(
                                       (void *[]){
                                           GC_ALLOC_INIT(bind_tex_t,

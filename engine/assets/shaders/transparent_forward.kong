@@ -1,3 +1,6 @@
+// transparent_forward.kong — Forward PBR with alpha blending for transparent objects
+// Same lighting as mesh_gbuffer but outputs alpha from opacity constant
+
 #[set(everything)]
 const constants: {
 	WVP: float4x4;
@@ -11,9 +14,7 @@ const constants: {
 	light_strength: float;
 	ambient_strength: float;
 	cam_pos: float3;
-	shadow_enabled: float;
-	shadow_pass: float;
-	ground_y: float;
+	opacity: float;
 	// Point lights (up to 4)
 	point_light_pos0: float3;
 	point_light_pos1: float3;
@@ -32,18 +33,10 @@ const constants: {
 	point_light_radius2: float;
 	point_light_radius3: float;
 	num_point_lights: float;
-	light_vp_r0: float4;
-	light_vp_r1: float4;
-	light_vp_r2: float4;
-	light_vp_r3: float4;
-	opacity: float;
 };
 
 #[set(everything)]
 const sampler_linear: sampler;
-
-#[set(everything)]
-const _shadow_map: tex2d;
 
 struct vert_in {
 	pos: float4;
@@ -56,39 +49,30 @@ struct vert_out {
 	tex: float2;
 	wpos: float3;
 	wnor: float3;
-	spos: float4;
 }
 
-fun mesh_gbuffer_vert(input: vert_in): vert_out {
+fun transparent_forward_vert(input: vert_in): vert_out {
 	var output: vert_out;
 	output.tex = input.tex;
 	var wpos: float4 = constants.World * float4(input.pos.xyz, 1.0);
 	output.wpos = wpos.xyz;
 	output.pos = constants.WVP * float4(input.pos.xyz, 1.0);
-	// Shadow space position: lvp * wpos matches the shadow pass clip computation.
-	// Shadow pass WVP = World * light_vp, Metal sees (World * light_vp)^T.
-	// Shader computes WVP * pos = light_vp^T * World^T * pos = lvp * (World * pos) = lvp * wpos.
-	var lvp: float4x4 = float4x4(constants.light_vp_r0, constants.light_vp_r1, constants.light_vp_r2, constants.light_vp_r3);
-	output.spos = lvp * wpos;
-	// Reconstruct z from xy (short2norm only stores 2 components)
+	// Reconstruct z from xy (short2norm)
 	var nx: float = input.nor.x;
 	var ny: float = input.nor.y;
 	var nz_sq: float = 1.0 - nx * nx - ny * ny;
 	var nz: float = 0.0;
 	if (nz_sq > 0.0) { nz = sqrt(nz_sq); }
-	// Transform normal via World matrix (upper 3x3)
 	var wn: float4 = constants.World * float4(nx, ny, nz, 0.0);
 	output.wnor = normalize(wn.xyz);
 	return output;
 }
 
-// Fresnel-Schlick approximation
 fun fresnel_schlick(cos_theta: float, f0: float3): float3 {
 	var t: float = pow(1.0 - cos_theta, 5.0);
 	return f0 + (float3(1.0, 1.0, 1.0) - f0) * t;
 }
 
-// GGX/Trowbridge-Reitz normal distribution function
 fun distribution_ggx(n: float3, h: float3, a: float): float {
 	var a2: float = a * a;
 	var n_dot_h: float = dot(n, h);
@@ -98,30 +82,23 @@ fun distribution_ggx(n: float3, h: float3, a: float): float {
 	return a2 / denom;
 }
 
-// Schlick-GGX geometry function
 fun geometry_schlick_ggx(n_dot_v: float, k: float): float {
 	var denom: float = n_dot_v * (1.0 - k) + k;
 	return n_dot_v / denom;
 }
 
-// Smith's method for geometry obstruction
 fun geometry_smith(n: float3, v: float3, l: float3, k: float): float {
 	var n_dot_v: float = max(dot(n, v), 0.0);
 	var n_dot_l: float = max(dot(n, l), 0.0);
-	var ggx1: float = geometry_schlick_ggx(n_dot_v, k);
-	var ggx2: float = geometry_schlick_ggx(n_dot_l, k);
-	return ggx1 * ggx2;
+	return geometry_schlick_ggx(n_dot_v, k) * geometry_schlick_ggx(n_dot_l, k);
 }
 
 fun calc_point_light(light_pos: float3, light_color: float3, light_strength: float, light_radius: float, frag_pos: float3, n: float3, v: float3, albedo: float3, rough: float, metal: float, f0: float3): float3 {
 	var to_light: float3 = light_pos - frag_pos;
 	var dist: float = sqrt(to_light.x * to_light.x + to_light.y * to_light.y + to_light.z * to_light.z);
-	if (dist > light_radius) {
-		return float3(0.0, 0.0, 0.0);
-	}
+	if (dist > light_radius) { return float3(0.0, 0.0, 0.0); }
 	var l: float3 = to_light / float3(dist, dist, dist);
 	var h: float3 = normalize(v + l);
-
 	var n_dot_l: float = max(dot(n, l), 0.0);
 	var ndf: float = distribution_ggx(n, h, rough);
 	var k: float = (rough + 1.0) * (rough + 1.0) * 0.125;
@@ -131,60 +108,38 @@ fun calc_point_light(light_pos: float3, light_color: float3, light_strength: flo
 	var numerator: float3 = fres * (ndf * g);
 	var denom: float = 4.0 * max(dot(n, v), 0.0) * n_dot_l + 0.0001;
 	var specular: float3 = numerator * (1.0 / denom);
-
 	var ks: float3 = fresnel_schlick(v_dot_h, f0);
 	var kd: float3 = (float3(1.0, 1.0, 1.0) - ks) * (1.0 - metal);
 	var diffuse: float3 = kd * albedo * 0.318309886;
-
-	// Attenuation: quadratic falloff
 	var atten: float = 1.0 - (dist / light_radius) * (dist / light_radius);
 	atten = atten * atten;
-
 	return (diffuse + specular) * light_color * light_strength * n_dot_l * atten;
 }
 
-fun mesh_gbuffer_frag(input: vert_out): float4 {
-	// Shadow pass: output depth as color for shadow map
-	if (constants.shadow_pass > 0.5) {
-		// Remap NDC z from [-1,1] to [0,1] to match the comparison below
-		var depth: float = input.pos.z * 0.5 + 0.5;
-		return float4(depth, depth, depth, 1.0);
-	}
-
+fun transparent_forward_frag(input: vert_out): float4 {
 	var n: float3 = normalize(input.wnor);
 	var v: float3 = normalize(constants.cam_pos - input.wpos);
 	var l: float3 = normalize(-constants.light_dir);
 	var h: float3 = normalize(v + l);
 
-	// Material properties
 	var albedo: float3 = constants.albedo_rgb;
 	var rough: float = max(constants.roughness, 0.04);
 	var metal: float = constants.metallic;
-
-	// Dielectric F0 = 0.04, metallic F0 = albedo
 	var f0: float3 = float3(0.04, 0.04, 0.04);
 	f0 = f0 + (albedo - f0) * metal;
 
-	// Cook-Torrance BRDF
 	var n_dot_l: float = max(dot(n, l), 0.0);
 	var ndf: float = distribution_ggx(n, h, rough);
 	var k: float = (rough + 1.0) * (rough + 1.0) * 0.125;
 	var g: float = geometry_smith(n, v, l, k);
-	var n_dot_h: float = max(dot(n, h), 0.0);
 	var v_dot_h: float = max(dot(v, h), 0.0);
 	var fres: float3 = fresnel_schlick(v_dot_h, f0);
 	var numerator: float3 = fres * (ndf * g);
 	var denom: float = 4.0 * max(dot(n, v), 0.0) * n_dot_l + 0.0001;
 	var specular: float3 = numerator * (1.0 / denom);
-
-	// Fresnel at normal incidence
 	var ks: float3 = fresnel_schlick(v_dot_h, f0);
 	var kd: float3 = (float3(1.0, 1.0, 1.0) - ks) * (1.0 - metal);
-
-	// Lambertian diffuse (multiply by 1/PI)
 	var diffuse: float3 = kd * albedo * 0.318309886;
-
-	// Direct lighting
 	var lo: float3 = (diffuse + specular) * constants.light_color * constants.light_strength * n_dot_l;
 
 	// Point lights
@@ -201,44 +156,15 @@ fun mesh_gbuffer_frag(input: vert_out): float4 {
 		lo = lo + calc_point_light(constants.point_light_pos3, constants.point_light_color3, constants.point_light_strength3, constants.point_light_radius3, input.wpos, n, v, albedo, rough, metal, f0);
 	}
 
-	// Ambient
 	var ambient: float3 = albedo * (constants.ambient_strength * constants.ao);
-
 	var color: float3 = ambient + lo;
 
-	// Shadow map comparison
-	var shadow_factor: float = 1.0;
-	if (constants.shadow_enabled > 0.5) {
-		// Perspective divide for shadow coordinates
-		var shadow_coord: float3 = input.spos.xyz / float3(input.spos.w, input.spos.w, input.spos.w);
-		// NDC [-1,1] to UV [0,1]
-		var su: float = shadow_coord.x * 0.5 + 0.5;
-		var sv: float = shadow_coord.y * 0.5 + 0.5;
-		var sz: float = shadow_coord.z * 0.5 + 0.5;
-		// Only sample if within shadow map bounds
-		if (su >= 0.0 && su <= 1.0 && sv >= 0.0 && sv <= 1.0 && sz >= 0.0 && sz <= 1.0) {
-			var shadow_sample: float4 = sample(_shadow_map, sampler_linear, float2(su, sv));
-			var shadow_depth: float = shadow_sample.r;
-			var bias: float = 0.005;
-			if (sz - bias > shadow_depth) {
-				shadow_factor = 0.3;
-			}
-		}
-	}
-
-	color = color * shadow_factor;
-
-	// Simple Reinhard tone mapping
-	color = color / (color + float3(1.0, 1.0, 1.0));
-
-	// Gamma correction (1/2.2)
-	color = pow3(color, float3(0.454545454, 0.454545454, 0.454545454));
-
-	return float4(color, 1.0);
+	// No tonemapping — compositor handles it. Output linear color with opacity.
+	return float4(color.x, color.y, color.z, constants.opacity);
 }
 
 #[pipe]
 struct pipe {
-	vertex = mesh_gbuffer_vert;
-	fragment = mesh_gbuffer_frag;
+	vertex = transparent_forward_vert;
+	fragment = transparent_forward_frag;
 }

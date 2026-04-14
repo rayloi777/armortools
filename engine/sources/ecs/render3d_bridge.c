@@ -3,6 +3,7 @@
 #include "deferred/deferred_gbuffer.h"
 #include "deferred/deferred_postfx.h"
 #include "shadow/shadow_directional.h"
+#include "transparent_bridge.h"
 #include <iron.h>
 #include <const_data.h>
 #include <stdio.h>
@@ -259,6 +260,9 @@ static void sys_3d_render_commands(void) {
         }
     }
 
+    // Hide transparent objects during G-buffer pass (opacity=0)
+    transparent_bridge_hide();
+
     render_path_submit_draw("mesh");
     gpu_end();
 
@@ -302,6 +306,16 @@ static void sys_3d_render_commands(void) {
         gpu_set_float(16, 0.1f);                                // near_plane
         gpu_set_float(20, 100.0f);                              // far_plane
         postfx_draw_fullscreen(pfx->ssao_pipeline, gb->depth_target);
+        gpu_end();
+    }
+
+    // Pass 3a.5: Transparent forward pass — render alpha-blended objects onto gbuffer0
+    // Uses the depth buffer from the deferred G-buffer pass for correct depth testing.
+    {
+        gpu_texture_t *trans_targets[1] = { gb->gbuffer0 };
+        gpu_begin(trans_targets, 1, gb->depth_target,
+                  0, 0, 1.0f);  // no clear — render on top of existing scene
+        transparent_bridge_render();
         gpu_end();
     }
 
