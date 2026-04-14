@@ -1,4 +1,12 @@
-// postfx_compositor.kong — Final composite: scene output
+// postfx_compositor.kong — Final composite: scene * AO + bloom
+// Uses screen-aligned vertices (NDC: {-1,-1, 3,-1, -1,3})
+// IMPORTANT: constants must be declared first for Iron's argument buffer layout
+
+#[set(everything)]
+const constants: {
+	ao_strength: float;
+	bloom_strength: float;
+};
 
 #[set(everything)]
 const sampler_linear: sampler;
@@ -7,13 +15,10 @@ const sampler_linear: sampler;
 const tex: tex2d;
 
 #[set(everything)]
-const constants: {
-	pos: float4;
-	tex: float4;
-	col: float4;
-	ao_strength: float;
-	bloom_strength: float;
-};
+const tex_ao: tex2d;
+
+#[set(everything)]
+const tex_bloom: tex2d;
 
 struct vert_in {
 	pos: float2;
@@ -22,26 +27,35 @@ struct vert_in {
 struct vert_out {
 	pos: float4;
 	tex: float2;
-	col: float4;
 }
 
 fun postfx_compositor_vert(input: vert_in): vert_out {
 	var output: vert_out;
-	var cpos: float4 = constants.pos;
-	var ctex: float4 = constants.tex;
 	output.pos = float4(input.pos, 0.0, 1.0);
-	output.pos.xy = output.pos.xy * cpos.zw + cpos.xy;
-	output.pos.xy = output.pos.xy * 2.0 - 1.0;
-	output.pos.y = -output.pos.y;
-	output.tex = input.pos * ctex.zw + ctex.xy;
-	output.col = constants.col;
+	output.tex = float2((input.pos.x + 1.0) * 0.5, (1.0 - input.pos.y) * 0.5);
 	return output;
 }
 
 fun postfx_compositor_frag(input: vert_out): float4 {
 	var scene: float4 = sample(tex, sampler_linear, input.tex);
+	var ao: float4 = sample(tex_ao, sampler_linear, input.tex);
+	var bloom: float4 = sample(tex_bloom, sampler_linear, input.tex);
+
 	var color: float3 = float3(scene.x, scene.y, scene.z);
-	return float4(color, 1.0);
+
+	// Apply ambient occlusion
+	color = color * float3(ao.x, ao.x, ao.x);
+
+	// Add bloom
+	color = color + float3(bloom.x, bloom.y, bloom.z) * constants.bloom_strength;
+
+	// Tonemapping (Reinhard)
+	var mapped: float3 = color / (color + float3(1.0, 1.0, 1.0));
+
+	// Gamma correction
+	mapped = float3(pow(mapped.x, 0.4545), pow(mapped.y, 0.4545), pow(mapped.z, 0.4545));
+
+	return float4(mapped.x, mapped.y, mapped.z, 1.0);
 }
 
 #[pipe]

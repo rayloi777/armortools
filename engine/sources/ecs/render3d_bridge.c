@@ -4,6 +4,7 @@
 #include "deferred/deferred_postfx.h"
 #include "shadow/shadow_directional.h"
 #include <iron.h>
+#include <const_data.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <math.h>
@@ -107,7 +108,34 @@ static void update_cam_pos_material(void) {
     }
 }
 
-// Helper: set a bind_constant float value by name on the first mesh's material
+// Draw a fullscreen quad using screen-aligned vertices (NDC coords: {-1,-1, 3,-1, -1,3}).
+// This bypasses Iron's draw_scaled_image() which uses _draw_current for viewport
+// normalization — unavailable when using gpu_begin() directly for render targets.
+// Draw a fullscreen quad using screen-aligned vertices (NDC coords: {-1,-1, 3,-1, -1,3}).
+static void postfx_draw_fullscreen(gpu_pipeline_t *pipeline, gpu_texture_t *tex) {
+    if (const_data_screen_aligned_vb == NULL) {
+        const_data_create_screen_aligned_data();
+    }
+    gpu_set_pipeline(pipeline);
+    gpu_set_vertex_buffer(const_data_screen_aligned_vb);
+    gpu_set_index_buffer(const_data_screen_aligned_ib);
+    gpu_set_texture(0, tex);
+    gpu_draw();
+}
+
+// Draw fullscreen with multiple textures (for compositor).
+// Textures must be set before calling; this just sets pipeline, VB, IB, and draws.
+static void postfx_draw_composite(gpu_pipeline_t *pipeline) {
+    if (const_data_screen_aligned_vb == NULL) {
+        const_data_create_screen_aligned_data();
+    }
+    gpu_set_pipeline(pipeline);
+    gpu_set_vertex_buffer(const_data_screen_aligned_vb);
+    gpu_set_index_buffer(const_data_screen_aligned_ib);
+    gpu_draw();
+}
+
+// Helper: set a bind-constant float value by name on the first mesh's material
 static void set_material_const(const char *name, float value) {
     if (!scene_meshes || scene_meshes->length == 0) return;
     mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[0];
@@ -257,7 +285,7 @@ static void sys_3d_render_commands(void) {
         return;
     }
 
-    // Copy lit scene to scene_copy for bloom input
+    // Copy lit scene to scene_copy for bloom input (same size as screen, draw_scaled_image works)
     gpu_texture_t *copy_targets[1] = { pfx->scene_copy };
     gpu_begin(copy_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
     draw_scaled_image(gb->gbuffer0, 0.0f, 0.0f, (float)w, (float)h);
@@ -267,22 +295,13 @@ static void sys_3d_render_commands(void) {
     if (pfx->ssao_enabled && pfx->ssao_pipeline) {
         gpu_texture_t *ao_targets[1] = { pfx->ao_result };
         gpu_begin(ao_targets, 1, NULL, GPU_CLEAR_COLOR, 0xffffffff, 1.0f);
-        draw_set_pipeline(pfx->ssao_pipeline);
-        // Set constants for SSAO shader (matching Iron's draw_image layout + custom params)
-        // offset 0: pos (float4), offset 16: tex (float4), offset 32: col (float4)
-        float hw = (float)(w / 2);
-        float hh = (float)(h / 2);
-        gpu_set_float4(0, 0.0f, 0.0f, hw / w, hh / h);        // pos: fullscreen at half-res
-        gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);            // tex: full texture
-        gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);            // col: white
-        gpu_set_float(48, (float)w);                             // screen_w
-        gpu_set_float(52, (float)h);                             // screen_h
-        gpu_set_float(56, pfx->ssao_radius);                    // radius
-        gpu_set_float(60, pfx->ssao_strength);                  // strength
-        gpu_set_float(64, 0.1f);                                 // near_plane
-        gpu_set_float(68, 100.0f);                               // far_plane
-        draw_scaled_image(gb->depth_target, 0.0f, 0.0f, hw, hh);
-        draw_set_pipeline(NULL);
+        gpu_set_float(0, (float)w);                             // screen_w
+        gpu_set_float(4, (float)h);                             // screen_h
+        gpu_set_float(8, pfx->ssao_radius);                    // radius
+        gpu_set_float(12, pfx->ssao_strength);                 // strength
+        gpu_set_float(16, 0.1f);                                // near_plane
+        gpu_set_float(20, 100.0f);                              // far_plane
+        postfx_draw_fullscreen(pfx->ssao_pipeline, gb->depth_target);
         gpu_end();
     }
 
@@ -291,34 +310,16 @@ static void sys_3d_render_commands(void) {
         // First downsample from scene_copy with brightness extraction
         gpu_texture_t *bd0_targets[1] = { pfx->bloom_down[0] };
         gpu_begin(bd0_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
-        draw_set_pipeline(pfx->bloom_down_pipeline);
-        gpu_set_float4(0, 0.0f, 0.0f, 1.0f, 1.0f);
-        gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);
-        gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);
-        gpu_set_float(48, pfx->bloom_threshold);
-        draw_scaled_image(pfx->scene_copy, 0.0f, 0.0f, (float)w / 2, (float)h / 2);
-        draw_set_pipeline(NULL);
+        gpu_set_float(0, pfx->bloom_threshold);
+        postfx_draw_fullscreen(pfx->bloom_down_pipeline, pfx->scene_copy);
         gpu_end();
 
         // Progressive downsample with blur
         for (int i = 1; i < 4; i++) {
             gpu_texture_t *bd_targets[1] = { pfx->bloom_down[i] };
-            int bw = w >> (i + 1);
-            int bh = h >> (i + 1);
-            if (bw < 1) bw = 1;
-            if (bh < 1) bh = 1;
-            int prev_bw = w >> i;
-            int prev_bh = h >> i;
-            if (prev_bw < 1) prev_bw = 1;
-            if (prev_bh < 1) prev_bh = 1;
             gpu_begin(bd_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
-            draw_set_pipeline(pfx->bloom_down_pipeline);
-            gpu_set_float4(0, 0.0f, 0.0f, 1.0f, 1.0f);
-            gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);
-            gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);
-            gpu_set_float(48, 0.0f); // no threshold for subsequent passes
-            draw_scaled_image(pfx->bloom_down[i - 1], 0.0f, 0.0f, (float)bw, (float)bh);
-            draw_set_pipeline(NULL);
+            gpu_set_float(0, 0.0f); // no threshold for subsequent passes
+            postfx_draw_fullscreen(pfx->bloom_down_pipeline, pfx->bloom_down[i - 1]);
             gpu_end();
         }
 
@@ -326,23 +327,14 @@ static void sys_3d_render_commands(void) {
         if (pfx->bloom_up_pipeline) {
             for (int i = 3; i >= 1; i--) {
                 gpu_texture_t *bu_targets[1] = { pfx->bloom_up[i] };
-                int bw = w >> i;
-                int bh = h >> i;
-                if (bw < 1) bw = 1;
-                if (bh < 1) bh = 1;
                 int src_bw = w >> (i + 1);
                 int src_bh = h >> (i + 1);
                 if (src_bw < 1) src_bw = 1;
                 if (src_bh < 1) src_bh = 1;
                 gpu_begin(bu_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
-                draw_set_pipeline(pfx->bloom_up_pipeline);
-                gpu_set_float4(0, 0.0f, 0.0f, 1.0f, 1.0f);
-                gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);
-                gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);
-                gpu_set_float(48, 1.0f / (float)src_bw);
-                gpu_set_float(52, 1.0f / (float)src_bh);
-                draw_scaled_image(pfx->bloom_down[i], 0.0f, 0.0f, (float)bw, (float)bh);
-                draw_set_pipeline(NULL);
+                gpu_set_float(0, 1.0f / (float)src_bw);
+                gpu_set_float(4, 1.0f / (float)src_bh);
+                postfx_draw_fullscreen(pfx->bloom_up_pipeline, pfx->bloom_down[i]);
                 gpu_end();
             }
 
@@ -353,28 +345,36 @@ static void sys_3d_render_commands(void) {
             if (src2_bw < 1) src2_bw = 1;
             if (src2_bh < 1) src2_bh = 1;
             gpu_begin(bu0_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
-            draw_set_pipeline(pfx->bloom_up_pipeline);
-            gpu_set_float4(0, 0.0f, 0.0f, 1.0f, 1.0f);
-            gpu_set_float4(16, 0.0f, 0.0f, 1.0f, 1.0f);
-            gpu_set_float4(32, 1.0f, 1.0f, 1.0f, 1.0f);
-            gpu_set_float(48, 1.0f / (float)src2_bw);
-            gpu_set_float(52, 1.0f / (float)src2_bh);
-            draw_scaled_image(pfx->bloom_up[1], 0.0f, 0.0f, (float)w / 2, (float)h / 2);
-            draw_set_pipeline(NULL);
+            gpu_set_float(0, 1.0f / (float)src2_bw);
+            gpu_set_float(4, 1.0f / (float)src2_bh);
+            postfx_draw_fullscreen(pfx->bloom_up_pipeline, pfx->bloom_up[1]);
             gpu_end();
         }
     }
 
     // Pass 4: Final composite to screen
     _gpu_begin(NULL, NULL, NULL, GPU_CLEAR_COLOR, 0xff1a1a2e, 1.0f);
-    gpu_texture_t *display_tex = NULL;
-    switch (g_debug_mode) {
-        case 4: display_tex = pfx->ao_result; break;         // SSAO debug
-        case 5: display_tex = pfx->bloom_down[2]; break;     // Bloom debug
-        default: display_tex = gb->gbuffer0; break;
+    if (g_debug_mode == 4 || g_debug_mode == 5) {
+        gpu_texture_t *debug_tex = (g_debug_mode == 4) ? pfx->ao_result : pfx->bloom_down[2];
+        draw_scaled_image(debug_tex, 0.0f, 0.0f, (float)w, (float)h);
     }
-    if (display_tex) {
-        draw_scaled_image(display_tex, 0.0f, 0.0f, (float)w, (float)h);
+    else if (pfx->composite_pipeline) {
+        // gpu_set_pipeline() clears current_textures[], so call it FIRST
+        gpu_set_pipeline(pfx->composite_pipeline);
+        gpu_set_float(0, pfx->ssao_strength);
+        gpu_set_float(4, pfx->bloom_strength);
+        gpu_set_texture(0, gb->gbuffer0);
+        gpu_set_texture(1, pfx->ao_result);
+        gpu_set_texture(2, pfx->bloom_up[0]);
+        if (const_data_screen_aligned_vb == NULL) {
+            const_data_create_screen_aligned_data();
+        }
+        gpu_set_vertex_buffer(const_data_screen_aligned_vb);
+        gpu_set_index_buffer(const_data_screen_aligned_ib);
+        gpu_draw();
+    }
+    else {
+        draw_scaled_image(gb->gbuffer0, 0.0f, 0.0f, (float)w, (float)h);
     }
     gpu_end();
 

@@ -11,7 +11,7 @@ static gpu_vertex_structure_t postfx_vertex_structure;
 
 // Use sys_get_shader() which correctly resolves the data path
 // sys_get_shader expects names like "postfx_ssao.vert" / "postfx_ssao.frag"
-static gpu_pipeline_t *create_postfx_pipeline(const char *name) {
+static gpu_pipeline_t *create_postfx_pipeline_format(const char *name, int format) {
 	char vert_name[128];
 	char frag_name[128];
 	snprintf(vert_name, sizeof(vert_name), "%s.vert", name);
@@ -27,6 +27,7 @@ static gpu_pipeline_t *create_postfx_pipeline(const char *name) {
 	gpu_pipeline_t *pipe = (gpu_pipeline_t *)calloc(1, sizeof(gpu_pipeline_t));
 	gpu_pipeline_init(pipe);
 	pipe->input_layout = &postfx_vertex_structure;
+	pipe->color_attachment[0] = format;
 	pipe->blend_source = GPU_BLEND_ONE;
 	pipe->blend_destination = GPU_BLEND_INV_SOURCE_ALPHA;
 	pipe->alpha_blend_source = GPU_BLEND_ONE;
@@ -37,6 +38,14 @@ static gpu_pipeline_t *create_postfx_pipeline(const char *name) {
 
 	printf("PostFX: created pipeline for %s\n", name);
 	return pipe;
+}
+
+static gpu_pipeline_t *create_postfx_pipeline(const char *name) {
+	return create_postfx_pipeline_format(name, GPU_TEXTURE_FORMAT_RGBA64);
+}
+
+static gpu_pipeline_t *create_postfx_pipeline_framebuffer(const char *name) {
+	return create_postfx_pipeline_format(name, GPU_TEXTURE_FORMAT_RGBA32);
 }
 
 void postfx_init(int width, int height) {
@@ -67,14 +76,14 @@ void postfx_init(int width, int height) {
 	g_postfx.ssao_pipeline = create_postfx_pipeline("postfx_ssao");
 	g_postfx.bloom_down_pipeline = create_postfx_pipeline("postfx_bloom_down");
 	g_postfx.bloom_up_pipeline = create_postfx_pipeline("postfx_bloom_up");
-	g_postfx.composite_pipeline = create_postfx_pipeline("postfx_compositor");
+	g_postfx.composite_pipeline = create_postfx_pipeline_framebuffer("postfx_compositor");
 
 	g_postfx.width = width;
 	g_postfx.height = height;
 	g_postfx.ssao_enabled = true;
 	g_postfx.bloom_enabled = true;
 	g_postfx.ssao_radius = 0.5f;
-	g_postfx.ssao_strength = 1.0f;
+	g_postfx.ssao_strength = 0.8f;
 	g_postfx.bloom_threshold = 0.8f;
 	g_postfx.bloom_strength = 0.3f;
 	g_postfx.initialized = true;
