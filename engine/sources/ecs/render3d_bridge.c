@@ -15,10 +15,6 @@
 // When true, the 2D overlay should NOT clear the framebuffer.
 static bool g_3d_rendered = false;
 
-// Saved bounding sphere radii for frustum culling workaround
-static float *g_saved_radii = NULL;
-static int g_saved_radii_count = 0;
-
 // Debug visualization mode: 0=Normal, 1=Depth, 2=Albedo, 3=RoughMet
 static int g_debug_mode = 0;
 
@@ -225,25 +221,6 @@ static void sys_3d_render_commands(void) {
     set_material_const("shadow_pass", 0.0f);
     set_material_const("shadow_enabled", 1.0f);
 
-    // Tighten bounding sphere radii before G-buffer pass so frustum culling
-    // actually works. Iron's transform_compute_radius uses full diagonal which
-    // makes the conservative +radius*2 test never cull anything.
-    {
-        int mesh_count = scene_meshes ? scene_meshes->length : 0;
-        if (g_saved_radii_count < mesh_count) {
-            g_saved_radii = (float *)realloc(g_saved_radii, mesh_count * sizeof(float));
-            g_saved_radii_count = mesh_count;
-        }
-        for (int i = 0; i < mesh_count; i++) {
-            mesh_object_t *mesh = (mesh_object_t *)scene_meshes->buffer[i];
-            transform_t *t = mesh->base->transform;
-            g_saved_radii[i] = t->radius;
-            // Quarter the radius: Iron's +radius*2 test uses 3*radius as
-            // culling threshold, so quartering makes the threshold ~0.75 * real_radius
-            t->radius *= 0.25f;
-        }
-    }
-
     // Bind shadow map texture via material's bind_textures/runtime system.
     // uniforms_set_material_consts() will match "_shadow_map" by name and
     // call gpu_set_texture(shader_unit, material_runtime_texture) during draw.
@@ -290,9 +267,9 @@ static void sys_3d_render_commands(void) {
     // Hide transparent objects during G-buffer pass (opacity=0)
     transparent_bridge_hide();
 
-    // Custom frustum culling: Iron's built-in cull test uses a very conservative
-    // +radius*2 threshold. We set our own tighter culling by checking each mesh
-    // against the camera's frustum planes using a standard sphere test.
+    // Custom frustum culling using correctly computed bounding spheres.
+    // Iron's built-in cull test uses a conservative +radius*2 threshold,
+    // so we apply our own standard sphere-in-frustum test (dist + radius < 0).
     if (scene_camera && scene_camera->frustum_planes && scene_camera->data->frustum_culling) {
         for (int i = 0; scene_meshes && i < scene_meshes->length; i++) {
             mesh_object_t *mesh = (mesh_object_t *)scene_meshes->buffer[i];
@@ -300,7 +277,7 @@ static void sys_3d_render_commands(void) {
             if (!obj->visible) continue;
 
             transform_t *t = obj->transform;
-            // Use the quartered radius as bounding sphere
+            // Use the bounding sphere radius (computed via Ritter's algorithm at load time)
             float radius = t->radius;
             vec4_t center = vec4_create(
                 t->world.m30,
