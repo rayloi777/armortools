@@ -1,0 +1,129 @@
+// decal_projection.kong — Deferred decal projected via depth reconstruction
+// Renders as fullscreen quad, reads depth buffer, reconstructs world position,
+// checks if pixel falls within decal AABB, and blends decal color.
+
+#[set(everything)]
+const constants: {
+	inv_vp_r0: float4;
+	inv_vp_r1: float4;
+	inv_vp_r2: float4;
+	inv_vp_r3: float4;
+	decal_pos: float3;
+	decal_half: float3;
+	decal_color: float3;
+	decal_opacity: float;
+	screen_w: float;
+	screen_h: float;
+	near_plane: float;
+	far_plane: float;
+};
+
+#[set(everything)]
+const sampler_linear: sampler;
+
+#[set(everything)]
+const depth_tex: tex2d;
+
+#[set(everything)]
+const scene_tex: tex2d;
+
+struct vert_in {
+	pos: float2;
+}
+
+struct vert_out {
+	pos: float4;
+	tex: float2;
+}
+
+fun decal_projection_vert(input: vert_in): vert_out {
+	var output: vert_out;
+	output.pos = float4(input.pos, 0.0, 1.0);
+	output.tex = float2((input.pos.x + 1.0) * 0.5, (1.0 - input.pos.y) * 0.5);
+	return output;
+}
+
+fun decal_projection_frag(input: vert_out): float4 {
+	// Sample depth
+	var depth_sample: float4 = sample(depth_tex, sampler_linear, input.tex);
+	var depth: float = depth_sample.x;
+
+	// Skip sky/background (depth near 1.0 means far plane)
+	if (depth > 0.999) {
+		var scene: float4 = sample(scene_tex, sampler_linear, input.tex);
+		return scene;
+	}
+
+	// Reconstruct NDC position from screen UV and depth
+	var ndc_x: float = input.tex.x * 2.0 - 1.0;
+	var ndc_y: float = input.tex.y * 2.0 - 1.0;
+	var ndc_z: float = depth * 2.0 - 1.0;
+
+	// Apply inverse view-projection to get world position
+	var inv_vp: float4x4 = float4x4(constants.inv_vp_r0, constants.inv_vp_r1, constants.inv_vp_r2, constants.inv_vp_r3);
+	var world_homogeneous: float4 = inv_vp * float4(ndc_x, ndc_y, ndc_z, 1.0);
+	var w: float = world_homogeneous.w;
+	if (w == 0.0) { w = 0.001; }
+	var world_pos: float3 = float3(world_homogeneous.x / w, world_homogeneous.y / w, world_homogeneous.z / w);
+
+	// Check if world position falls within the decal AABB
+	var local_pos: float3 = float3(
+		world_pos.x - constants.decal_pos.x,
+		world_pos.y - constants.decal_pos.y,
+		world_pos.z - constants.decal_pos.z
+	);
+
+	// AABB test: local_pos must be within [-decal_half, +decal_half]
+	if (abs(local_pos.x) > constants.decal_half.x) {
+		var scene: float4 = sample(scene_tex, sampler_linear, input.tex);
+		return scene;
+	}
+	if (abs(local_pos.y) > constants.decal_half.y) {
+		var scene: float4 = sample(scene_tex, sampler_linear, input.tex);
+		return scene;
+	}
+	if (abs(local_pos.z) > constants.decal_half.z) {
+		var scene: float4 = sample(scene_tex, sampler_linear, input.tex);
+		return scene;
+	}
+
+	// Compute UV within the decal volume (top-down projection: XZ plane)
+	var u: float = (local_pos.x / constants.decal_half.x + 1.0) * 0.5;
+	var v: float = (local_pos.z / constants.decal_half.z + 1.0) * 0.5;
+
+	// Circular mask for bullet-hole look
+	var dx: float = u * 2.0 - 1.0;
+	var dy: float = v * 2.0 - 1.0;
+	var dist: float = sqrt(dx * dx + dy * dy);
+	if (dist > 1.0) {
+		var scene: float4 = sample(scene_tex, sampler_linear, input.tex);
+		return scene;
+	}
+
+	// Smooth edge falloff
+	var falloff: float = 1.0 - dist;
+	falloff = falloff * falloff;
+
+	// Decal pattern: concentric rings
+	var ring: float = sin(dist * 30.0) * 0.5 + 0.5;
+	var pattern: float = ring * 0.3 + 0.7;
+
+	var decal_r: float = constants.decal_color.x * pattern;
+	var decal_g: float = constants.decal_color.y * pattern;
+	var decal_b: float = constants.decal_color.z * pattern;
+
+	// Blend with scene
+	var scene_color: float4 = sample(scene_tex, sampler_linear, input.tex);
+	var alpha: float = constants.decal_opacity * falloff;
+	var out_r: float = scene_color.x * (1.0 - alpha) + decal_r * alpha;
+	var out_g: float = scene_color.y * (1.0 - alpha) + decal_g * alpha;
+	var out_b: float = scene_color.z * (1.0 - alpha) + decal_b * alpha;
+
+	return float4(out_r, out_g, out_b, 1.0);
+}
+
+#[pipe]
+struct pipe {
+	vertex = decal_projection_vert;
+	fragment = decal_projection_frag;
+}

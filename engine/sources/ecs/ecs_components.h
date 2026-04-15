@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../components/transparency.h"
+#include "../components/decal.h"
+#include "../components/lod.h"
 
 typedef struct { float x, y, z; } comp_2d_position;
 typedef struct { float x, y, z, w; } comp_2d_rotation;
@@ -102,3 +104,5 @@ uint64_t ecs_component_comp_directional_light(void);
 uint64_t ecs_component_comp_3d_material(void);
 uint64_t ecs_component_comp_3d_transparency(void);
 uint64_t ecs_component_comp_3d_particle(void);
+uint64_t ecs_component_comp_3d_decal(void);
+uint64_t ecs_component_comp_3d_lod(void);

@@ -11,6 +11,8 @@
 # vampire_system
 # 3D ---------------
 # test_m1_gbuffer
- test_m6_transparent
+# test_m6_transparent
+# test_m7_decal
+ test_m8_optimization
  camera3d_control_system
 # ------------------

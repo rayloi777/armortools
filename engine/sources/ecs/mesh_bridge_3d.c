@@ -131,6 +131,27 @@ void mesh_bridge_3d_create_mesh(uint64_t entity) {
     if (mesh_data != NULL) {
         mesh_object_t *mesh_obj = mesh_object_create(mesh_data, mat_data);
         if (mesh_obj != NULL) {
+            // Set correct AABB dimensions so frustum culling uses accurate sphere bounds.
+            // Without this, transform_compute_dim falls back to 2*scale which produces
+            // oversized radii that defeat frustum culling.
+            if (mesh_obj->base->raw == NULL) {
+                vec4_t aabb = mesh_data_calculate_aabb(mesh_data);
+                obj_t *o_raw = GC_ALLOC_INIT(obj_t, {
+                    .name = "",
+                    .dimensions = GC_ALLOC_INIT(f32_array_t, {
+                        .buffer = gc_alloc(sizeof(float) * 3),
+                        .length = 3,
+                        .capacity = 3
+                    })
+                });
+                o_raw->dimensions->buffer[0] = aabb.x;
+                o_raw->dimensions->buffer[1] = aabb.y;
+                o_raw->dimensions->buffer[2] = aabb.z;
+                mesh_obj->base->raw = o_raw;
+                mesh_obj->base->transform->dirty = true;
+                transform_build_matrix(mesh_obj->base->transform);
+            }
+
             robj->iron_mesh_object = mesh_obj->base;
             robj->iron_transform = mesh_obj->base->transform;
             robj->dirty = true;

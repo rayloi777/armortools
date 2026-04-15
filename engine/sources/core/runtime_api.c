@@ -763,6 +763,26 @@ static minic_val_t minic_sys_3d_get_debug_mode(minic_val_t *args, int argc) {
     return minic_val_int(sys_3d_get_debug_mode());
 }
 
+static minic_val_t minic_sys_3d_stat_mesh_total(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    return minic_val_int(sys_3d_get_stats().mesh_total);
+}
+
+static minic_val_t minic_sys_3d_stat_mesh_rendered(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    return minic_val_int(sys_3d_get_stats().mesh_rendered);
+}
+
+static minic_val_t minic_sys_3d_stat_mesh_culled(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    return minic_val_int(sys_3d_get_stats().mesh_culled);
+}
+
+static minic_val_t minic_sys_3d_stat_string(minic_val_t *args, int argc) {
+    (void)args; (void)argc;
+    return minic_val_ptr((void *)sys_3d_stat_string());
+}
+
 static struct timespec g_bench_epoch = {0, 0};
 static bool g_bench_epoch_set = false;
 
@@ -1426,6 +1446,10 @@ void runtime_api_register(void) {
 
     minic_register_native("sys_3d_set_debug_mode", minic_sys_3d_set_debug_mode);
     minic_register_native("sys_3d_get_debug_mode", minic_sys_3d_get_debug_mode);
+    minic_register_native("sys_3d_stat_mesh_total", minic_sys_3d_stat_mesh_total);
+    minic_register_native("sys_3d_stat_mesh_rendered", minic_sys_3d_stat_mesh_rendered);
+    minic_register_native("sys_3d_stat_mesh_culled", minic_sys_3d_stat_mesh_culled);
+    minic_register_native("sys_3d_stat_string", minic_sys_3d_stat_string);
 
     printf("Runtime APIs registered\n");
 }

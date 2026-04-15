@@ -34,9 +34,11 @@
 #include "ecs/mesh_bridge_3d.c"
 #include "ecs/render3d_bridge.c"
 #include "ecs/transparent_bridge.c"
+#include "ecs/decal/decal_bridge.c"
 #include "ecs/deferred/deferred_gbuffer.c"
 #include "ecs/deferred/deferred_postfx.c"
 #include "ecs/shadow/shadow_directional.c"
+#include "ecs/culling/lod_bridge.c"
 
 // 3D Components
 #include "components/material.c"

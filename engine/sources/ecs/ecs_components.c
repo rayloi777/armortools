@@ -27,6 +27,8 @@ static ecs_entity_t comp_directional_light_entity = 0;
 static ecs_entity_t comp_3d_material_entity = 0;
 static ecs_entity_t comp_3d_transparency_entity = 0;
 static ecs_entity_t comp_3d_particle_entity = 0;
+static ecs_entity_t comp_3d_decal_entity = 0;
+static ecs_entity_t comp_3d_lod_entity = 0;
 
 ecs_entity_t ecs_component_comp_2d_position(void) { return comp_2d_position_entity; }
 ecs_entity_t ecs_component_comp_2d_rotation(void) { return comp_2d_rotation_entity; }
@@ -48,6 +50,8 @@ ecs_entity_t ecs_component_comp_directional_light(void) { return comp_directiona
 ecs_entity_t ecs_component_comp_3d_material(void) { return comp_3d_material_entity; }
 ecs_entity_t ecs_component_comp_3d_transparency(void) { return comp_3d_transparency_entity; }
 ecs_entity_t ecs_component_comp_3d_particle(void) { return comp_3d_particle_entity; }
+ecs_entity_t ecs_component_comp_3d_decal(void) { return comp_3d_decal_entity; }
+ecs_entity_t ecs_component_comp_3d_lod(void) { return comp_3d_lod_entity; }
 
 static ecs_entity_t register_component(ecs_world_t *ecs, const char *name, size_t size, size_t alignment) {
     ecs_component_desc_t desc = {0};
@@ -94,6 +98,8 @@ void ecs_register_components(void *world) {
     comp_3d_material_entity = register_component(ecs, "comp_3d_material", sizeof(comp_3d_material), _Alignof(comp_3d_material));
     comp_3d_transparency_entity = register_component(ecs, "comp_3d_transparency", sizeof(comp_3d_transparency), _Alignof(comp_3d_transparency));
     comp_3d_particle_entity = register_component(ecs, "comp_3d_particle", sizeof(comp_3d_particle), _Alignof(comp_3d_particle));
+    comp_3d_decal_entity = register_component(ecs, "comp_3d_decal", sizeof(comp_3d_decal), _Alignof(comp_3d_decal));
+    comp_3d_lod_entity = register_component(ecs, "comp_3d_lod", sizeof(comp_3d_lod), _Alignof(comp_3d_lod));
 }
 
 void ecs_register_builtin_fields(void) {
@@ -246,6 +252,22 @@ void ecs_register_builtin_fields(void) {
     ecs_dynamic_component_add_field(id, "color_b", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_particle, color_b));
     ecs_dynamic_component_add_field(id, "color_a", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_particle, color_a));
     ecs_dynamic_component_add_field(id, "alive", DYNAMIC_TYPE_BOOL, offsetof(comp_3d_particle, alive));
+
+    id = comp_3d_decal_entity;
+    ecs_dynamic_component_add_field(id, "size_x", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_decal, size_x));
+    ecs_dynamic_component_add_field(id, "size_y", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_decal, size_y));
+    ecs_dynamic_component_add_field(id, "size_z", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_decal, size_z));
+    ecs_dynamic_component_add_field(id, "opacity", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_decal, opacity));
+    ecs_dynamic_component_add_field(id, "color_r", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_decal, color_r));
+    ecs_dynamic_component_add_field(id, "color_g", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_decal, color_g));
+    ecs_dynamic_component_add_field(id, "color_b", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_decal, color_b));
+    ecs_dynamic_component_add_field(id, "channel", DYNAMIC_TYPE_INT, offsetof(comp_3d_decal, channel));
+
+    id = comp_3d_lod_entity;
+    ecs_dynamic_component_add_field(id, "dist0", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_lod, dist0));
+    ecs_dynamic_component_add_field(id, "dist1", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_lod, dist1));
+    ecs_dynamic_component_add_field(id, "dist2", DYNAMIC_TYPE_FLOAT, offsetof(comp_3d_lod, dist2));
+    ecs_dynamic_component_add_field(id, "active_lod", DYNAMIC_TYPE_INT, offsetof(comp_3d_lod, active_lod));
 }
 
 uint64_t ecs_get_builtin_component(const char *name) {
@@ -270,6 +292,8 @@ uint64_t ecs_get_builtin_component(const char *name) {
     if (strcmp(name, "comp_3d_material") == 0) return comp_3d_material_entity;
     if (strcmp(name, "comp_3d_transparency") == 0) return comp_3d_transparency_entity;
     if (strcmp(name, "comp_3d_particle") == 0) return comp_3d_particle_entity;
+    if (strcmp(name, "comp_3d_decal") == 0) return comp_3d_decal_entity;
+    if (strcmp(name, "comp_3d_lod") == 0) return comp_3d_lod_entity;
     return 0;
 }
 
@@ -294,5 +318,7 @@ const char *ecs_get_builtin_component_name(uint64_t component_id) {
     if (component_id == comp_3d_material_entity) return "comp_3d_material";
     if (component_id == comp_3d_transparency_entity) return "comp_3d_transparency";
     if (component_id == comp_3d_particle_entity) return "comp_3d_particle";
+    if (component_id == comp_3d_decal_entity) return "comp_3d_decal";
+    if (component_id == comp_3d_lod_entity) return "comp_3d_lod";
     return NULL;
 }

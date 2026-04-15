@@ -5,6 +5,7 @@
 #include "ecs/camera_bridge_3d.h"
 #include "ecs/mesh_bridge_3d.h"
 #include "ecs/render3d_bridge.h"
+#include "ecs/culling/lod_bridge.h"
 #include "minic_system.h"
 #include "ui_ext_api.h"
 #include <iron.h>
@@ -59,6 +60,7 @@ void game_loop_update(void) {
     // Sync 3D transforms BEFORE rendering so GPU gets up-to-date data
     camera_bridge_3d_update();
     mesh_bridge_3d_sync_transforms();
+    lod_bridge_update();
 
     sys_render();
 

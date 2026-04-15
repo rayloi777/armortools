@@ -1,0 +1,126 @@
+// test_m8_optimization — Performance & Optimization test
+// Places many objects at various distances to test frustum culling & LOD
+// Keys: 1=Normal, 2=Depth, 4=SSAO, 5=Bloom
+
+id g_pos_comp = 0;
+id g_rot_comp = 0;
+id g_scale_comp = 0;
+id g_cam_comp = 0;
+id g_mesh_comp = 0;
+id g_render_comp = 0;
+
+id g_cam = 0;
+int g_debug_mode = 0;
+int g_mesh_count = 0;
+
+int init(void) {
+    printf("\n=== M8 Optimization Test ===\n");
+
+    g_pos_comp = component_lookup("comp_3d_position");
+    g_rot_comp = component_lookup("comp_3d_rotation");
+    g_scale_comp = component_lookup("comp_3d_scale");
+    g_cam_comp = component_lookup("comp_3d_camera");
+    g_mesh_comp = component_lookup("comp_3d_mesh_renderer");
+    g_render_comp = component_lookup("RenderObject3D");
+
+    // Load ground plane
+    void *ground_obj = mesh_load_arm("cube.arm");
+    id ground = entity_create();
+    entity_add(ground, g_pos_comp);
+    entity_add(ground, g_rot_comp);
+    entity_add(ground, g_scale_comp);
+    entity_add(ground, g_mesh_comp);
+    entity_add(ground, g_render_comp);
+    comp_set_floats(g_pos_comp, entity_get(ground, g_pos_comp), "x,y,z", 0.0, -0.5, 0.0);
+    comp_set_floats(g_rot_comp, entity_get(ground, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+    comp_set_floats(g_scale_comp, entity_get(ground, g_scale_comp), "x,y,z", 20.0, 0.1, 20.0);
+    comp_set_ptr(g_render_comp, entity_get(ground, g_render_comp), "iron_mesh_object", ground_obj);
+    comp_set_bool(g_render_comp, entity_get(ground, g_render_comp), "dirty", 1);
+    comp_set_bool(g_mesh_comp, entity_get(ground, g_mesh_comp), "visible", 1);
+    g_mesh_count = 1;
+
+    // Place cubes in a grid at various distances
+    int i = 0;
+    while (i < 48) {
+        float x = (float)((i % 8) - 4) * 3.0;
+        float z = (float)((i / 8)) * 5.0 + 2.0;
+        float y = 0.5;
+
+        void *cube_obj = mesh_add_arm("cube.arm");
+        id cube = entity_create();
+        entity_add(cube, g_pos_comp);
+        entity_add(cube, g_rot_comp);
+        entity_add(cube, g_scale_comp);
+        entity_add(cube, g_mesh_comp);
+        entity_add(cube, g_render_comp);
+        comp_set_floats(g_pos_comp, entity_get(cube, g_pos_comp), "x,y,z", x, y, z);
+        comp_set_floats(g_rot_comp, entity_get(cube, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+        comp_set_floats(g_scale_comp, entity_get(cube, g_scale_comp), "x,y,z", 1.0, 1.0, 1.0);
+        comp_set_ptr(g_render_comp, entity_get(cube, g_render_comp), "iron_mesh_object", cube_obj);
+        comp_set_bool(g_render_comp, entity_get(cube, g_render_comp), "dirty", 1);
+        comp_set_bool(g_mesh_comp, entity_get(cube, g_mesh_comp), "visible", 1);
+        g_mesh_count = g_mesh_count + 1;
+        i = i + 1;
+    }
+
+    // Load ship at center
+    void *ship_obj = mesh_add_arm("ship.arm");
+    id ship = entity_create();
+    entity_add(ship, g_pos_comp);
+    entity_add(ship, g_rot_comp);
+    entity_add(ship, g_scale_comp);
+    entity_add(ship, g_mesh_comp);
+    entity_add(ship, g_render_comp);
+    comp_set_floats(g_pos_comp, entity_get(ship, g_pos_comp), "x,y,z", 0.0, 0.0, 0.0);
+    comp_set_floats(g_rot_comp, entity_get(ship, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+    comp_set_floats(g_scale_comp, entity_get(ship, g_scale_comp), "x,y,z", 1.0, 1.0, 1.0);
+    comp_set_ptr(g_render_comp, entity_get(ship, g_render_comp), "iron_mesh_object", ship_obj);
+    comp_set_bool(g_render_comp, entity_get(ship, g_render_comp), "dirty", 1);
+    comp_set_bool(g_mesh_comp, entity_get(ship, g_mesh_comp), "visible", 1);
+    g_mesh_count = g_mesh_count + 1;
+
+    // Create camera
+    g_cam = entity_create();
+    entity_add(g_cam, g_pos_comp);
+    entity_add(g_cam, g_rot_comp);
+    entity_add(g_cam, g_cam_comp);
+    comp_set_floats(g_pos_comp, entity_get(g_cam, g_pos_comp), "x,y,z", 0.0, 5.0, 12.0);
+    comp_set_floats(g_rot_comp, entity_get(g_cam, g_rot_comp), "x,y,z,w", 0.0, 0.0, 0.0, 1.0);
+    comp_set_floats(g_cam_comp, entity_get(g_cam, g_cam_comp), "fov,near_plane,far_plane", 1.047, 0.1, 100.0);
+    comp_set_bool(g_cam_comp, entity_get(g_cam, g_cam_comp), "perspective", 1);
+    comp_set_bool(g_cam_comp, entity_get(g_cam, g_cam_comp), "active", 1);
+    entity_set_name(g_cam, "main_camera");
+
+    printf("=== M8 Init Complete (%d meshes) ===\n\n", g_mesh_count);
+    return 0;
+}
+
+int step(void) {
+    if (keyboard_started("1") != 0.0) { g_debug_mode = 0; sys_3d_set_debug_mode(0); }
+    if (keyboard_started("2") != 0.0) { g_debug_mode = 1; sys_3d_set_debug_mode(1); }
+    if (keyboard_started("4") != 0.0) { g_debug_mode = 4; sys_3d_set_debug_mode(4); }
+    if (keyboard_started("5") != 0.0) { g_debug_mode = 5; sys_3d_set_debug_mode(5); }
+    return 0;
+}
+
+int draw(void) {
+    int total = sys_3d_stat_mesh_total();
+    int rendered = sys_3d_stat_mesh_rendered();
+    int culled = sys_3d_stat_mesh_culled();
+
+    draw_set_font("font.ttf", 16);
+    draw_set_color(0xffffffff);
+    draw_string("M8: Optimization Test", 10.0, 10.0);
+    if (g_debug_mode == 0) draw_string("Mode: Normal", 10.0, 30.0);
+    if (g_debug_mode == 1) draw_string("Mode: Depth", 10.0, 30.0);
+    if (g_debug_mode == 4) draw_string("Mode: SSAO", 10.0, 30.0);
+    if (g_debug_mode == 5) draw_string("Mode: Bloom", 10.0, 30.0);
+    draw_string("1=Normal 2=Depth 4=SSAO 5=Bloom", 10.0, 50.0);
+
+    // Perf stats
+    draw_set_color(0xff00ff00);
+    draw_string("---- Performance ----", 10.0, 80.0);
+    draw_fps(10.0, 100.0);
+    draw_string(sys_3d_stat_string(), 10.0, 120.0);
+    return 0;
+}

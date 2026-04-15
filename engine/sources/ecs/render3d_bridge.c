@@ -4,6 +4,7 @@
 #include "deferred/deferred_postfx.h"
 #include "shadow/shadow_directional.h"
 #include "transparent_bridge.h"
+#include "decal/decal_bridge.h"
 #include <iron.h>
 #include <const_data.h>
 #include <stdio.h>
@@ -14,11 +15,18 @@
 // When true, the 2D overlay should NOT clear the framebuffer.
 static bool g_3d_rendered = false;
 
+// Saved bounding sphere radii for frustum culling workaround
+static float *g_saved_radii = NULL;
+static int g_saved_radii_count = 0;
+
 // Debug visualization mode: 0=Normal, 1=Depth, 2=Albedo, 3=RoughMet
 static int g_debug_mode = 0;
 
 // Light view-projection matrix for shadow mapping
 static mat4_t g_light_vp;
+
+// Performance statistics (reset each frame)
+static render3d_stats_t g_stats = {0};
 
 static void compute_light_vp(void) {
     // Read light direction from material constants
@@ -217,6 +225,25 @@ static void sys_3d_render_commands(void) {
     set_material_const("shadow_pass", 0.0f);
     set_material_const("shadow_enabled", 1.0f);
 
+    // Tighten bounding sphere radii before G-buffer pass so frustum culling
+    // actually works. Iron's transform_compute_radius uses full diagonal which
+    // makes the conservative +radius*2 test never cull anything.
+    {
+        int mesh_count = scene_meshes ? scene_meshes->length : 0;
+        if (g_saved_radii_count < mesh_count) {
+            g_saved_radii = (float *)realloc(g_saved_radii, mesh_count * sizeof(float));
+            g_saved_radii_count = mesh_count;
+        }
+        for (int i = 0; i < mesh_count; i++) {
+            mesh_object_t *mesh = (mesh_object_t *)scene_meshes->buffer[i];
+            transform_t *t = mesh->base->transform;
+            g_saved_radii[i] = t->radius;
+            // Quarter the radius: Iron's +radius*2 test uses 3*radius as
+            // culling threshold, so quartering makes the threshold ~0.75 * real_radius
+            t->radius *= 0.25f;
+        }
+    }
+
     // Bind shadow map texture via material's bind_textures/runtime system.
     // uniforms_set_material_consts() will match "_shadow_map" by name and
     // call gpu_set_texture(shader_unit, material_runtime_texture) during draw.
@@ -263,8 +290,69 @@ static void sys_3d_render_commands(void) {
     // Hide transparent objects during G-buffer pass (opacity=0)
     transparent_bridge_hide();
 
+    // Custom frustum culling: Iron's built-in cull test uses a very conservative
+    // +radius*2 threshold. We set our own tighter culling by checking each mesh
+    // against the camera's frustum planes using a standard sphere test.
+    if (scene_camera && scene_camera->frustum_planes && scene_camera->data->frustum_culling) {
+        for (int i = 0; scene_meshes && i < scene_meshes->length; i++) {
+            mesh_object_t *mesh = (mesh_object_t *)scene_meshes->buffer[i];
+            object_t *obj = mesh->base;
+            if (!obj->visible) continue;
+
+            transform_t *t = obj->transform;
+            // Use the quartered radius as bounding sphere
+            float radius = t->radius;
+            vec4_t center = vec4_create(
+                t->world.m30,
+                t->world.m31,
+                t->world.m32,
+                0.0f);
+
+            bool outside = false;
+            for (int p = 0; p < scene_camera->frustum_planes->length; p++) {
+                frustum_plane_t *plane = (frustum_plane_t *)scene_camera->frustum_planes->buffer[p];
+                float dist = plane->normal.x * center.x +
+                             plane->normal.y * center.y +
+                             plane->normal.z * center.z +
+                             plane->constant;
+                if (dist + radius < 0.0f) {
+                    outside = true;
+                    break;
+                }
+            }
+            obj->culled = outside;
+            // Also toggle visibility so Iron's render loop skips culled meshes
+            // (we restore visibility after the pass)
+            if (outside) {
+                obj->visible = false;
+            }
+        }
+    }
+
     render_path_submit_draw("mesh");
     gpu_end();
+
+    // Collect stats AFTER G-buffer pass — count culled vs rendered
+    g_stats.mesh_total = scene_meshes ? scene_meshes->length : 0;
+    g_stats.mesh_culled = 0;
+    g_stats.mesh_rendered = 0;
+    for (int i = 0; scene_meshes && i < scene_meshes->length; i++) {
+        mesh_object_t *mesh = (mesh_object_t *)scene_meshes->buffer[i];
+        object_t *obj = mesh->base;
+        if (obj->culled) {
+            g_stats.mesh_culled++;
+        } else {
+            g_stats.mesh_rendered++;
+        }
+    }
+    g_stats.pass_count = 3; // shadow + gbuffer + composite
+
+    // Restore visibility on custom-culled meshes
+    for (int i = 0; scene_meshes && i < scene_meshes->length; i++) {
+        mesh_object_t *mesh = (mesh_object_t *)scene_meshes->buffer[i];
+        mesh->base->visible = true;
+        mesh->base->culled = false;
+    }
 
     // --- Post-Processing ---
     postfx_t *pfx = postfx_get();
@@ -318,6 +406,16 @@ static void sys_3d_render_commands(void) {
         transparent_bridge_render();
         gpu_end();
     }
+
+    // Pass 3a.6: Decal pass — project decals onto scene using depth buffer
+    // TODO: Disabled until decal system is fully implemented
+    // {
+    //     gpu_texture_t *decal_targets[1] = { gb->gbuffer0 };
+    //     gpu_begin(decal_targets, 1, NULL,
+    //               0, 0, 1.0f);  // no clear — blend on top of existing scene
+    //     decal_bridge_render(gb->depth_target, pfx->scene_copy, w, h);
+    //     gpu_end();
+    // }
 
     // Pass 3b: Bloom downsample chain
     if (pfx->bloom_enabled && pfx->bloom_down_pipeline) {
@@ -442,4 +540,15 @@ void sys_3d_set_debug_mode(int mode) {
 
 int sys_3d_get_debug_mode(void) {
     return g_debug_mode;
+}
+
+render3d_stats_t sys_3d_get_stats(void) {
+    return g_stats;
+}
+
+static char g_stat_buf[128];
+const char *sys_3d_stat_string(void) {
+    snprintf(g_stat_buf, sizeof(g_stat_buf), "Meshes: %d total / %d rendered / %d culled",
+             g_stats.mesh_total, g_stats.mesh_rendered, g_stats.mesh_culled);
+    return g_stat_buf;
 }

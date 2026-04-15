@@ -7,7 +7,8 @@
 static postfx_t g_postfx = {0};
 
 // Vertex structure matching Iron's draw system (pos: float2)
-static gpu_vertex_structure_t postfx_vertex_structure;
+// Shared with decal_bridge.c for fullscreen quad rendering
+gpu_vertex_structure_t postfx_vertex_structure;
 
 // Use sys_get_shader() which correctly resolves the data path
 // sys_get_shader expects names like "postfx_ssao.vert" / "postfx_ssao.frag"

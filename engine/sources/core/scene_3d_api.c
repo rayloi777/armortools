@@ -16,6 +16,44 @@
 // Access g_runtime_world from runtime_api.c
 extern game_world_t *g_runtime_world;
 
+// Fix AABB dimensions on mesh objects so frustum culling uses accurate bounds.
+// Without this, transform_compute_dim falls back to 2*scale which produces
+// oversized radii that defeat frustum culling.
+static void fix_mesh_dimensions(int start_index) {
+    if (!scene_meshes) return;
+    for (int i = start_index; i < scene_meshes->length; i++) {
+        mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[i];
+        if (!m || !m->base || !m->data) continue;
+        object_t *obj = m->base;
+
+        // Always compute correct AABB from mesh vertex data
+        vec4_t aabb = mesh_data_calculate_aabb(m->data);
+
+        if (obj->raw == NULL) {
+            obj->raw = GC_ALLOC_INIT(obj_t, {
+                .name = "",
+                .dimensions = GC_ALLOC_INIT(f32_array_t, {
+                    .buffer = gc_alloc(sizeof(float) * 3),
+                    .length = 3,
+                    .capacity = 3
+                })
+            });
+        } else if (obj->raw->dimensions == NULL) {
+            obj->raw->dimensions = GC_ALLOC_INIT(f32_array_t, {
+                .buffer = gc_alloc(sizeof(float) * 3),
+                .length = 3,
+                .capacity = 3
+            });
+        }
+
+        obj->raw->dimensions->buffer[0] = aabb.x;
+        obj->raw->dimensions->buffer[1] = aabb.y;
+        obj->raw->dimensions->buffer[2] = aabb.z;
+        obj->transform->dirty = true;
+        transform_build_matrix(obj->transform);
+    }
+}
+
 // Helper: extract 64-bit entity ID from minic value
 static uint64_t extract_entity_id3d(minic_val_t *arg) {
     if (arg->type == MINIC_T_ID) return arg->u64;
@@ -427,6 +465,9 @@ static minic_val_t minic_mesh_load_arm(minic_val_t *args, int argc) {
         return minic_val_ptr(NULL);
     }
 
+    // Fix AABB dimensions so frustum culling works correctly
+    fix_mesh_dimensions(0);
+
     // Initialize viewport dimensions to prevent division-by-zero
     render_path_current_w = sys_w();
     render_path_current_h = sys_h();
@@ -496,6 +537,9 @@ static minic_val_t minic_mesh_add_arm(minic_val_t *args, int argc) {
             }
         }
     }
+
+    // Fix AABB dimensions on new meshes so frustum culling works correctly
+    fix_mesh_dimensions(existing_count);
 
     void *first_new_mesh = NULL;
     if (scene_meshes != NULL) {

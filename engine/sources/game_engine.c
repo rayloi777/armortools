@@ -17,6 +17,8 @@
 #include "ecs/mesh_bridge_3d.h"
 #include "ecs/render3d_bridge.h"
 #include "ecs/transparent_bridge.h"
+#include "ecs/decal/decal_bridge.h"
+#include "ecs/culling/lod_bridge.h"
 #include "core/asset_loader.h"
 #include "core/scene_api.h"
 #include <iron_input.h>
@@ -142,6 +144,10 @@ void game_engine_init(void) {
 
     transparent_bridge_init(g_world);
 
+    decal_bridge_init(g_world);
+
+    lod_bridge_init(g_world);
+
     asset_loader_set_world(g_world);
     scene_api_set_world(g_world);
 
@@ -186,6 +192,8 @@ void game_engine_shutdown(void) {
     ecs_dynamic_shutdown();
     mesh_bridge_3d_shutdown();
     transparent_bridge_shutdown();
+    decal_bridge_shutdown();
+    lod_bridge_shutdown();
     camera_bridge_3d_shutdown();
     game_world_destroy(g_world);
     g_world = NULL;
