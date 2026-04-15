@@ -19,6 +19,9 @@ extern game_world_t *g_runtime_world;
 // Compute a tight bounding sphere radius from mesh vertex positions using Ritter's algorithm.
 // The vertex buffer stores INT16-packed positions with stride 4 (x,y,z,w).
 // To get world-space coordinates: divide by 32767 and multiply by scale_pos.
+// Guarded for unity build: mesh_bridge_3d.c may define the same function earlier.
+#ifndef HAVE_BOUNDING_SPHERE_RADIUS
+#define HAVE_BOUNDING_SPHERE_RADIUS
 static float calculate_bounding_sphere_radius(mesh_data_t *mesh_data) {
     vertex_array_t *positions = mesh_data_get_vertex_array(mesh_data, "pos");
     if (!positions || !positions->values || positions->values->length < 4) return 1.0f;
@@ -72,6 +75,7 @@ static float calculate_bounding_sphere_radius(mesh_data_t *mesh_data) {
 
     return radius > 0.001f ? radius : 1.0f;
 }
+#endif // HAVE_BOUNDING_SPHERE_RADIUS
 
 // Fix bounding sphere dimensions on mesh objects so frustum culling uses accurate bounds.
 // Computes a tight bounding sphere via Ritter's algorithm and stores the radius in

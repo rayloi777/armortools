@@ -5,6 +5,64 @@
 #include <iron.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
+
+// Compute a tight bounding sphere radius from mesh vertex positions using Ritter's algorithm.
+// The vertex buffer stores INT16-packed positions with stride 4 (x,y,z,w).
+// To get world-space coordinates: divide by 32767 and multiply by scale_pos.
+// Guarded for unity build: scene_3d_api.c defines the same function later.
+#ifndef HAVE_BOUNDING_SPHERE_RADIUS
+#define HAVE_BOUNDING_SPHERE_RADIUS
+static float calculate_bounding_sphere_radius(mesh_data_t *mesh_data) {
+    vertex_array_t *positions = mesh_data_get_vertex_array(mesh_data, "pos");
+    if (!positions || !positions->values || positions->values->length < 4) return 1.0f;
+
+    float scale = mesh_data->scale_pos / 32767.0f;
+    float *buf = positions->values->buffer;
+    int count = positions->values->length;
+
+    float x0 = buf[0] * scale, y0 = buf[1] * scale, z0 = buf[2] * scale;
+    float max_dist_sq = 0.0f;
+    float p1x = x0, p1y = y0, p1z = z0;
+    for (int i = 4; i < count; i += 4) {
+        float x = buf[i] * scale, y = buf[i+1] * scale, z = buf[i+2] * scale;
+        float dx = x - x0, dy = y - y0, dz = z - z0;
+        float d2 = dx*dx + dy*dy + dz*dz;
+        if (d2 > max_dist_sq) { max_dist_sq = d2; p1x = x; p1y = y; p1z = z; }
+    }
+
+    max_dist_sq = 0.0f;
+    float p2x = p1x, p2y = p1y, p2z = p1z;
+    for (int i = 0; i < count; i += 4) {
+        float x = buf[i] * scale, y = buf[i+1] * scale, z = buf[i+2] * scale;
+        float dx = x - p1x, dy = y - p1y, dz = z - p1z;
+        float d2 = dx*dx + dy*dy + dz*dz;
+        if (d2 > max_dist_sq) { max_dist_sq = d2; p2x = x; p2y = y; p2z = z; }
+    }
+
+    float cx = (p1x + p2x) * 0.5f;
+    float cy = (p1y + p2y) * 0.5f;
+    float cz = (p1z + p2z) * 0.5f;
+    float dx = p2x - p1x, dy = p2y - p1y, dz = p2z - p1z;
+    float radius = sqrtf(dx*dx + dy*dy + dz*dz) * 0.5f;
+
+    for (int i = 0; i < count; i += 4) {
+        float x = buf[i] * scale, y = buf[i+1] * scale, z = buf[i+2] * scale;
+        float ex = x - cx, ey = y - cy, ez = z - cz;
+        float dist = sqrtf(ex*ex + ey*ey + ez*ez);
+        if (dist > radius) {
+            float new_r = (radius + dist) * 0.5f;
+            float ratio = (new_r - radius) / dist;
+            cx += ex * ratio;
+            cy += ey * ratio;
+            cz += ez * ratio;
+            radius = new_r;
+        }
+    }
+
+    return radius > 0.001f ? radius : 1.0f;
+}
+#endif // HAVE_BOUNDING_SPHERE_RADIUS
 
 static game_world_t *g_mesh_3d_world = NULL;
 static ecs_query_t *g_sync_query = NULL;
@@ -131,11 +189,10 @@ void mesh_bridge_3d_create_mesh(uint64_t entity) {
     if (mesh_data != NULL) {
         mesh_object_t *mesh_obj = mesh_object_create(mesh_data, mat_data);
         if (mesh_obj != NULL) {
-            // Set correct AABB dimensions so frustum culling uses accurate sphere bounds.
-            // Without this, transform_compute_dim falls back to 2*scale which produces
-            // oversized radii that defeat frustum culling.
+            // Set correct bounding sphere dimensions so frustum culling uses accurate bounds.
             if (mesh_obj->base->raw == NULL) {
-                vec4_t aabb = mesh_data_calculate_aabb(mesh_data);
+                float radius = calculate_bounding_sphere_radius(mesh_data);
+                float dim_val = radius / sqrtf(3.0f);
                 obj_t *o_raw = GC_ALLOC_INIT(obj_t, {
                     .name = "",
                     .dimensions = GC_ALLOC_INIT(f32_array_t, {
@@ -144,9 +201,9 @@ void mesh_bridge_3d_create_mesh(uint64_t entity) {
                         .capacity = 3
                     })
                 });
-                o_raw->dimensions->buffer[0] = aabb.x;
-                o_raw->dimensions->buffer[1] = aabb.y;
-                o_raw->dimensions->buffer[2] = aabb.z;
+                o_raw->dimensions->buffer[0] = dim_val;
+                o_raw->dimensions->buffer[1] = dim_val;
+                o_raw->dimensions->buffer[2] = dim_val;
                 mesh_obj->base->raw = o_raw;
                 mesh_obj->base->transform->dirty = true;
                 transform_build_matrix(mesh_obj->base->transform);
