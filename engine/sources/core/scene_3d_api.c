@@ -16,9 +16,68 @@
 // Access g_runtime_world from runtime_api.c
 extern game_world_t *g_runtime_world;
 
-// Fix AABB dimensions on mesh objects so frustum culling uses accurate bounds.
-// Without this, transform_compute_dim falls back to 2*scale which produces
-// oversized radii that defeat frustum culling.
+// Compute a tight bounding sphere radius from mesh vertex positions using Ritter's algorithm.
+// The vertex buffer stores INT16-packed positions with stride 4 (x,y,z,w).
+// To get world-space coordinates: divide by 32767 and multiply by scale_pos.
+static float calculate_bounding_sphere_radius(mesh_data_t *mesh_data) {
+    vertex_array_t *positions = mesh_data_get_vertex_array(mesh_data, "pos");
+    if (!positions || !positions->values || positions->values->length < 4) return 1.0f;
+
+    float scale = mesh_data->scale_pos / 32767.0f;
+    float *buf = positions->values->buffer;
+    int count = positions->values->length;
+
+    // Step 1: Find the point farthest from the first vertex
+    float x0 = buf[0] * scale, y0 = buf[1] * scale, z0 = buf[2] * scale;
+    float max_dist_sq = 0.0f;
+    float p1x = x0, p1y = y0, p1z = z0;
+    for (int i = 4; i < count; i += 4) {
+        float x = buf[i] * scale, y = buf[i+1] * scale, z = buf[i+2] * scale;
+        float dx = x - x0, dy = y - y0, dz = z - z0;
+        float d2 = dx*dx + dy*dy + dz*dz;
+        if (d2 > max_dist_sq) { max_dist_sq = d2; p1x = x; p1y = y; p1z = z; }
+    }
+
+    // Step 2: Find the point farthest from P1
+    max_dist_sq = 0.0f;
+    float p2x = p1x, p2y = p1y, p2z = p1z;
+    for (int i = 0; i < count; i += 4) {
+        float x = buf[i] * scale, y = buf[i+1] * scale, z = buf[i+2] * scale;
+        float dx = x - p1x, dy = y - p1y, dz = z - p1z;
+        float d2 = dx*dx + dy*dy + dz*dz;
+        if (d2 > max_dist_sq) { max_dist_sq = d2; p2x = x; p2y = y; p2z = z; }
+    }
+
+    // Step 3: Initial sphere from P1-P2 diameter
+    float cx = (p1x + p2x) * 0.5f;
+    float cy = (p1y + p2y) * 0.5f;
+    float cz = (p1z + p2z) * 0.5f;
+    float dx = p2x - p1x, dy = p2y - p1y, dz = p2z - p1z;
+    float radius = sqrtf(dx*dx + dy*dy + dz*dz) * 0.5f;
+
+    // Step 4: Expand sphere to include all vertices
+    for (int i = 0; i < count; i += 4) {
+        float x = buf[i] * scale, y = buf[i+1] * scale, z = buf[i+2] * scale;
+        float ex = x - cx, ey = y - cy, ez = z - cz;
+        float dist = sqrtf(ex*ex + ey*ey + ez*ez);
+        if (dist > radius) {
+            float new_r = (radius + dist) * 0.5f;
+            float ratio = (new_r - radius) / dist;
+            cx += ex * ratio;
+            cy += ey * ratio;
+            cz += ez * ratio;
+            radius = new_r;
+        }
+    }
+
+    return radius > 0.001f ? radius : 1.0f;
+}
+
+// Fix bounding sphere dimensions on mesh objects so frustum culling uses accurate bounds.
+// Computes a tight bounding sphere via Ritter's algorithm and stores the radius in
+// obj->raw->dimensions. Iron's transform_compute_dim() multiplies each dimension by scale,
+// then transform_compute_radius() computes sqrt(dx²+dy²+dz²). Setting all three slots to
+// radius/sqrt(3) produces the correct bounding sphere radius: r/sqrt(3) * sqrt(3*s²) = r*s.
 static void fix_mesh_dimensions(int start_index) {
     if (!scene_meshes) return;
     for (int i = start_index; i < scene_meshes->length; i++) {
@@ -26,8 +85,11 @@ static void fix_mesh_dimensions(int start_index) {
         if (!m || !m->base || !m->data) continue;
         object_t *obj = m->base;
 
-        // Always compute correct AABB from mesh vertex data
-        vec4_t aabb = mesh_data_calculate_aabb(m->data);
+        float radius = calculate_bounding_sphere_radius(m->data);
+
+        // Store radius/sqrt(3) in each dimension slot so Iron's radius chain
+        // produces the correct bounding sphere radius after scale multiplication
+        float dim_val = radius / sqrtf(3.0f);
 
         if (obj->raw == NULL) {
             obj->raw = GC_ALLOC_INIT(obj_t, {
@@ -46,9 +108,9 @@ static void fix_mesh_dimensions(int start_index) {
             });
         }
 
-        obj->raw->dimensions->buffer[0] = aabb.x;
-        obj->raw->dimensions->buffer[1] = aabb.y;
-        obj->raw->dimensions->buffer[2] = aabb.z;
+        obj->raw->dimensions->buffer[0] = dim_val;
+        obj->raw->dimensions->buffer[1] = dim_val;
+        obj->raw->dimensions->buffer[2] = dim_val;
         obj->transform->dirty = true;
         transform_build_matrix(obj->transform);
     }
