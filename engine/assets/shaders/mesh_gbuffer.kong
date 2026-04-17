@@ -37,6 +37,9 @@ const constants: {
 	light_vp_r2: float4;
 	light_vp_r3: float4;
 	opacity: float;
+	use_albedo_tex: float;    // 1.0 = use texture, 0.0 = use albedo_rgb
+	use_metallic_tex: float;  // 1.0 = use texture, 0.0 = use metallic constant
+	use_roughness_tex: float; // 1.0 = use texture, 0.0 = use roughness constant
 };
 
 #[set(everything)]
@@ -44,6 +47,15 @@ const sampler_linear: sampler;
 
 #[set(everything)]
 const _shadow_map: tex2d;
+
+#[set(everything)]
+const tex_albedo: tex2d;
+
+#[set(everything)]
+const tex_metallic: tex2d;
+
+#[set(everything)]
+const tex_roughness: tex2d;
 
 struct vert_in {
 	pos: float4;
@@ -157,9 +169,21 @@ fun mesh_gbuffer_frag(input: vert_out): float4 {
 	var h: float3 = normalize(v + l);
 
 	// Material properties
-	var albedo: float3 = constants.albedo_rgb;
-	var rough: float = max(constants.roughness, 0.04);
-	var metal: float = constants.metallic;
+	// Albedo: texture with sRGB→Linear conversion, or constant fallback
+	var albedo_tex: float3 = sample(tex_albedo, sampler_linear, input.tex).rgb;
+	albedo_tex = pow(albedo_tex, float3(2.2));  // gamma decode sRGB→Linear
+	var albedo: float3 = (constants.use_albedo_tex > 0.5) ? albedo_tex : constants.albedo_rgb;
+
+	// Metallic: texture sample (R channel) or constant fallback
+	var metal: float = (constants.use_metallic_tex > 0.5)
+	    ? sample(tex_metallic, sampler_linear, input.tex).r
+	    : constants.metallic;
+
+	// Roughness: texture sample (R channel) or constant fallback
+	var rough: float = (constants.use_roughness_tex > 0.5)
+	    ? sample(tex_roughness, sampler_linear, input.tex).r
+	    : constants.roughness;
+	rough = max(rough, 0.04);
 
 	// Dielectric F0 = 0.04, metallic F0 = albedo
 	var f0: float3 = float3(0.04, 0.04, 0.04);
