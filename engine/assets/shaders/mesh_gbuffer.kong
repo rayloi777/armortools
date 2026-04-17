@@ -171,7 +171,7 @@ fun mesh_gbuffer_frag(input: vert_out): float4 {
 	// Material properties
 	// Albedo: texture with sRGB→Linear conversion, or constant fallback
 	var albedo_tex: float3 = sample(tex_albedo, sampler_linear, input.tex).rgb;
-	albedo_tex = pow(albedo_tex, float3(2.2));  // gamma decode sRGB→Linear
+	albedo_tex = pow3(albedo_tex, float3(2.2));  // gamma decode sRGB→Linear
 	var albedo: float3 = (constants.use_albedo_tex > 0.5) ? albedo_tex : constants.albedo_rgb;
 
 	// Metallic: texture sample (R channel) or constant fallback
