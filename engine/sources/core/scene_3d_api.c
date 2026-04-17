@@ -527,7 +527,7 @@ static minic_val_t minic_mesh_load_arm(minic_val_t *args, int argc) {
                         // Find and set the corresponding use_*_tex constant
                         for (int j = 0; j < ctx->bind_constants->length; j++) {
                             bind_const_t *bc = (bind_const_t *)ctx->bind_constants->buffer[j];
-                            if (bc->name == NULL || bc->vec == NULL) continue;
+                            if (bc->name == NULL || bc->vec == NULL || bc->vec->length < 1) continue;
 
                             // Map texture slot to use_*_tex constant
                             if (strcmp(tex->name, "tex_albedo") == 0 && strcmp(bc->name, "use_albedo_tex") == 0) {
