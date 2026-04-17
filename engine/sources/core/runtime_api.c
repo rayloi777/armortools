@@ -1443,6 +1443,8 @@ void runtime_api_register(void) {
 
     // 3D scene API (camera, mesh, entity transforms)
     scene_3d_api_register();
+    minic_register_native("material_bind_texture", minic_material_bind_texture);
+    minic_register_native("material_set_use_texture", minic_material_set_use_texture);
 
     minic_register_native("sys_3d_set_debug_mode", minic_sys_3d_set_debug_mode);
     minic_register_native("sys_3d_get_debug_mode", minic_sys_3d_get_debug_mode);

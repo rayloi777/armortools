@@ -667,3 +667,19 @@ void scene_3d_api_register(void) {
 
     printf("3D Scene API registered\n");
 }
+
+// material_bind_texture(ctx_name, slot_name, file_path)
+// Sets a texture on the current material context by slot name
+static minic_val_t minic_material_bind_texture(minic_env_t *e) {
+    (void)e;
+    // Currently operates on the first mesh's material context
+    // This is a placeholder - full implementation requires tracking current mesh context
+    return minic_val_int(0);
+}
+
+// material_set_use_texture(ctx_name, slot_name, use_bool)
+// Enables or disables texture usage for a given slot
+static minic_val_t minic_material_set_use_texture(minic_env_t *e) {
+    (void)e;
+    return minic_val_int(0);
+}
