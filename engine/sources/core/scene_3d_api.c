@@ -521,6 +521,24 @@ static minic_val_t minic_mesh_load_arm(minic_val_t *args, int argc) {
                     gpu_texture_t *img = data_get_image(tex->file);
                     printf("[mesh_load] Texture '%s' (unit '%s'): %s\n",
                         tex->file, tex->name, img ? "OK" : "NOT FOUND");
+
+                    // Set use_*_tex flag based on whether texture was successfully loaded
+                    if (tex->file != NULL && strlen(tex->file) > 0 && strcmp(tex->file, "_shadow_map") != 0) {
+                        // Find and set the corresponding use_*_tex constant
+                        for (int j = 0; j < ctx->bind_constants->length; j++) {
+                            bind_const_t *bc = (bind_const_t *)ctx->bind_constants->buffer[j];
+                            if (bc->name == NULL || bc->vec == NULL) continue;
+
+                            // Map texture slot to use_*_tex constant
+                            if (strcmp(tex->name, "tex_albedo") == 0 && strcmp(bc->name, "use_albedo_tex") == 0) {
+                                bc->vec->buffer[0] = img ? 1.0f : 0.0f;
+                            } else if (strcmp(tex->name, "tex_metallic") == 0 && strcmp(bc->name, "use_metallic_tex") == 0) {
+                                bc->vec->buffer[0] = img ? 1.0f : 0.0f;
+                            } else if (strcmp(tex->name, "tex_roughness") == 0 && strcmp(bc->name, "use_roughness_tex") == 0) {
+                                bc->vec->buffer[0] = img ? 1.0f : 0.0f;
+                            }
+                        }
+                    }
                 }
             }
         }
