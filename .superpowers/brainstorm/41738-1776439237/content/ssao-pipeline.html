@@ -1,0 +1,58 @@
+<h2>SSAO 管線流程與潛在問題</h2>
+<p class="subtitle">深入分析 engine SSAO 顯示效果問題</p>
+
+<div class="section">
+<h3>Pass 3a: SSAO (半分辨率)</h3>
+<div style="background:#1e1e2e;padding:16px;border-radius:8px;font-family:monospace;font-size:13px;line-height:1.6">
+<div style="color:#89b4fa">// postfx_ssao.kong</div>
+<div style="color:#cdd6f4">1. 讀取 <span style="color:#f38ba8">depth_target</span> (全分辨率深度)</div>
+<div style="color:#cdd6f4">2. 線性化深度 + 16方向採樣</div>
+<div style="color:#cdd6f4">3. 輸出到 <span style="color:#a6e3a1">ao_result</span> @ <span style="color:#f9e2af">width/2 × height/2</span></div>
+<div style="margin-top:8px;color:#6c7086">ao_result 格式: RGBA64</div>
+<div style="color:#6c7086">默認參數: radius=0.5, strength=0.8, near=0.1, far=100.0</div>
+</div>
+</div>
+
+<div class="section">
+<h3>Pass 4: Compositor (全分辨率)</h3>
+<div style="background:#1e1e2e;padding:16px;border-radius:8px;font-family:monospace;font-size:13px;line-height:1.6">
+<div style="color:#89b4fa">// postfx_compositor.kong</div>
+<div style="color:#cdd6f4">1. 讀取 gbuffer0 (全分辨率)</div>
+<div style="color:#cdd6f4">2. 讀取 ao_result @ <span style="color:#f9e2af">width/2 × height/2</span></div>
+<div style="color:#cdd6f4">3. <span style="color:#f38ba8">問題:</span> 使用全分辨率UV採樣半分辨率紋理</div>
+<div style="color:#cdd6f4">4. color * ao → 輸出到屏幕</div>
+</div>
+</div>
+
+<div class="section">
+<h3>🔴 核心問題: 分辨率不匹配</h3>
+<div style="background:#2d1f1f;padding:16px;border-radius:8px;border:1px solid #f38ba8">
+<p style="color:#f38ba8;font-weight:bold">ao_result 是半分辨率 (W/2 × H/2)，但 compositor 用全分辨率 UV 採樣</p>
+<p style="color:#cdd6f4">Compositor 紋理坐標范圍 [0,1]，但 ao_result 實際隻有 [0,0.5] × [0,0.5] 的有效區域</p>
+<p style="color:#6c7086">→ 採樣坐標嚴重重疊，AO 效果混亂</p>
+</div>
+</div>
+
+<div class="section">
+<h3>其他可能問題</h3>
+<div class="pros-cons">
+<div class="pros">
+<h4>可能原因</h4>
+<ul>
+<li><strong>分辨率不匹配</strong> — 最可能，AAO紋理被壓縮到1/4區域</li>
+<li><strong>深度值範圍</strong> — near/far 設置與實際場景不匹配</li>
+<li><strong>Blend 模式</strong> — pipeline blend 設置可能不正確</li>
+<li><strong>Clear color</strong> — 0xffffffff 可能影響初始深度</li>
+</ul>
+</div>
+<div class="cons">
+<h4>不太可能</h4>
+<ul>
+<li><strong>Shader 邏輯</strong> — 16採樣算法本身看起來合理</li>
+<li><strong>紋理格式</strong> — RGBA64 足夠存儲單通道 AO</li>
+</ul>
+</div>
+</div>
+</div>
+
+<p style="color:#6c7086;font-size:12px;margin-top:24px">調試模式: 按 4 顯示 ao_result，按 5 顯示 bloom_down[2]</p>

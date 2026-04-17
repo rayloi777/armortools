@@ -1,6 +1,6 @@
-// postfx_ssao.kong — Screen-Space Ambient Occlusion
-// Uses screen-aligned vertices (NDC: {-1,-1, 3,-1, -1,3})
-// Simple depth-based occlusion with 16 samples
+// postfx_ssao.kong — Screen-Space Ambient Occlusion with view-space normals
+// Reconstructs view-space position from depth via inverse projection matrix
+// Computes normals via screen-space derivatives, then does hemisphere sampling
 
 #[set(everything)]
 const constants: {
@@ -10,6 +10,11 @@ const constants: {
 	strength: float;
 	near_plane: float;
 	far_plane: float;
+	// Inverse projection matrix (column-major, 4x4)
+	inv_proj_r0: float4;
+	inv_proj_r1: float4;
+	inv_proj_r2: float4;
+	inv_proj_r3: float4;
 };
 
 #[set(everything)]
@@ -34,53 +39,159 @@ fun postfx_ssao_vert(input: vert_in): vert_out {
 	return output;
 }
 
-fun linearize_depth(depth: float): float {
-	var ndc_z: float = depth * 2.0 - 1.0;
-	var n: float = constants.near_plane;
-	var f: float = constants.far_plane;
-	return (2.0 * n * f) / (f + n - ndc_z * (f - n));
+// Reconstruct view-space position from depth texture using inverse projection
+fun reconstruct_view_pos(uv: float2, raw_depth: float): float3 {
+	// NDC coordinates
+	var ndc_x: float = uv.x * 2.0 - 1.0;
+	var ndc_y: float = (1.0 - uv.y) * 2.0 - 1.0;
+	var ndc_z: float = raw_depth * 2.0 - 1.0;
+
+	// Reconstruct clip-space position
+	var clip_pos: float4 = float4(ndc_x, ndc_y, ndc_z, 1.0);
+
+	// Apply inverse projection to get view-space position
+	var inv_proj: float4x4 = float4x4(
+		constants.inv_proj_r0,
+		constants.inv_proj_r1,
+		constants.inv_proj_r2,
+		constants.inv_proj_r3
+	);
+	var view_pos: float4 = inv_proj * clip_pos;
+	view_pos = view_pos / view_pos.w;
+
+	return float3(view_pos.x, view_pos.y, view_pos.z);
+}
+
+// Compute view-space normal from position using screen-space derivatives
+fun compute_normal(uv: float2): float3 {
+	var texel_size: float2 = float2(1.0 / constants.screen_w, 1.0 / constants.screen_h);
+
+	// Reconstruct positions at 4 neighbors
+	var p_left: float3 = reconstruct_view_pos(uv + float2(-texel_size.x, 0.0),
+		sample(tex, sampler_linear, uv + float2(-texel_size.x, 0.0)).r);
+	var p_right: float3 = reconstruct_view_pos(uv + float2(texel_size.x, 0.0),
+		sample(tex, sampler_linear, uv + float2(texel_size.x, 0.0)).r);
+	var p_top: float3 = reconstruct_view_pos(uv + float2(0.0, -texel_size.y),
+		sample(tex, sampler_linear, uv + float2(0.0, -texel_size.y)).r);
+	var p_bottom: float3 = reconstruct_view_pos(uv + float2(0.0, texel_size.y),
+		sample(tex, sampler_linear, uv + float2(0.0, texel_size.y)).r);
+
+	// Compute tangent and bitangent
+	var tangent: float3 = p_right - p_left;
+	var bitangent: float3 = p_top - p_bottom;
+
+	// Cross product gives view-space normal (flipped to face camera)
+	var normal: float3 = cross(tangent, bitangent);
+	if (normal.z > 0.0) { normal = -normal; }
+	return normalize(normal);
+}
+
+// Get sample offset in tangent space (golden-ratio disk pattern)
+fun get_sample_offset(i: int, rot: float): float3 {
+	// Golden ratio based sample directions (tangent space)
+	// These are pre-computed as vec3(tx, ty, tz) where tz is along normal
+	var sx: float;
+	var sy: float;
+	var sz: float;
+
+	if (i == 0) { sx = 0.04977; sy = 0.04471; sz = 0.04960; }
+	else if (i == 1) { sx = -0.03787; sy = -0.04112; sz = 0.04503; }
+	else if (i == 2) { sx = -0.02565; sy = -0.01283; sz = 0.05105; }
+	else if (i == 3) { sx = -0.00199; sy = -0.00502; sz = 0.04997; }
+	else if (i == 4) { sx = 0.01814; sy = -0.01514; sz = 0.04773; }
+	else if (i == 5) { sx = 0.03159; sy = 0.00744; sz = 0.04399; }
+	else if (i == 6) { sx = 0.02895; sy = 0.03121; sz = 0.03922; }
+	else if (i == 7) { sx = 0.01524; sy = 0.04477; sz = 0.03441; }
+	else if (i == 8) { sx = -0.01234; sy = 0.04411; sz = 0.02995; }
+	else if (i == 9) { sx = -0.03366; sy = 0.02773; sz = 0.02683; }
+	else if (i == 10) { sx = -0.04108; sy = 0.00368; sz = 0.02544; }
+	else if (i == 11) { sx = -0.03330; sy = -0.02027; sz = 0.02610; }
+	else if (i == 12) { sx = -0.01399; sy = -0.03827; sz = 0.02863; }
+	else if (i == 13) { sx = 0.00999; sy = -0.04419; sz = 0.03249; }
+	else if (i == 14) { sx = 0.03207; sy = -0.03617; sz = 0.03672; }
+	else { sx = 0.04877; sy = -0.02039; sz = 0.03987; }
+
+	// Apply rotation around normal
+	var cs: float = cos(rot);
+	var sn: float = sin(rot);
+	var rx: float = sx * cs - sy * sn;
+	var ry: float = sx * sn + sy * cs;
+
+	return float3(rx, ry, sz);
 }
 
 fun postfx_ssao_frag(input: vert_out): float4 {
-	var depth_sample: float4 = sample(tex, sampler_linear, input.tex);
-	var depth: float = depth_sample.r;
-	if (depth >= 1.0) {
+	var raw_depth: float = sample(tex, sampler_linear, input.tex).r;
+
+	// Sky/far plane = no occlusion
+	if (raw_depth >= 1.0) {
 		return float4(1.0, 1.0, 1.0, 1.0);
 	}
 
-	var center_d: float = linearize_depth(depth);
-	var occlusion: float = 0.0;
-	var num_samples: float = 16.0;
+	// Reconstruct view-space position and normal
+	var center_pos: float3 = reconstruct_view_pos(input.tex, raw_depth);
+	var normal: float3 = compute_normal(input.tex);
 
-	// Per-pixel rotation for direction diversity
+	// Build TBN matrix to orient hemisphere samples to surface normal
+	var up: float3 = float3(0.0, 1.0, 0.0);
+	if (abs(normal.y) > 0.99) { up = float3(1.0, 0.0, 0.0); }
+	var tangent: float3 = normalize(cross(up, normal));
+	var bitangent: float3 = cross(normal, tangent);
+
+	// Per-pixel random rotation
 	var rot: float = (input.tex.x * constants.screen_w * 7.13 + input.tex.y * constants.screen_h * 11.71) * 3.14159;
 
-	// Sample in a disk pattern with 16 directions
+	var occlusion: float = 0.0;
+	var num_valid: float = 0.0;
+
+	// Hemisphere sampling - 16 samples
 	for (var i: int = 0; i < 16; i += 1) {
-		var angle: float = float(i) * 0.3927 + rot;  // 0.3927 = 2*PI/16
-		var dist: float = constants.radius * (0.25 + 0.75 * float(i) / 16.0);
+		// Get rotated sample offset in tangent space
+		var sample_ts: float3 = get_sample_offset(i, rot);
 
-		var offset: float2 = float2(cos(angle), sin(angle)) * dist;
-		var sample_uv: float2 = input.tex + offset / float2(constants.screen_w, constants.screen_h);
+		// Transform to view space
+		var sample_dir: float3 = sample_ts.x * tangent + sample_ts.y * bitangent + sample_ts.z * normal;
+		sample_dir = normalize(sample_dir);
 
-		var sd: float4 = sample(tex, sampler_linear, sample_uv);
-		var sample_d: float = sd.r;
-		if (sample_d < 1.0) {
-			var sample_lin: float = linearize_depth(sample_d);
-			var diff: float = center_d - sample_lin;
+		// Skip if pointing backwards
+		if (dot(sample_dir, normal) >= 0.0) {
+			// Sample position in view space
+			var sample_pos: float3 = center_pos + sample_dir * constants.radius;
 
-			// Range check: only occlude if sample is in front and within radius
-			var range: float = 0.5;
-			if (diff > 0.001 && diff < range) {
-				// Smooth falloff
-				var fade: float = 1.0 - diff / range;
-				occlusion = occlusion + fade * fade;
+			// Project to UV offset (scale by depth for perspective correct sampling)
+			var depth_scale: float = constants.radius / max(-sample_pos.z, 0.1);
+			var uv_offset: float2 = float2(sample_dir.x, -sample_dir.y) * depth_scale * 0.5;
+
+			var sample_uv: float2 = input.tex + uv_offset;
+
+			// Bounds check
+			if (sample_uv.x >= 0.0 && sample_uv.x <= 1.0 && sample_uv.y >= 0.0 && sample_uv.y <= 1.0) {
+				// Get depth at sample UV
+				var sample_raw_depth: float = sample(tex, sampler_linear, sample_uv).r;
+				if (sample_raw_depth < 1.0) {
+					// Reconstruct sample view position
+					var sample_recon_pos: float3 = reconstruct_view_pos(sample_uv, sample_raw_depth);
+
+					// Check occlusion: if sample is in front of our sample point
+					var diff_z: float = sample_recon_pos.z - sample_pos.z;
+
+					// Only count if within range
+					var range_check: float = 0.5;
+					if (diff_z < -0.01 && diff_z > -range_check) {
+						var falloff: float = 1.0 - (-diff_z) / range_check;
+						occlusion = occlusion + falloff * falloff;
+					}
+					num_valid = num_valid + 1.0;
+				}
 			}
 		}
 	}
 
+	// Avoid division by zero
+	if (num_valid < 1.0) { num_valid = 1.0; }
+
 	// Normalize and apply strength
-	occlusion = (occlusion / num_samples) * constants.strength;
+	occlusion = (occlusion / num_valid) * constants.strength;
 	occlusion = clamp(occlusion, 0.0, 1.0);
 
 	var ao: float = 1.0 - occlusion;

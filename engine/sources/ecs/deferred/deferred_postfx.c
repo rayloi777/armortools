@@ -60,6 +60,7 @@ void postfx_init(int width, int height) {
 	int hh = height / 2;
 
 	g_postfx.ao_result = gpu_create_render_target(hw, hh, GPU_TEXTURE_FORMAT_RGBA64);
+	g_postfx.ssao_upsampled = gpu_create_render_target(width, height, GPU_TEXTURE_FORMAT_RGBA64);
 
 	// Bloom downsample chain: 1/2, 1/4, 1/8, 1/16
 	int bw = width;
@@ -83,8 +84,8 @@ void postfx_init(int width, int height) {
 	g_postfx.height = height;
 	g_postfx.ssao_enabled = true;
 	g_postfx.bloom_enabled = true;
-	g_postfx.ssao_radius = 0.5f;
-	g_postfx.ssao_strength = 0.8f;
+	g_postfx.ssao_radius = 0.15f;
+	g_postfx.ssao_strength = 0.5f;
 	g_postfx.bloom_threshold = 0.8f;
 	g_postfx.bloom_strength = 0.3f;
 	g_postfx.initialized = true;
@@ -101,6 +102,7 @@ void postfx_resize(int width, int height) {
 	gpu_pipeline_t *comp = g_postfx.composite_pipeline;
 
 	g_postfx.ao_result = NULL;
+	g_postfx.ssao_upsampled = NULL;
 	for (int i = 0; i < 4; i++) {
 		g_postfx.bloom_down[i] = NULL;
 		g_postfx.bloom_up[i] = NULL;
@@ -111,6 +113,7 @@ void postfx_resize(int width, int height) {
 	int hw = width / 2;
 	int hh = height / 2;
 	g_postfx.ao_result = gpu_create_render_target(hw, hh, GPU_TEXTURE_FORMAT_RGBA64);
+	g_postfx.ssao_upsampled = gpu_create_render_target(width, height, GPU_TEXTURE_FORMAT_RGBA64);
 	int bw = width, bh = height;
 	for (int i = 0; i < 4; i++) {
 		bw = bw > 1 ? bw / 2 : 1;
@@ -132,6 +135,7 @@ void postfx_resize(int width, int height) {
 void postfx_shutdown(void) {
 	if (!g_postfx.initialized) return;
 	g_postfx.ao_result = NULL;
+	g_postfx.ssao_upsampled = NULL;
 	for (int i = 0; i < 4; i++) {
 		g_postfx.bloom_down[i] = NULL;
 		g_postfx.bloom_up[i] = NULL;

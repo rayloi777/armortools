@@ -172,17 +172,22 @@ fun mesh_gbuffer_frag(input: vert_out): float4 {
 	// Albedo: texture with sRGB→Linear conversion, or constant fallback
 	var albedo_tex: float3 = sample(tex_albedo, sampler_linear, input.tex).rgb;
 	albedo_tex = pow3(albedo_tex, float3(2.2));  // gamma decode sRGB→Linear
-	var albedo: float3 = (constants.use_albedo_tex > 0.5) ? albedo_tex : constants.albedo_rgb;
+	var albedo: float3 = constants.albedo_rgb;
+	if (constants.use_albedo_tex > 0.5) {
+		albedo = albedo_tex;
+	}
 
 	// Metallic: texture sample (R channel) or constant fallback
-	var metal: float = (constants.use_metallic_tex > 0.5)
-	    ? sample(tex_metallic, sampler_linear, input.tex).r
-	    : constants.metallic;
+	var metal: float = constants.metallic;
+	if (constants.use_metallic_tex > 0.5) {
+		metal = sample(tex_metallic, sampler_linear, input.tex).r;
+	}
 
 	// Roughness: texture sample (R channel) or constant fallback
-	var rough: float = (constants.use_roughness_tex > 0.5)
-	    ? sample(tex_roughness, sampler_linear, input.tex).r
-	    : constants.roughness;
+	var rough: float = constants.roughness;
+	if (constants.use_roughness_tex > 0.5) {
+		rough = sample(tex_roughness, sampler_linear, input.tex).r;
+	}
 	rough = max(rough, 0.04);
 
 	// Dielectric F0 = 0.04, metallic F0 = albedo

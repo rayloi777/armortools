@@ -362,6 +362,9 @@ static void sys_3d_render_commands(void) {
 
     // Pass 3a: SSAO (half-res, reads depth via SSAO shader pipeline)
     if (pfx->ssao_enabled && pfx->ssao_pipeline) {
+        // Compute inverse projection matrix for view-space position reconstruction
+        mat4_t inv_proj = mat4_inv(main_cam->p);
+
         gpu_texture_t *ao_targets[1] = { pfx->ao_result };
         gpu_begin(ao_targets, 1, NULL, GPU_CLEAR_COLOR, 0xffffffff, 1.0f);
         gpu_set_float(0, (float)w);                             // screen_w
@@ -370,11 +373,35 @@ static void sys_3d_render_commands(void) {
         gpu_set_float(12, pfx->ssao_strength);                 // strength
         gpu_set_float(16, 0.1f);                                // near_plane
         gpu_set_float(20, 100.0f);                              // far_plane
+        // Inverse projection matrix (column-major, 4 vec4 starting at offset 24)
+        gpu_set_float(24, inv_proj.m00); gpu_set_float(28, inv_proj.m10);
+        gpu_set_float(32, inv_proj.m20); gpu_set_float(36, inv_proj.m30);
+        gpu_set_float(40, inv_proj.m01); gpu_set_float(44, inv_proj.m11);
+        gpu_set_float(48, inv_proj.m21); gpu_set_float(52, inv_proj.m31);
+        gpu_set_float(56, inv_proj.m02); gpu_set_float(60, inv_proj.m12);
+        gpu_set_float(64, inv_proj.m22); gpu_set_float(68, inv_proj.m32);
+        gpu_set_float(72, inv_proj.m03); gpu_set_float(76, inv_proj.m13);
+        gpu_set_float(80, inv_proj.m23); gpu_set_float(84, inv_proj.m33);
         postfx_draw_fullscreen(pfx->ssao_pipeline, gb->depth_target);
         gpu_end();
+
+        // Pass 3a.5: SSAO upsample (half-res → full-res)
+        // Reuse bloom_up_pipeline for bilinear upscale of SSAO result
+        if (pfx->bloom_up_pipeline && pfx->ssao_upsampled) {
+            gpu_texture_t *ssao_up_targets[1] = { pfx->ssao_upsampled };
+            int hw = w / 2;
+            int hh = h / 2;
+            if (hw < 1) hw = 1;
+            if (hh < 1) hh = 1;
+            gpu_begin(ssao_up_targets, 1, NULL, GPU_CLEAR_COLOR, 0, 1.0f);
+            gpu_set_float(0, 1.0f / (float)hw);
+            gpu_set_float(4, 1.0f / (float)hh);
+            postfx_draw_fullscreen(pfx->bloom_up_pipeline, pfx->ao_result);
+            gpu_end();
+        }
     }
 
-    // Pass 3a.5: Transparent forward pass — render alpha-blended objects onto gbuffer0
+    // Pass 3a.6: Transparent forward pass — render alpha-blended objects onto gbuffer0
     // Uses the depth buffer from the deferred G-buffer pass for correct depth testing.
     {
         gpu_texture_t *trans_targets[1] = { gb->gbuffer0 };
@@ -384,7 +411,7 @@ static void sys_3d_render_commands(void) {
         gpu_end();
     }
 
-    // Pass 3a.6: Decal pass — project decals onto scene using depth buffer
+    // Pass 3a.7: Decal pass — project decals onto scene using depth buffer
     // TODO: Disabled until decal system is fully implemented
     // {
     //     gpu_texture_t *decal_targets[1] = { gb->gbuffer0 };
@@ -453,7 +480,7 @@ static void sys_3d_render_commands(void) {
         gpu_set_float(0, pfx->ssao_strength);
         gpu_set_float(4, pfx->bloom_strength);
         gpu_set_texture(0, gb->gbuffer0);
-        gpu_set_texture(1, pfx->ao_result);
+        gpu_set_texture(1, pfx->ssao_upsampled);
         gpu_set_texture(2, pfx->bloom_up[0]);
         if (const_data_screen_aligned_vb == NULL) {
             const_data_create_screen_aligned_data();

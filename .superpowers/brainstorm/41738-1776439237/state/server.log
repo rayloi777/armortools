@@ -1,0 +1,4 @@
+{"type":"server-started","port":53642,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:53642","screen_dir":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/41738-1776439237/content","state_dir":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/41738-1776439237/state"}
+{"type":"screen-added","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/41738-1776439237/content/ssao-pipeline.html"}
+{"type":"screen-added","file":"/Users/rayloi/Documents/GitHub/armortools/.superpowers/brainstorm/41738-1776439237/content/waiting.html"}
+{"type":"server-stopped","reason":"idle timeout"}

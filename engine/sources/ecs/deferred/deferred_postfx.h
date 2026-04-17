@@ -7,6 +7,7 @@ struct gpu_pipeline_t;
 
 typedef struct {
 	struct gpu_texture_t *ao_result;       // RGBA64: SSAO output (half-res)
+	struct gpu_texture_t *ssao_upsampled;  // RGBA64: SSAO upsampled to full-res
 	struct gpu_texture_t *bloom_down[4];   // RGBA64: 1/2, 1/4, 1/8, 1/16
 	struct gpu_texture_t *bloom_up[4];     // RGBA64: upsample chain
 	struct gpu_texture_t *scene_copy;      // RGBA64: lit scene before bloom
