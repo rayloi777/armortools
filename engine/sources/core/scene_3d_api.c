@@ -668,18 +668,116 @@ void scene_3d_api_register(void) {
     printf("3D Scene API registered\n");
 }
 
-// material_bind_texture(ctx_name, slot_name, file_path)
-// Sets a texture on the current material context by slot name
+// material_bind_texture(slot_name, file_path)
+// Sets a texture on the first mesh's material context by slot name
+// Example: material_bind_texture("tex_albedo", "3d/textures/Camera_01_body_diff_4k.png")
 minic_val_t minic_material_bind_texture(minic_val_t *args, int argc) {
-    (void)args; (void)argc;
-    // Currently operates on the first mesh's material context
-    // This is a placeholder - full implementation requires tracking current mesh context
-    return minic_val_int(0);
+    if (argc < 2) return minic_val_int(0);
+    if (args[0].type != MINIC_T_PTR || args[1].type != MINIC_T_PTR) return minic_val_int(0);
+
+    const char *slot_name = (const char *)args[0].p;
+    const char *file_path = (const char *)args[1].p;
+    if (!slot_name || !file_path) return minic_val_int(0);
+
+    // Get first mesh's material context
+    if (!scene_meshes || scene_meshes->length == 0) return minic_val_int(0);
+    mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[0];
+    if (!mesh_obj || !mesh_obj->material) return minic_val_int(0);
+
+    material_context_t *ctx = material_data_get_context(mesh_obj->material, "mesh");
+    if (!ctx || !ctx->bind_textures || !ctx->_) return minic_val_int(0);
+
+    // Find texture slot index
+    int tex_idx = -1;
+    for (int i = 0; i < ctx->bind_textures->length; i++) {
+        bind_tex_t *tex = (bind_tex_t *)ctx->bind_textures->buffer[i];
+        if (tex->name && strcmp(tex->name, slot_name) == 0) {
+            tex_idx = i;
+            break;
+        }
+    }
+    if (tex_idx < 0) return minic_val_int(0);
+
+    // Load texture
+    gpu_texture_t *tex = data_get_image(file_path);
+    if (!tex) {
+        printf("[material_bind_texture] Failed to load texture '%s'\n", file_path);
+        return minic_val_int(0);
+    }
+
+    // Update bind_tex file path
+    bind_tex_t *bind_tex = (bind_tex_t *)ctx->bind_textures->buffer[tex_idx];
+    if (bind_tex->file) free(bind_tex->file);
+    bind_tex->file = strdup(file_path);
+
+    // Update runtime textures array - rebuild it to include the new texture
+    if (ctx->_->textures) {
+        // Reset and rebuild textures array
+        ctx->_->textures->length = 0;
+        for (int i = 0; i < ctx->bind_textures->length; i++) {
+            bind_tex_t *bt = (bind_tex_t *)ctx->bind_textures->buffer[i];
+            if (bt->file && strlen(bt->file) > 0 && strcmp(bt->file, "_shadow_map") != 0) {
+                gpu_texture_t *t = data_get_image(bt->file);
+                any_array_push(ctx->_->textures, t);
+            } else {
+                any_array_push(ctx->_->textures, NULL);
+            }
+        }
+    }
+
+    // Set use_*_tex flag to 1.0
+    const char *use_flag_name = NULL;
+    if (strcmp(slot_name, "tex_albedo") == 0) use_flag_name = "use_albedo_tex";
+    else if (strcmp(slot_name, "tex_metallic") == 0) use_flag_name = "use_metallic_tex";
+    else if (strcmp(slot_name, "tex_roughness") == 0) use_flag_name = "use_roughness_tex";
+
+    if (use_flag_name && ctx->bind_constants) {
+        for (int i = 0; i < ctx->bind_constants->length; i++) {
+            bind_const_t *bc = (bind_const_t *)ctx->bind_constants->buffer[i];
+            if (bc->name && strcmp(bc->name, use_flag_name) == 0 && bc->vec && bc->vec->length > 0) {
+                bc->vec->buffer[0] = 1.0f;
+                break;
+            }
+        }
+    }
+
+    printf("[material_bind_texture] Bound '%s' to slot '%s'\n", file_path, slot_name);
+    return minic_val_int(1);
 }
 
-// material_set_use_texture(ctx_name, slot_name, use_bool)
+// material_set_use_texture(slot_name, use_bool)
 // Enables or disables texture usage for a given slot
 minic_val_t minic_material_set_use_texture(minic_val_t *args, int argc) {
-    (void)args; (void)argc;
-    return minic_val_int(0);
+    if (argc < 2) return minic_val_int(0);
+    if (args[0].type != MINIC_T_PTR || args[1].type != MINIC_T_FLOAT) return minic_val_int(0);
+
+    const char *slot_name = (const char *)args[0].p;
+    float use_flag = args[1].f;
+    if (!slot_name) return minic_val_int(0);
+
+    // Get first mesh's material context
+    if (!scene_meshes || scene_meshes->length == 0) return minic_val_int(0);
+    mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[0];
+    if (!mesh_obj || !mesh_obj->material) return minic_val_int(0);
+
+    material_context_t *ctx = material_data_get_context(mesh_obj->material, "mesh");
+    if (!ctx || !ctx->bind_constants) return minic_val_int(0);
+
+    // Find use_*_tex flag by slot name
+    const char *use_flag_name = NULL;
+    if (strcmp(slot_name, "tex_albedo") == 0) use_flag_name = "use_albedo_tex";
+    else if (strcmp(slot_name, "tex_metallic") == 0) use_flag_name = "use_metallic_tex";
+    else if (strcmp(slot_name, "tex_roughness") == 0) use_flag_name = "use_roughness_tex";
+
+    if (use_flag_name) {
+        for (int i = 0; i < ctx->bind_constants->length; i++) {
+            bind_const_t *bc = (bind_const_t *)ctx->bind_constants->buffer[i];
+            if (bc->name && strcmp(bc->name, use_flag_name) == 0 && bc->vec && bc->vec->length > 0) {
+                bc->vec->buffer[0] = use_flag;
+                break;
+            }
+        }
+    }
+
+    return minic_val_int(1);
 }
