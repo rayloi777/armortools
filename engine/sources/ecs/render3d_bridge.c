@@ -24,6 +24,26 @@ static mat4_t g_light_vp;
 // Performance statistics (reset each frame)
 static render3d_stats_t g_stats = {0};
 
+// Helper: apply a material bind constant by name to ALL meshes.
+// This ensures material constants (light_dir, cam_pos, shadow_vp, etc.) are
+// propagated to every mesh's material context, not just the first.
+static void mesh_apply_material_to_all(const char *name, float value) {
+    if (!scene_meshes || scene_meshes->length == 0) return;
+    for (int i = 0; i < scene_meshes->length; i++) {
+        mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[i];
+        if (!m || !m->material) continue;
+        material_context_t *mc = material_data_get_context(m->material, "mesh");
+        if (!mc || !mc->bind_constants) continue;
+        for (int j = 0; j < mc->bind_constants->length; j++) {
+            bind_const_t *bc = (bind_const_t *)mc->bind_constants->buffer[j];
+            if (bc->name && bc->vec && strcmp(bc->name, name) == 0) {
+                bc->vec->buffer[0] = value;
+                break;
+            }
+        }
+    }
+}
+
 static void compute_light_vp(void) {
     // Read light direction from material constants
     float ldx = -0.5f, ldy = -0.7f, ldz = -0.5f;
@@ -75,6 +95,35 @@ static void compute_light_vp(void) {
     mat4_t proj = mat4_ortho(-ortho_size, ortho_size, -ortho_size, ortho_size, 0.1f, 15.0f);
 
     g_light_vp = mat4_mult_mat(view, proj);
+
+    // Write light_vp matrix rows to ALL meshes' material constants
+    if (!scene_meshes || scene_meshes->length == 0) return;
+    for (int mi = 0; mi < scene_meshes->length; mi++) {
+        mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[mi];
+        if (!m || !m->material) continue;
+        material_context_t *mc = material_data_get_context(m->material, "mesh");
+        if (!mc || !mc->bind_constants) continue;
+        for (int i = 0; i < mc->bind_constants->length; i++) {
+            bind_const_t *bc = (bind_const_t *)mc->bind_constants->buffer[i];
+            if (!bc->name || !bc->vec) continue;
+            if (strcmp(bc->name, "light_vp_r0") == 0 && bc->vec->length >= 4) {
+                bc->vec->buffer[0] = g_light_vp.m00; bc->vec->buffer[1] = g_light_vp.m10;
+                bc->vec->buffer[2] = g_light_vp.m20; bc->vec->buffer[3] = g_light_vp.m30;
+            }
+            else if (strcmp(bc->name, "light_vp_r1") == 0 && bc->vec->length >= 4) {
+                bc->vec->buffer[0] = g_light_vp.m01; bc->vec->buffer[1] = g_light_vp.m11;
+                bc->vec->buffer[2] = g_light_vp.m21; bc->vec->buffer[3] = g_light_vp.m31;
+            }
+            else if (strcmp(bc->name, "light_vp_r2") == 0 && bc->vec->length >= 4) {
+                bc->vec->buffer[0] = g_light_vp.m02; bc->vec->buffer[1] = g_light_vp.m12;
+                bc->vec->buffer[2] = g_light_vp.m22; bc->vec->buffer[3] = g_light_vp.m32;
+            }
+            else if (strcmp(bc->name, "light_vp_r3") == 0 && bc->vec->length >= 4) {
+                bc->vec->buffer[0] = g_light_vp.m03; bc->vec->buffer[1] = g_light_vp.m13;
+                bc->vec->buffer[2] = g_light_vp.m23; bc->vec->buffer[3] = g_light_vp.m33;
+            }
+        }
+    }
 }
 
 // Update cam_pos in the material bind_constants to match the current camera position.
@@ -84,31 +133,33 @@ static void update_cam_pos_material(void) {
 
     vec4_t cam_loc = scene_camera->base->transform->loc;
 
-    // Get material from the first mesh object's material pointer
-    mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[0];
-    if (!mesh_obj || !mesh_obj->material) return;
+    // Iterate over ALL mesh objects and update their material constants
+    for (int mi = 0; mi < scene_meshes->length; mi++) {
+        mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[mi];
+        if (!mesh_obj || !mesh_obj->material) continue;
 
-    material_context_t *mctx = material_data_get_context(mesh_obj->material, "mesh");
-    if (!mctx || !mctx->bind_constants) return;
+        material_context_t *mctx = material_data_get_context(mesh_obj->material, "mesh");
+        if (!mctx || !mctx->bind_constants) continue;
 
-    for (int i = 0; i < mctx->bind_constants->length; i++) {
-        bind_const_t *bc = (bind_const_t *)mctx->bind_constants->buffer[i];
-        if (!bc->name || !bc->vec) continue;
-        if (strcmp(bc->name, "cam_pos") == 0 && bc->vec->length >= 3) {
-            bc->vec->buffer[0] = cam_loc.x;
-            bc->vec->buffer[1] = cam_loc.y;
-            bc->vec->buffer[2] = cam_loc.z;
-        }
-        else if (strcmp(bc->name, "point_light_pos0") == 0 && bc->vec->length >= 3) {
-            bc->vec->buffer[0] = 2.0f;
-            bc->vec->buffer[1] = 2.0f;
-            bc->vec->buffer[2] = 0.0f;
-        }
-        else if (strcmp(bc->name, "point_light_strength0") == 0) {
-            bc->vec->buffer[0] = 5.0f;
-        }
-        else if (strcmp(bc->name, "num_point_lights") == 0) {
-            bc->vec->buffer[0] = 1.0f;
+        for (int i = 0; i < mctx->bind_constants->length; i++) {
+            bind_const_t *bc = (bind_const_t *)mctx->bind_constants->buffer[i];
+            if (!bc->name || !bc->vec) continue;
+            if (strcmp(bc->name, "cam_pos") == 0 && bc->vec->length >= 3) {
+                bc->vec->buffer[0] = cam_loc.x;
+                bc->vec->buffer[1] = cam_loc.y;
+                bc->vec->buffer[2] = cam_loc.z;
+            }
+            else if (strcmp(bc->name, "point_light_pos0") == 0 && bc->vec->length >= 3) {
+                bc->vec->buffer[0] = 2.0f;
+                bc->vec->buffer[1] = 2.0f;
+                bc->vec->buffer[2] = 0.0f;
+            }
+            else if (strcmp(bc->name, "point_light_strength0") == 0) {
+                bc->vec->buffer[0] = 5.0f;
+            }
+            else if (strcmp(bc->name, "num_point_lights") == 0) {
+                bc->vec->buffer[0] = 1.0f;
+            }
         }
     }
 }
@@ -116,7 +167,6 @@ static void update_cam_pos_material(void) {
 // Draw a fullscreen quad using screen-aligned vertices (NDC coords: {-1,-1, 3,-1, -1,3}).
 // This bypasses Iron's draw_scaled_image() which uses _draw_current for viewport
 // normalization — unavailable when using gpu_begin() directly for render targets.
-// Draw a fullscreen quad using screen-aligned vertices (NDC coords: {-1,-1, 3,-1, -1,3}).
 static void postfx_draw_fullscreen(gpu_pipeline_t *pipeline, gpu_texture_t *tex) {
     if (const_data_screen_aligned_vb == NULL) {
         const_data_create_screen_aligned_data();
@@ -140,18 +190,20 @@ static void postfx_draw_composite(gpu_pipeline_t *pipeline) {
     gpu_draw();
 }
 
-// Helper: set a bind-constant float value by name on the first mesh's material
+// Helper: set a bind-constant float value by name on ALL meshes' material
 static void set_material_const(const char *name, float value) {
     if (!scene_meshes || scene_meshes->length == 0) return;
-    mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[0];
-    if (!m || !m->material) return;
-    material_context_t *mc = material_data_get_context(m->material, "mesh");
-    if (!mc || !mc->bind_constants) return;
-    for (int i = 0; i < mc->bind_constants->length; i++) {
-        bind_const_t *bc = (bind_const_t *)mc->bind_constants->buffer[i];
-        if (bc->name && bc->vec && strcmp(bc->name, name) == 0) {
-            bc->vec->buffer[0] = value;
-            return;
+    for (int mi = 0; mi < scene_meshes->length; mi++) {
+        mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[mi];
+        if (!m || !m->material) continue;
+        material_context_t *mc = material_data_get_context(m->material, "mesh");
+        if (!mc || !mc->bind_constants) continue;
+        for (int i = 0; i < mc->bind_constants->length; i++) {
+            bind_const_t *bc = (bind_const_t *)mc->bind_constants->buffer[i];
+            if (bc->name && bc->vec && strcmp(bc->name, name) == 0) {
+                bc->vec->buffer[0] = value;
+                break;
+            }
         }
     }
 }
@@ -224,45 +276,21 @@ static void sys_3d_render_commands(void) {
     // Bind shadow map texture via material's bind_textures/runtime system.
     // uniforms_set_material_consts() will match "_shadow_map" by name and
     // call gpu_set_texture(shader_unit, material_runtime_texture) during draw.
+    // Apply to ALL meshes so every mesh can sample shadows correctly.
     if (scene_meshes != NULL && scene_meshes->length > 0) {
-        mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[0];
-        if (m && m->material && m->material->_) {
-            material_context_t *mc = material_data_get_context(m->material, "mesh");
-            if (mc && mc->_ && mc->_->textures && mc->_->textures->length > 0) {
-                mc->_->textures->buffer[0] = sd->shadow_map;
+        for (int mi = 0; mi < scene_meshes->length; mi++) {
+            mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[mi];
+            if (m && m->material && m->material->_) {
+                material_context_t *mc = material_data_get_context(m->material, "mesh");
+                if (mc && mc->_ && mc->_->textures && mc->_->textures->length > 0) {
+                    mc->_->textures->buffer[0] = sd->shadow_map;
+                }
             }
         }
     }
 
     // Set light VP matrix as 4 vec4 shader constants for shadow coordinate calculation
-    if (scene_meshes != NULL && scene_meshes->length > 0) {
-        mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[0];
-        if (m && m->material) {
-            material_context_t *mc = material_data_get_context(m->material, "mesh");
-            if (mc && mc->bind_constants) {
-                for (int i = 0; i < mc->bind_constants->length; i++) {
-                    bind_const_t *bc = (bind_const_t *)mc->bind_constants->buffer[i];
-                    if (!bc->name || !bc->vec) continue;
-                    if (strcmp(bc->name, "light_vp_r0") == 0 && bc->vec->length >= 4) {
-                        bc->vec->buffer[0] = g_light_vp.m00; bc->vec->buffer[1] = g_light_vp.m10;
-                        bc->vec->buffer[2] = g_light_vp.m20; bc->vec->buffer[3] = g_light_vp.m30;
-                    }
-                    else if (strcmp(bc->name, "light_vp_r1") == 0 && bc->vec->length >= 4) {
-                        bc->vec->buffer[0] = g_light_vp.m01; bc->vec->buffer[1] = g_light_vp.m11;
-                        bc->vec->buffer[2] = g_light_vp.m21; bc->vec->buffer[3] = g_light_vp.m31;
-                    }
-                    else if (strcmp(bc->name, "light_vp_r2") == 0 && bc->vec->length >= 4) {
-                        bc->vec->buffer[0] = g_light_vp.m02; bc->vec->buffer[1] = g_light_vp.m12;
-                        bc->vec->buffer[2] = g_light_vp.m22; bc->vec->buffer[3] = g_light_vp.m32;
-                    }
-                    else if (strcmp(bc->name, "light_vp_r3") == 0 && bc->vec->length >= 4) {
-                        bc->vec->buffer[0] = g_light_vp.m03; bc->vec->buffer[1] = g_light_vp.m13;
-                        bc->vec->buffer[2] = g_light_vp.m23; bc->vec->buffer[3] = g_light_vp.m33;
-                    }
-                }
-            }
-        }
-    }
+    // (handled in compute_light_vp() which writes to ALL meshes)
 
     // Hide transparent objects during G-buffer pass (opacity=0)
     transparent_bridge_hide();

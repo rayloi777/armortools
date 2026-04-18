@@ -26,9 +26,19 @@ int init(void) {
     g_mesh_comp = component_lookup("comp_3d_mesh_renderer");
     g_render_comp = component_lookup("RenderObject3D");
 
-    // --- Load ship.arm scene data (creates Iron objects, not ECS entities) ---
-    void *mesh_obj = mesh_load_arm("ship.arm");
-    printf("Ship.arm loaded, mesh_obj=%p\n", mesh_obj);
+    // --- Load Camera_01_4k.arm scene data (may have multiple meshes) ---
+    void *mesh_obj = mesh_load_arm("Camera_01_4k.arm");
+    printf("Camera_01_4k.arm loaded, mesh_obj=%p\n", mesh_obj);
+
+    // Bind PBR textures for Camera body mesh
+    material_bind_texture_by_name("Camera_01_body", "tex_albedo", "3d/textures/Camera_01_body_diff_4k.k");
+    material_bind_texture_by_name("Camera_01_body", "tex_metallic", "3d/textures/Camera_01_body_metallic_4k.k");
+    material_bind_texture_by_name("Camera_01_body", "tex_roughness", "3d/textures/Camera_01_body_roughness_4k.k");
+
+    // Bind PBR textures for Camera strap mesh (if present in the .arm file)
+    material_bind_texture_by_name("Camera_01_strap", "tex_albedo", "3d/textures/Camera_01_strap_diff_4k.k");
+    material_bind_texture_by_name("Camera_01_strap", "tex_metallic", "3d/textures/Camera_01_strap_metallic_4k.k");
+    material_bind_texture_by_name("Camera_01_strap", "tex_roughness", "3d/textures/Camera_01_strap_roughness_4k.k");
 
     // --- Create mesh entity ---
     g_mesh = entity_create();

@@ -483,6 +483,51 @@ static minic_val_t minic_camera_3d_orthographic(minic_val_t *args, int argc) {
 }
 
 // mesh_load_arm(path) -> ptr — loads .arm scene into Iron objects without creating ECS entities
+static material_data_t* clone_material_data(material_data_t* original) {
+    if (!original) return NULL;
+    material_data_t* clone = (material_data_t*)gc_alloc(sizeof(material_data_t));
+    *clone = *original;  // shallow copy
+
+    // Deep copy contexts — each mesh gets its own material_context_t array
+    clone->contexts = any_array_create_from_raw(NULL, 0);
+    if (original->contexts) {
+        for (int i = 0; i < original->contexts->length; i++) {
+            material_context_t* orig_ctx = (material_context_t*)original->contexts->buffer[i];
+            material_context_t* new_ctx = (material_context_t*)gc_alloc(sizeof(material_context_t));
+            *new_ctx = *orig_ctx;
+            // bind_textures and bind_constants in context also need deep copy
+            if (orig_ctx->bind_textures) {
+                new_ctx->bind_textures = any_array_create_from_raw(NULL, 0);
+                for (int j = 0; j < orig_ctx->bind_textures->length; j++) {
+                    bind_tex_t* orig_bt = (bind_tex_t*)orig_ctx->bind_textures->buffer[j];
+                    bind_tex_t* new_bt = (bind_tex_t*)gc_alloc(sizeof(bind_tex_t));
+                    *new_bt = *orig_bt;
+                    new_bt->name = orig_bt->name ? strdup(orig_bt->name) : NULL;
+                    new_bt->file = (orig_bt->file && orig_bt->file[0] != '\0' && strcmp(orig_bt->file, "_shadow_map") != 0)
+                        ? strdup(orig_bt->file) : orig_bt->file;
+                    any_array_push(new_ctx->bind_textures, new_bt);
+                }
+            }
+            if (orig_ctx->bind_constants) {
+                new_ctx->bind_constants = any_array_create_from_raw(NULL, 0);
+                for (int j = 0; j < orig_ctx->bind_constants->length; j++) {
+                    bind_const_t* orig_bc = (bind_const_t*)orig_ctx->bind_constants->buffer[j];
+                    bind_const_t* new_bc = (bind_const_t*)gc_alloc(sizeof(bind_const_t));
+                    *new_bc = *orig_bc;
+                    new_bc->name = orig_bc->name ? strdup(orig_bc->name) : NULL;
+                    if (orig_bc->vec) {
+                        new_bc->vec = f32_array_create_from_raw(orig_bc->vec->buffer, orig_bc->vec->length);
+                    }
+                    any_array_push(new_ctx->bind_constants, new_bc);
+                }
+            }
+            any_array_push(clone->contexts, new_ctx);
+        }
+    }
+
+    return clone;
+}
+
 static minic_val_t minic_mesh_load_arm(minic_val_t *args, int argc) {
     if (!g_runtime_world) return minic_val_ptr(NULL);
 
@@ -509,6 +554,22 @@ static minic_val_t minic_mesh_load_arm(minic_val_t *args, int argc) {
         scene_remove();
     }
     scene_create(scene_raw);
+
+    // Clone material for each mesh so they have independent material contexts
+    if (scene_meshes != NULL && scene_meshes->length > 0) {
+        // First mesh keeps the original material (already initialized with shader/pipeline)
+        mesh_object_t *first_mesh = (mesh_object_t *)scene_meshes->buffer[0];
+        material_data_t *first_mat = first_mesh ? first_mesh->material : NULL;
+
+        // All additional meshes get a clone of the first mesh's material
+        for (int i = 1; i < scene_meshes->length; i++) {
+            mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[i];
+            if (m && m->material == first_mat && first_mat != NULL) {
+                m->material = clone_material_data(first_mat);
+                printf("[mesh_load] Cloned material for mesh[%d]\n", i);
+            }
+        }
+    }
 
     // Log texture loading status for default material
     if (scene_raw->material_datas != NULL && scene_raw->material_datas->length > 0) {
@@ -643,6 +704,90 @@ static minic_val_t minic_mesh_add_arm(minic_val_t *args, int argc) {
     return minic_val_ptr(first_new_mesh);
 }
 
+// material_bind_texture_by_name(mesh_name, slot_name, file_path) -> int
+// Binds a texture to a specific mesh by name.
+// Example: material_bind_texture_by_name("Camera_01_body", "tex_albedo", "3d/textures/body_diff.k");
+static minic_val_t minic_material_bind_texture_by_name(minic_val_t *args, int argc) {
+    if (argc < 3) return minic_val_int(0);
+    if (args[0].type != MINIC_T_PTR || args[1].type != MINIC_T_PTR || args[2].type != MINIC_T_PTR) {
+        return minic_val_int(0);
+    }
+
+    const char *mesh_name = (const char *)args[0].p;
+    const char *slot_name = (const char *)args[1].p;
+    const char *file_path = (const char *)args[2].p;
+    if (!mesh_name || !slot_name || !file_path) return minic_val_int(0);
+
+    if (!scene_meshes || scene_meshes->length == 0) return minic_val_int(0);
+
+    // Find mesh by name
+    mesh_object_t *target_mesh = NULL;
+    int target_idx = -1;
+    for (int i = 0; i < scene_meshes->length; i++) {
+        mesh_object_t *m = (mesh_object_t *)scene_meshes->buffer[i];
+        if (m && m->base && m->base->name && strcmp(m->base->name, mesh_name) == 0) {
+            target_mesh = m;
+            target_idx = i;
+            break;
+        }
+    }
+    if (!target_mesh || !target_mesh->material) {
+        printf("[material_bind_texture_by_name] Mesh '%s' not found\n", mesh_name);
+        return minic_val_int(0);
+    }
+
+    material_context_t *ctx = material_data_get_context(target_mesh->material, "mesh");
+    if (!ctx || !ctx->bind_textures) return minic_val_int(0);
+
+    // Find texture slot index
+    int tex_idx = -1;
+    for (int i = 0; i < ctx->bind_textures->length; i++) {
+        bind_tex_t *tex = (bind_tex_t *)ctx->bind_textures->buffer[i];
+        if (tex->name && strcmp(tex->name, slot_name) == 0) {
+            tex_idx = i;
+            break;
+        }
+    }
+    if (tex_idx < 0) {
+        printf("[material_bind_texture_by_name] Slot '%s' not found\n", slot_name);
+        return minic_val_int(0);
+    }
+
+    // Load texture
+    gpu_texture_t *tex = data_get_image(file_path);
+    if (!tex) {
+        printf("[material_bind_texture_by_name] Failed to load '%s'\n", file_path);
+        return minic_val_int(0);
+    }
+
+    // Update bind_tex file path
+    bind_tex_t *bind_tex = (bind_tex_t *)ctx->bind_textures->buffer[tex_idx];
+    // Free only heap-allocated paths (not "_shadow_map" static string or empty)
+    if (bind_tex->file != NULL && bind_tex->file[0] != '\0' && strcmp(bind_tex->file, "_shadow_map") != 0) {
+        free(bind_tex->file);
+    }
+    bind_tex->file = strdup(file_path);
+
+    // Set use_*_tex flag to 1.0
+    const char *use_flag_name = NULL;
+    if (strcmp(slot_name, "tex_albedo") == 0) use_flag_name = "use_albedo_tex";
+    else if (strcmp(slot_name, "tex_metallic") == 0) use_flag_name = "use_metallic_tex";
+    else if (strcmp(slot_name, "tex_roughness") == 0) use_flag_name = "use_roughness_tex";
+
+    if (use_flag_name && ctx->bind_constants) {
+        for (int i = 0; i < ctx->bind_constants->length; i++) {
+            bind_const_t *bc = (bind_const_t *)ctx->bind_constants->buffer[i];
+            if (bc->name && strcmp(bc->name, use_flag_name) == 0 && bc->vec && bc->vec->length > 0) {
+                bc->vec->buffer[0] = 1.0f;
+                break;
+            }
+        }
+    }
+
+    printf("[material_bind_texture_by_name] Bound '%s' to '%s' slot '%s'\n", file_path, mesh_name, slot_name);
+    return minic_val_int(1);
+}
+
 void scene_3d_api_register(void) {
     minic_register_native("camera_3d_create", minic_camera_3d_create);
     minic_register_native("camera_3d_set_fov", minic_camera_3d_set_fov);
@@ -665,6 +810,10 @@ void scene_3d_api_register(void) {
     minic_register_native("mesh_load_arm", minic_mesh_load_arm);
     minic_register_native("mesh_add_arm", minic_mesh_add_arm);
 
+    minic_register_native("material_bind_texture", minic_material_bind_texture);
+    minic_register_native("material_bind_texture_by_name", minic_material_bind_texture_by_name);
+    minic_register_native("material_set_use_texture", minic_material_set_use_texture);
+
     printf("3D Scene API registered\n");
 }
 
@@ -672,70 +821,84 @@ void scene_3d_api_register(void) {
 // Sets a texture on the first mesh's material context by slot name
 // Example: material_bind_texture("tex_albedo", "3d/textures/Camera_01_body_diff_4k.png")
 minic_val_t minic_material_bind_texture(minic_val_t *args, int argc) {
-    if (argc < 2) return minic_val_int(0);
-    if (args[0].type != MINIC_T_PTR || args[1].type != MINIC_T_PTR) return minic_val_int(0);
+    printf("[DEBUG] MBT called, argc=%d\n", argc);
+    if (argc < 2) {
+        printf("[DEBUG] MBT: argc < 2\n");
+        return minic_val_int(0);
+    }
+    printf("[DEBUG] MBT: arg types: %d, %d\n", args[0].type, args[1].type);
+    if (args[0].type != MINIC_T_PTR || args[1].type != MINIC_T_PTR) {
+        printf("[DEBUG] MBT: type mismatch\n");
+        return minic_val_int(0);
+    }
 
     const char *slot_name = (const char *)args[0].p;
     const char *file_path = (const char *)args[1].p;
+    printf("[DEBUG] MBT: slot=%s, file=%s\n", slot_name ? slot_name : "NULL", file_path ? file_path : "NULL");
     if (!slot_name || !file_path) return minic_val_int(0);
 
     // Get first mesh's material context
+    printf("[DEBUG] MBT: scene_meshes=%p, len=%d\n", scene_meshes, scene_meshes ? scene_meshes->length : -1);
     if (!scene_meshes || scene_meshes->length == 0) return minic_val_int(0);
     mesh_object_t *mesh_obj = (mesh_object_t *)scene_meshes->buffer[0];
+    printf("[DEBUG] MBT: mesh_obj=%p, mat=%p\n", mesh_obj, mesh_obj ? mesh_obj->material : NULL);
     if (!mesh_obj || !mesh_obj->material) return minic_val_int(0);
 
     material_context_t *ctx = material_data_get_context(mesh_obj->material, "mesh");
-    if (!ctx || !ctx->bind_textures || !ctx->_) return minic_val_int(0);
+    printf("[DEBUG] MBT: ctx=%p, bt=%p\n", ctx, ctx ? ctx->bind_textures : NULL);
+    if (!ctx || !ctx->bind_textures) return minic_val_int(0);
 
     // Find texture slot index
     int tex_idx = -1;
     for (int i = 0; i < ctx->bind_textures->length; i++) {
         bind_tex_t *tex = (bind_tex_t *)ctx->bind_textures->buffer[i];
+        printf("[DEBUG] MBT: bt[%d] name=%s\n", i, tex->name ? tex->name : "NULL");
         if (tex->name && strcmp(tex->name, slot_name) == 0) {
             tex_idx = i;
-            break;
+            printf("[DEBUG] MBT: found slot at idx=%d\n", tex_idx);
         }
     }
     if (tex_idx < 0) return minic_val_int(0);
 
     // Load texture
+    printf("[DEBUG] MBT: calling data_get_image(%s)\n", file_path);
     gpu_texture_t *tex = data_get_image(file_path);
+    printf("[DEBUG] MBT: data_get_image returned %p\n", tex);
     if (!tex) {
         printf("[material_bind_texture] Failed to load texture '%s'\n", file_path);
         return minic_val_int(0);
     }
 
+    printf("[DEBUG] MBT: updating bind_tex at idx=%d\n", tex_idx);
     // Update bind_tex file path
     bind_tex_t *bind_tex = (bind_tex_t *)ctx->bind_textures->buffer[tex_idx];
-    if (bind_tex->file) free(bind_tex->file);
-    bind_tex->file = strdup(file_path);
-
-    // Update runtime textures array - rebuild it to include the new texture
-    if (ctx->_->textures) {
-        // Reset and rebuild textures array
-        ctx->_->textures->length = 0;
-        for (int i = 0; i < ctx->bind_textures->length; i++) {
-            bind_tex_t *bt = (bind_tex_t *)ctx->bind_textures->buffer[i];
-            if (bt->file && strlen(bt->file) > 0 && strcmp(bt->file, "_shadow_map") != 0) {
-                gpu_texture_t *t = data_get_image(bt->file);
-                any_array_push(ctx->_->textures, t);
-            } else {
-                any_array_push(ctx->_->textures, NULL);
-            }
-        }
+    printf("[DEBUG] MBT: bind_tex=%p, old_file=%p\n", bind_tex, bind_tex ? bind_tex->file : NULL);
+    if (bind_tex->file && bind_tex->file[0] != '\0' && strcmp(bind_tex->file, "_shadow_map") != 0) {
+        // Only free if it's a heap allocation (not static string literals)
+        // We can detect this by checking if it starts with static prefix patterns
+        // For safety, just overwrite - the old pointer may be static
     }
+    printf("[DEBUG] MBT: about to strdup, file_path=%s\n", file_path);
+    char *copy = strdup(file_path);
+    printf("[DEBUG] MBT: strdup returned %p\n", copy);
+    bind_tex->file = copy;
+    printf("[DEBUG] MBT: bind_tex->file updated\n");
 
     // Set use_*_tex flag to 1.0
     const char *use_flag_name = NULL;
     if (strcmp(slot_name, "tex_albedo") == 0) use_flag_name = "use_albedo_tex";
     else if (strcmp(slot_name, "tex_metallic") == 0) use_flag_name = "use_metallic_tex";
     else if (strcmp(slot_name, "tex_roughness") == 0) use_flag_name = "use_roughness_tex";
+    printf("[DEBUG] MBT: use_flag=%s\n", use_flag_name ? use_flag_name : "NULL");
 
     if (use_flag_name && ctx->bind_constants) {
+        printf("[DEBUG] MBT: searching bind_constants, len=%d\n", ctx->bind_constants->length);
         for (int i = 0; i < ctx->bind_constants->length; i++) {
             bind_const_t *bc = (bind_const_t *)ctx->bind_constants->buffer[i];
+            printf("[DEBUG] MBT: bc[%d] name=%s\n", i, bc->name ? bc->name : "NULL");
             if (bc->name && strcmp(bc->name, use_flag_name) == 0 && bc->vec && bc->vec->length > 0) {
                 bc->vec->buffer[0] = 1.0f;
+                printf("[DEBUG] MBT: set flag to 1.0\n");
                 break;
             }
         }

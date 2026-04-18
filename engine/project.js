@@ -15,5 +15,6 @@ project.add_assets("assets/prefabs/*.json", {destination: "data/{name}"});
 project.add_assets("assets/*.png", {destination: "data/{name}"});
 project.add_assets("assets/images/*.png", {destination: "data/{name}"});
 project.add_assets("assets/3d/*.arm", {destination: "data/{name}"});
-project.add_assets("assets/3d/*.png", {destination: "data/{name}"});
+project.add_assets("assets/3d/*.png", {destination: "data/3d/{name}"});
+project.add_assets("assets/3d/textures/*.png", {destination: "data/3d/textures/{name}"});
 return project;
