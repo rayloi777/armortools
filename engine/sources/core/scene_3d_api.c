@@ -762,10 +762,6 @@ static minic_val_t minic_material_bind_texture_by_name(minic_val_t *args, int ar
 
     // Update bind_tex file path
     bind_tex_t *bind_tex = (bind_tex_t *)ctx->bind_textures->buffer[tex_idx];
-    // Free only heap-allocated paths (not "_shadow_map" static string or empty)
-    if (bind_tex->file != NULL && bind_tex->file[0] != '\0' && strcmp(bind_tex->file, "_shadow_map") != 0) {
-        free(bind_tex->file);
-    }
     bind_tex->file = strdup(file_path);
 
     // Set use_*_tex flag to 1.0
