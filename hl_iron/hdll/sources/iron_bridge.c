@@ -29,6 +29,11 @@ HL_PRIM double HL_NAME(system_get_time)(void) {
 }
 DEFINE_PRIM(_F64, system_get_time, _NO_ARG);
 
+HL_PRIM void HL_NAME(system_exit)(void) {
+	exit(0);
+}
+DEFINE_PRIM(_VOID, system_exit, _NO_ARG);
+
 // ============================================================
 // GPU functions
 // ============================================================

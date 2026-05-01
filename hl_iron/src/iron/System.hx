@@ -17,4 +17,6 @@ class System {
     public static function setRenderCallback(cb:Void->Void):Void {}
 
     public static function setUpdateCallback(cb:Void->Void):Void {}
+
+    public static function exit():Void {}
 }

@@ -2,23 +2,23 @@ package iron;
 
 @:hlNative("iron")
 class Input {
-    public static function keyboardDown(key:hl.Bytes):Bool {
+    public static function keyboardDown(key:String):Bool {
         return false;
     }
 
-    public static function keyboardStarted(key:hl.Bytes):Bool {
+    public static function keyboardStarted(key:String):Bool {
         return false;
     }
 
-    public static function keyboardReleased(key:hl.Bytes):Bool {
+    public static function keyboardReleased(key:String):Bool {
         return false;
     }
 
-    public static function mouseDown(button:hl.Bytes):Bool {
+    public static function mouseDown(button:String):Bool {
         return false;
     }
 
-    public static function mouseStarted(button:hl.Bytes):Bool {
+    public static function mouseStarted(button:String):Bool {
         return false;
     }
 

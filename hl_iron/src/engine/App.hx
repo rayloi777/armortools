@@ -11,7 +11,9 @@ class App {
     }
 
     static function update():Void {
-        // No-op for now — keyboard input will be added after MVP verifies rendering works
+        if (Input.keyboardDown("escape")) {
+            System.exit();
+        }
     }
 
     static function draw():Void {
