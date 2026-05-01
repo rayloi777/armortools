@@ -1,15 +1,14 @@
 // Iron engine HDLL bridge layer.
-// Uses DEFINE_PRIM macros — can be compiled into host (static) or as standalone .hdll.
-//
-// For static registration: host calls iron_register_all_prims() before hl_module_load.
-// For HDLL: compile this file as a shared library named iron.hdll.
+// Compiled as a shared library (iron.hdll).
+// HashLink loads this HDLL when Haxe code calls @:hlNative("iron") functions.
+// Iron engine functions are resolved at load time from the host executable.
 
 #include <hl.h>
 #include <iron.h>
 
 // Override HL_NAME to use "iron_" prefix for all bridge functions.
 #undef HL_NAME
-#define HL_NAME(n) iron_##n
+#define HL_NAME(n) hliron_##n
 
 // ============================================================
 // System functions
@@ -87,7 +86,7 @@ HL_PRIM f32 HL_NAME(mouse_get_y)(void) {
 DEFINE_PRIM(_F32, mouse_get_y, _NO_ARG);
 
 // ============================================================
-// Callback registration — called from Haxe to register closures
+// Callback registration — called from Haxe to store closures in host
 // ============================================================
 
 // Forward declarations (implemented in host/main.c)
@@ -103,43 +102,3 @@ HL_PRIM void HL_NAME(set_update_callback)(vclosure *cb) {
 	iron_bridge_set_update_closure(cb);
 }
 DEFINE_PRIM(_VOID, set_update_callback, _FUN(_VOID, _NO_ARG));
-
-// ============================================================
-// Static registration — called by host before hl_module_load
-// ============================================================
-
-extern void *iron_hlp_gpu_begin_default();
-extern void *iron_hlp_gpu_end();
-extern void *iron_hlp_system_get_width();
-extern void *iron_hlp_system_get_height();
-extern void *iron_hlp_system_get_time();
-extern void *iron_hlp_keyboard_down();
-extern void *iron_hlp_keyboard_started();
-extern void *iron_hlp_keyboard_released();
-extern void *iron_hlp_mouse_down();
-extern void *iron_hlp_mouse_started();
-extern void *iron_hlp_mouse_get_x();
-extern void *iron_hlp_mouse_get_y();
-extern void *iron_hlp_set_render_callback();
-extern void *iron_hlp_set_update_callback();
-
-void iron_register_all_prims(void) {
-	// GPU
-	hl_register_prim("gpu_begin_default@2",        (void *)iron_hlp_gpu_begin_default);
-	hl_register_prim("gpu_end@0",                   (void *)iron_hlp_gpu_end);
-	// System
-	hl_register_prim("system_get_width@0",          (void *)iron_hlp_system_get_width);
-	hl_register_prim("system_get_height@0",         (void *)iron_hlp_system_get_height);
-	hl_register_prim("system_get_time@0",           (void *)iron_hlp_system_get_time);
-	// Input
-	hl_register_prim("keyboard_down@1",             (void *)iron_hlp_keyboard_down);
-	hl_register_prim("keyboard_started@1",          (void *)iron_hlp_keyboard_started);
-	hl_register_prim("keyboard_released@1",         (void *)iron_hlp_keyboard_released);
-	hl_register_prim("mouse_down@1",                (void *)iron_hlp_mouse_down);
-	hl_register_prim("mouse_started@1",             (void *)iron_hlp_mouse_started);
-	hl_register_prim("mouse_get_x@0",              (void *)iron_hlp_mouse_get_x);
-	hl_register_prim("mouse_get_y@0",              (void *)iron_hlp_mouse_get_y);
-	// Callbacks
-	hl_register_prim("set_render_callback@1",       (void *)iron_hlp_set_render_callback);
-	hl_register_prim("set_update_callback@1",       (void *)iron_hlp_set_update_callback);
-}

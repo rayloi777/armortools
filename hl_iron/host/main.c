@@ -1,20 +1,20 @@
 // Host program for HashLink Iron Engine
-// Compiles with Iron engine sources (unity build).
-// Embeds HashLink VM, registers bridge primitives, loads Haxe module.
+// Compiles with Iron engine sources + HashLink sources (unity build).
 // Iron owns the main loop; Haxe closures are called from Iron callbacks.
+// HDLL (iron.hdll) is loaded automatically by HashLink's module system.
 
 #include <hl.h>
+#include <hlmodule.h>
 #include <iron.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-// --- Bridge registration (defined in iron_bridge.c) ---
-extern void iron_register_all_prims(void);
 
 // --- Stored Haxe callbacks ---
 static vclosure *g_haxe_render_cb = NULL;
 static vclosure *g_haxe_update_cb = NULL;
 static vdynamic *g_haxe_exc = NULL;
+static hl_module *g_hl_module = NULL;
+static hl_code   *g_hl_code = NULL;
 
 // --- Iron callback implementations ---
 static void host_render_callback(void) {
@@ -39,10 +39,7 @@ static void host_update_callback(void) {
 	}
 }
 
-// --- Iron bridge functions (called from Haxe via DEFINE_PRIM) ---
-// These are exposed to Haxe through hl_register_prim() in iron_bridge.c.
-// Storage for callbacks set from Haxe:
-
+// --- Called from Haxe via DEFINE_PRIM in iron.hdll ---
 void iron_bridge_set_render_closure(vclosure *cb) {
 	g_haxe_render_cb = cb;
 }
@@ -62,8 +59,42 @@ void  console_info(char *s) {}
 char *tr(char *id) { return id; }
 i32   pipes_get_constant_location(char *s) { return 0; }
 
+// --- Load .hl bytecode file ---
+static hl_code *load_code(const char *file, char **error_msg) {
+	hl_code *code;
+	FILE *f = fopen(file, "rb");
+	int pos, size;
+	char *fdata;
+	if (f == NULL) {
+		*error_msg = "File not found";
+		return NULL;
+	}
+	fseek(f, 0, SEEK_END);
+	size = (int)ftell(f);
+	fseek(f, 0, SEEK_SET);
+	fdata = (char *)malloc(size);
+	pos = 0;
+	while (pos < size) {
+		int r = (int)fread(fdata + pos, 1, size - pos, f);
+		if (r <= 0) {
+			*error_msg = "Read error";
+			free(fdata);
+			fclose(f);
+			return NULL;
+		}
+		pos += r;
+	}
+	fclose(f);
+	code = hl_code_read(fdata, size, error_msg);
+	free(fdata);
+	return code;
+}
+
 // --- Entry point ---
 void _kickstart() {
+	char *error_msg = NULL;
+	vclosure cl;
+
 	// 1. Configure and create Iron window
 	iron_window_options_t *ops =
 	    GC_ALLOC_INIT(iron_window_options_t, {
@@ -87,31 +118,48 @@ void _kickstart() {
 
 	// 3. Initialize HashLink VM
 	hl_global_init();
+	vdynamic *ret;
+	hl_register_thread(&ret);
+
 	char *argv[] = {"hl_iron", NULL};
 	int   argc   = 1;
-	hl_sys_init(&argc, argv);
+	hl_setup.sys_args = argv + 1;
+	hl_setup.sys_nargs = argc - 1;
+	hl_sys_init();
 
-	// 4. Register all bridge primitives
-	iron_register_all_prims();
-
-	// 5. Load Haxe module
-	hl_module *m = hl_module_load("hlboot.hl", true);
-	if (m == NULL) {
-		fprintf(stderr, "Failed to load hlboot.hl\n");
+	// 4. Load Haxe bytecode
+	g_hl_code = load_code("hlboot.hl", &error_msg);
+	if (g_hl_code == NULL) {
+		fprintf(stderr, "Failed to load hlboot.hl: %s\n",
+		    error_msg ? error_msg : "unknown error");
 		return;
 	}
 
-	// 6. Initialize and JIT-compile the module
-	hl_module_init(m, NULL);
+	// 5. Allocate and initialize module (JIT compile)
+	//    This resolves @:hlNative("iron") by loading iron.hdll
+	g_hl_module = hl_module_alloc(g_hl_code);
+	if (g_hl_module == NULL) {
+		fprintf(stderr, "Failed to allocate HashLink module\n");
+		return;
+	}
+	if (!hl_module_init(g_hl_module, false)) {
+		fprintf(stderr, "Failed to initialize HashLink module\n");
+		return;
+	}
 
-	// 7. Set up exception handler and call Haxe main
-	hl_code *code = m->code;
-	hl_trap(ctx, g_haxe_exc, on_error);
+	// 6. Call Haxe entry point
+	cl.t = g_hl_code->functions[g_hl_module->functions_indexes[g_hl_code->entrypoint]].type;
+	cl.fun = g_hl_module->functions_ptrs[g_hl_code->entrypoint];
+	cl.hasValue = 0;
 
-	// Call module init extras (runs Haxe __init__ blocks)
-	hl_module_init_extra(m);
+	bool is_exc = false;
+	hl_dyn_call_safe(&cl, NULL, 0, &is_exc);
+	if (is_exc) {
+		fprintf(stderr, "Haxe entry point exception\n");
+		return;
+	}
 
-	// 8. Set Iron callbacks — Haxe main() will have registered closures
+	// 7. Set Iron callbacks — Haxe main() will have registered closures
 	//    via iron_bridge_set_render_closure/update_closure
 	gc_unroot(render_path_commands);
 	render_path_commands = host_render_callback;
@@ -119,15 +167,13 @@ void _kickstart() {
 
 	_iron_set_update_callback(host_update_callback);
 
+	// 8. Free bytecode (module has what it needs)
+	hl_code_free(g_hl_code);
+
 	// 9. Enter Iron main loop (blocks until window closes)
 	iron_start();
 
-	// Cleanup (reached after iron_start returns on window close)
-	hl_global_free();
-	return;
-
-on_error:
-	fprintf(stderr, "Haxe fatal exception: %s\n",
-	    hl_to_string(g_haxe_exc));
+	// Cleanup
+	hl_module_free(g_hl_module);
 	hl_global_free();
 }
