@@ -1,5 +1,7 @@
 #pragma once
 
+#include <hl.h>
+
 // Bridge registration function — called by host before loading Haxe module.
 void iron_register_all_prims(void);
 
